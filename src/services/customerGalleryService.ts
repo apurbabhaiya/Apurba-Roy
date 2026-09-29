@@ -423,6 +423,34 @@ export async function getCustomerGalleryByToken(identifier: string): Promise<Cus
       }
     }
 
+    // If the normalized project exists but its photos subcollection is empty,
+    // recover the embedded photo list from the legacy customerGalleries document.
+    // This prevents a saved totalPhotos count from rendering as "0 photos" when
+    // an earlier subcollection write was skipped or blocked.
+    if (!photos || photos.length === 0) {
+      try {
+        const legacySnap = await getDoc(doc(db, 'customerGalleries', resolvedId));
+        if (legacySnap.exists()) {
+          const legacyData = legacySnap.data();
+          if (Array.isArray(legacyData.photos) && legacyData.photos.length > 0) {
+            photos = legacyData.photos.map((p: any) => ({
+              id: p.id || p.driveFileId,
+              driveFileId: p.driveFileId || p.id,
+              name: p.name || p.fileName || p.id || p.driveFileId,
+              thumbnailUrl: p.thumbnailUrl,
+              previewUrl: p.previewUrl,
+              mimeType: p.mimeType,
+              createdTime: p.createdTime || p.createdAt,
+              size: p.size,
+              folderId: p.folderId,
+            }));
+          }
+        }
+      } catch (err) {
+        console.warn('Could not recover embedded legacy gallery photos:', err);
+      }
+    }
+
     // Load selections from subcollection projects/{resolvedId}/selections
     let selectedPhotoIds: string[] = foundData.selectedPhotoIds || [];
     try {
