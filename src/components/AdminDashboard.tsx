@@ -37,7 +37,7 @@ import {
   FileJson,
   FileSpreadsheet,
 } from 'lucide-react';
-import { User } from 'firebase/auth';
+import type { AppUser } from '../services/auth';
 import { Album, ClientSelectionSubmission, SubmissionStatus, CustomerGallery } from '../types';
 import { CreateAlbumModal } from './CreateAlbumModal';
 import { CreateCustomerGalleryModal } from './CreateCustomerGalleryModal';
@@ -61,7 +61,7 @@ import {
 } from '../services/zipDownloader';
 
 interface AdminDashboardProps {
-  user: User | null;
+  user: AppUser | null;
   accessToken: string | null;
   albums: Album[];
   submissions: ClientSelectionSubmission[];
