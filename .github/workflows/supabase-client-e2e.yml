@@ -1,0 +1,125 @@
+name: Supabase Client E2E
+
+on:
+  push:
+    branches:
+      - migrate/firebase-to-supabase
+    paths:
+      - .github/workflows/supabase-client-e2e.yml
+  workflow_dispatch:
+
+jobs:
+  client-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Supabase client
+        run: npm install @supabase/supabase-js@^2
+
+      - name: Exercise anonymous client gallery flow
+        run: |
+          node --input-type=module <<'NODE'
+          import { createClient } from '@supabase/supabase-js';
+
+          const supabase = createClient(
+            'https://izfmwvqveiphyuufvxoq.supabase.co',
+            'sb_publishable_pTtO1vQIUiYpwVUHWYbCeA_hug5Y7Hn',
+            { auth: { persistSession: false, autoRefreshToken: false } }
+          );
+
+          const { data: auth, error: authError } = await supabase.auth.signInAnonymously();
+          if (authError || !auth?.user?.is_anonymous) throw authError || new Error('Anonymous auth failed');
+          const userId = auth.user.id;
+
+          const { data: galleryId, error: claimError } = await supabase.rpc('claim_gallery_access', {
+            p_identifier: 'e2e-rommochobi-test-token',
+          });
+          if (claimError || galleryId !== '11111111-1111-4111-8111-111111111111') {
+            throw claimError || new Error('Gallery claim failed');
+          }
+
+          const { data: gallery, error: galleryError } = await supabase
+            .from('galleries')
+            .select('id,status,total_photos')
+            .eq('id', galleryId)
+            .single();
+          if (galleryError || gallery.total_photos !== 1) throw galleryError || new Error('Gallery read failed');
+
+          const { data: photos, error: photosError } = await supabase
+            .from('photos')
+            .select('id,drive_file_id,file_name')
+            .eq('gallery_id', galleryId);
+          if (photosError || photos?.length !== 1) throw photosError || new Error('Photo read failed');
+
+          const sessionId = crypto.randomUUID();
+          const recoveryCode = 'E2E-' + userId.slice(0, 8).toUpperCase();
+
+          const { error: sessionError } = await supabase.from('client_sessions').insert({
+            id: sessionId,
+            gallery_id: galleryId,
+            session_token: userId,
+            recovery_code: recoveryCode,
+            user_id: userId,
+            client_name: 'E2E Client',
+            selected_count: 0,
+            status: 'active',
+          });
+          if (sessionError) throw sessionError;
+
+          const { error: selectionError } = await supabase.from('selections').insert({
+            gallery_id: galleryId,
+            photo_id: photos[0].id,
+            session_token: userId,
+            selected: true,
+            user_id: userId,
+            drive_file_id: photos[0].drive_file_id,
+            file_name: photos[0].file_name,
+            selection_order: 1,
+          });
+          if (selectionError) throw selectionError;
+
+          const { error: stateError } = await supabase.rpc('client_set_gallery_state', {
+            p_gallery_id: galleryId,
+            p_selected_count: 1,
+            p_status: 'selection_in_progress',
+            p_client_notes: 'E2E client flow',
+          });
+          if (stateError) throw stateError;
+
+          const { error: zipError } = await supabase.rpc('client_request_zip', {
+            p_gallery_id: galleryId,
+            p_email: '',
+            p_phone: '',
+            p_notes: 'E2E',
+            p_selected_count: 1,
+          });
+          if (zipError) throw zipError;
+
+          const { data: recovered, error: recoverError } = await supabase.rpc('recover_client_session', {
+            p_identifier: 'e2e-rommochobi-test-token',
+            p_recovery_code: recoveryCode,
+          });
+          if (recoverError || !recovered?.length) throw recoverError || new Error('Recovery failed');
+
+          const { error: deleteSelectionError } = await supabase
+            .from('selections')
+            .delete()
+            .eq('gallery_id', galleryId)
+            .eq('user_id', userId);
+          if (deleteSelectionError) throw deleteSelectionError;
+
+          const { error: deleteSessionError } = await supabase
+            .from('client_sessions')
+            .delete()
+            .eq('id', sessionId)
+            .eq('user_id', userId);
+          if (deleteSessionError) throw deleteSessionError;
+
+          await supabase.auth.signOut();
+          console.log('Anonymous client gallery E2E passed.');
+          NODE
