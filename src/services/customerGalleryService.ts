@@ -18,11 +18,20 @@ const isUuid = (value?: string | null): boolean =>
   !!value && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 
 const newUuid = (): string => {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-    return crypto.randomUUID();
+  const webCrypto = globalThis.crypto;
+  if (webCrypto?.randomUUID) {
+    return webCrypto.randomUUID();
   }
+
   const bytes = new Uint8Array(16);
-  crypto.getRandomValues(bytes);
+  if (webCrypto?.getRandomValues) {
+    webCrypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < bytes.length; i++) {
+      bytes[i] = Math.floor(Math.random() * 256);
+    }
+  }
+
   bytes[6] = (bytes[6] & 0x0f) | 0x40;
   bytes[8] = (bytes[8] & 0x3f) | 0x80;
   const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
@@ -170,7 +179,7 @@ async function updateGallerySelectionState(
       p_gallery_id: projectId,
       p_selected_count: count,
       p_status: status,
-      p_client_notes: notes ?? null,
+      p_client_notes: notes ?? undefined,
     });
     if (error) throw error;
     return;
