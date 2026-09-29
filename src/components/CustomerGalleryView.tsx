@@ -347,7 +347,15 @@ export const CustomerGalleryView: React.FC<CustomerGalleryViewProps> = ({
   useEffect(() => {
     let isMounted = true;
     const loadGallery = async () => {
-      if (!initialGallery || initialGallery.secureToken !== token) {
+      const initialNeedsHydration =
+        !initialGallery ||
+        initialGallery.secureToken !== token ||
+        !initialGallery.photos ||
+        initialGallery.photos.length === 0 ||
+        ((initialGallery.totalPhotos || 0) > 0 &&
+          initialGallery.photos.length < (initialGallery.totalPhotos || 0));
+
+      if (initialNeedsHydration) {
         setLoading(true);
         try {
           const g = await getCustomerGalleryByToken(token);
