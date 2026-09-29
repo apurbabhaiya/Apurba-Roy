@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { User } from 'firebase/auth';
 import {
   initAuth,
   googleSignIn,
@@ -9,6 +8,7 @@ import {
   signInClientAnonymously,
   ensureAnonymousAuth,
   auth,
+  AppUser,
 } from './services/auth';
 import {
   getStoredAlbums,
@@ -24,7 +24,7 @@ import { CustomerGalleryView } from './components/CustomerGalleryView';
 import { getCustomerGalleryByToken } from './services/customerGalleryService';
 
 export default function App() {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AppUser | null>(null);
   const [accessToken, setLocalAccessToken] = useState<string | null>(null);
   const [albums, setAlbums] = useState<Album[]>([]);
   const [submissions, setSubmissions] = useState<ClientSelectionSubmission[]>([]);
@@ -36,7 +36,7 @@ export default function App() {
   const [customerGalleryObject, setCustomerGalleryObject] = useState<CustomerGallery | null>(null);
   const [isAdminPreviewing, setIsAdminPreviewing] = useState<boolean>(false);
 
-  // Automatically sign in clients anonymously upon mounting when no user is detected, ensuring session for Firestore access
+  // Automatically sign in clients anonymously upon mounting when no user is detected, ensuring a Supabase client session
   useEffect(() => {
     const handleInitialAnonymousAuth = async () => {
       try {
@@ -54,11 +54,11 @@ export default function App() {
   useEffect(() => {
     const unsubscribe = initAuth(
       (authedUser, token) => {
-        // Authenticated Google admin user
+        // Authenticated Google admin user via Supabase
         setUser(authedUser);
         setLocalAccessToken(token || null);
       },
-      (anonOrNullUser?: User | null) => {
+      (anonOrNullUser?: AppUser | null) => {
         // Anonymous client or logged out of admin
         setUser(null);
         setLocalAccessToken(null);
