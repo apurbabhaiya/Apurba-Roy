@@ -336,13 +336,13 @@ export async function saveCustomerGallery(gallery: CustomerGallery): Promise<voi
   const { error: galleryError } = await supabase.from('galleries').upsert(row, { onConflict: 'id' });
   if (galleryError) throw galleryError;
 
-  const { error: deletePhotosError } = await supabase
-    .from('photos')
-    .delete()
-    .eq('gallery_id', gallery.id);
-  if (deletePhotosError) throw deletePhotosError;
-
   const photos = gallery.photos || [];
+  const { data: existingPhotoRows, error: existingPhotoError } = await supabase
+    .from('photos')
+    .select('id,drive_file_id')
+    .eq('gallery_id', gallery.id);
+  if (existingPhotoError) throw existingPhotoError;
+
   if (photos.length) {
     const photoRows = photos.map((photo, index) => ({
       gallery_id: gallery.id,
@@ -359,8 +359,29 @@ export async function saveCustomerGallery(gallery: CustomerGallery): Promise<voi
       folder_id: photo.folderId || null,
     }));
 
-    const { error: photoError } = await supabase.from('photos').insert(photoRows);
+    const { error: photoError } = await supabase
+      .from('photos')
+      .upsert(photoRows, { onConflict: 'gallery_id,drive_file_id' });
     if (photoError) throw photoError;
+
+    const liveDriveIds = new Set(photoRows.map((row) => row.drive_file_id));
+    const staleIds = (existingPhotoRows || [])
+      .filter((row: any) => !liveDriveIds.has(row.drive_file_id))
+      .map((row: any) => row.id);
+
+    if (staleIds.length) {
+      const { error: staleDeleteError } = await supabase
+        .from('photos')
+        .delete()
+        .in('id', staleIds);
+      if (staleDeleteError) throw staleDeleteError;
+    }
+  } else if ((existingPhotoRows || []).length) {
+    const { error: clearPhotosError } = await supabase
+      .from('photos')
+      .delete()
+      .eq('gallery_id', gallery.id);
+    if (clearPhotosError) throw clearPhotosError;
   }
 
   const updatedGallery: CustomerGallery = {
