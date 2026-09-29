@@ -7,46 +7,38 @@ export const DRIVE_SCOPES = [
 ];
 
 const STORAGE_PROVIDER_TOKEN = 'rommochobi_gdrive_provider_token_v1';
-const STORAGE_PROVIDER_REFRESH_TOKEN = 'rommochobi_gdrive_provider_refresh_token_v1';
 
-function persistProviderTokens(session: Session | null) {
-  if (!session) return;
+function persistProviderToken(session: Session | null) {
+  if (!session?.provider_token) return;
   try {
-    if (session.provider_token) {
-      localStorage.setItem(STORAGE_PROVIDER_TOKEN, session.provider_token);
-    }
-    if (session.provider_refresh_token) {
-      localStorage.setItem(
-        STORAGE_PROVIDER_REFRESH_TOKEN,
-        session.provider_refresh_token
-      );
-    }
+    sessionStorage.setItem(STORAGE_PROVIDER_TOKEN, session.provider_token);
   } catch {
-    // Local storage can be unavailable in privacy modes; auth still works.
+    // Session storage can be unavailable in privacy modes; auth still works.
   }
 }
 
 export function clearProviderTokens() {
   try {
+    sessionStorage.removeItem(STORAGE_PROVIDER_TOKEN);
     localStorage.removeItem(STORAGE_PROVIDER_TOKEN);
-    localStorage.removeItem(STORAGE_PROVIDER_REFRESH_TOKEN);
+    localStorage.removeItem('rommochobi_gdrive_provider_refresh_token_v1');
   } catch {}
 }
 
 export function getGoogleDriveAccessToken(): string | null {
   try {
-    return localStorage.getItem(STORAGE_PROVIDER_TOKEN);
+    return (
+      sessionStorage.getItem(STORAGE_PROVIDER_TOKEN) ||
+      localStorage.getItem(STORAGE_PROVIDER_TOKEN)
+    );
   } catch {
     return null;
   }
 }
 
+// Kept for compatibility only. Long-lived Google refresh tokens are not stored in the browser.
 export function getGoogleDriveRefreshToken(): string | null {
-  try {
-    return localStorage.getItem(STORAGE_PROVIDER_REFRESH_TOKEN);
-  } catch {
-    return null;
-  }
+  return null;
 }
 
 export async function ensureAnonymousSupabaseAuth(): Promise<User | null> {
@@ -72,7 +64,7 @@ export function initSupabaseAuth(
   const {
     data: { subscription },
   } = supabase.auth.onAuthStateChange((_event, session) => {
-    persistProviderTokens(session);
+    persistProviderToken(session);
 
     const user = session?.user ?? null;
     if (user && !user.is_anonymous && session) {
@@ -84,7 +76,7 @@ export function initSupabaseAuth(
   });
 
   void supabase.auth.getSession().then(({ data }) => {
-    persistProviderTokens(data.session);
+    persistProviderToken(data.session);
     const user = data.session?.user ?? null;
     if (user && !user.is_anonymous && data.session) {
       onPermanentUser?.(user, data.session);
