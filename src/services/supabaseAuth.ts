@@ -27,10 +27,7 @@ export function clearProviderTokens() {
 
 export function getGoogleDriveAccessToken(): string | null {
   try {
-    return (
-      sessionStorage.getItem(STORAGE_PROVIDER_TOKEN) ||
-      localStorage.getItem(STORAGE_PROVIDER_TOKEN)
-    );
+    return sessionStorage.getItem(STORAGE_PROVIDER_TOKEN);
   } catch {
     return null;
   }
@@ -91,6 +88,9 @@ export function initSupabaseAuth(
 export async function googleSupabaseSignIn(
   forceAccountSelect = false
 ): Promise<void> {
+  // Never reuse a stale Google provider token when reconnecting.
+  clearProviderTokens();
+
   const prompt = forceAccountSelect ? 'consent select_account' : 'consent';
 
   const { error } = await supabase.auth.signInWithOAuth({
@@ -101,6 +101,7 @@ export async function googleSupabaseSignIn(
       queryParams: {
         access_type: 'offline',
         prompt,
+        include_granted_scopes: 'true',
       },
     },
   });

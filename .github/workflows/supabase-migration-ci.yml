@@ -52,7 +52,8 @@ jobs:
               scopes: 'https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file',
               queryParams: {
                 access_type: 'offline',
-                prompt: 'consent',
+                prompt: 'consent select_account',
+                include_granted_scopes: 'true',
               },
             },
           });
@@ -72,7 +73,24 @@ jobs:
             throw new Error(`Google provider is not ready. HTTP ${response.status}. ${body.slice(0, 300)}`);
           }
 
-          console.log('Supabase anonymous auth and Google OAuth provider are ready.');
+          const google = new URL(location);
+          const scope = google.searchParams.get('scope') || '';
+          const redirectUri = google.searchParams.get('redirect_uri') || '';
+
+          for (const requiredScope of [
+            'https://www.googleapis.com/auth/drive.readonly',
+            'https://www.googleapis.com/auth/drive.file',
+          ]) {
+            if (!scope.includes(requiredScope)) {
+              throw new Error(`Google OAuth URL is missing required Drive scope: ${requiredScope}`);
+            }
+          }
+
+          if (redirectUri !== 'https://izfmwvqveiphyuufvxoq.supabase.co/auth/v1/callback') {
+            throw new Error(`Unexpected Google OAuth callback URI: ${redirectUri}`);
+          }
+
+          console.log('Supabase anonymous auth, Google callback, and Drive scopes are ready.');
           NODE
 
       - name: Type check
