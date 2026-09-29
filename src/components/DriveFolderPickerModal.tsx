@@ -57,6 +57,15 @@ interface BreadcrumbItem {
   driveId?: string;
 }
 
+type ConnectionStage = 'idle' | 'account' | 'api' | 'folders' | 'ready' | 'error';
+
+const CONNECTION_STAGE_ORDER: ConnectionStage[] = ['account', 'api', 'folders', 'ready'];
+
+const waitForStatus = (ms: number) =>
+  new Promise<void>((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+
 export const DriveFolderPickerModal: React.FC<DriveFolderPickerModalProps> = ({
   accessToken,
   isOpen,
@@ -100,21 +109,39 @@ export const DriveFolderPickerModal: React.FC<DriveFolderPickerModalProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isReconnecting, setIsReconnecting] = useState(false);
+  const [connectionStage, setConnectionStage] = useState<ConnectionStage>('idle');
+  const [connectionMessage, setConnectionMessage] = useState(
+    'Ready to connect securely to Google Drive.'
+  );
 
   const currentBreadcrumb = breadcrumbs[breadcrumbs.length - 1];
+  const isDriveApiDisabled = Boolean(
+    error && /google drive api is disabled|drive api has not been used|api is disabled/i.test(error)
+  );
   const reconnectSuggested = Boolean(
     error &&
-      /reconnect google drive|permission is missing|authorization has expired|access token has expired/i.test(
+      /reconnect google drive|permission is missing|authorization has expired|access token has expired|google drive api is disabled/i.test(
         error
       )
   );
 
+  const activeConnectionStep =
+    connectionStage === 'idle'
+      ? -1
+      : connectionStage === 'error'
+        ? Math.max(0, CONNECTION_STAGE_ORDER.findIndex((stage) => stage === 'api'))
+        : CONNECTION_STAGE_ORDER.findIndex((stage) => stage === connectionStage);
+
   const handleReconnectGoogleDrive = async () => {
     if (isReconnecting) return;
     setIsReconnecting(true);
+    setConnectionStage('account');
+    setConnectionMessage('Opening Google consent so Drive permission can be refreshed...');
     try {
       await googleSupabaseSignIn(true);
     } catch (err: any) {
+      setConnectionStage('error');
+      setConnectionMessage('Google Drive reconnect needs attention.');
       setError(err?.message || 'Unable to reconnect Google Drive.');
       setIsReconnecting(false);
     }
@@ -127,11 +154,45 @@ export const DriveFolderPickerModal: React.FC<DriveFolderPickerModalProps> = ({
     async (folderId: string, driveId?: string) => {
       setIsLoading(true);
       setError(null);
+
+      const isInitialConnection = folderId === 'root' && !driveId;
+
       try {
+        if (isInitialConnection) {
+          setConnectionStage('account');
+          setConnectionMessage('Step 1 of 4 — Google account connected.');
+          await waitForStatus(500);
+
+          setConnectionStage('api');
+          setConnectionMessage('Step 2 of 4 — Checking Google Drive API permission...');
+          await waitForStatus(650);
+
+          setConnectionStage('folders');
+          setConnectionMessage('Step 3 of 4 — Loading folders from My Drive...');
+        } else {
+          setConnectionStage('folders');
+          setConnectionMessage('Loading this Drive folder...');
+        }
+
         const results = await listDriveFolders(accessToken, folderId, driveId);
         setFolders(results);
+
+        setConnectionStage('ready');
+        setConnectionMessage(
+          results.length > 0
+            ? `Step 4 of 4 — Ready. ${results.length} folder${results.length === 1 ? '' : 's'} available.`
+            : 'Step 4 of 4 — Connected. This location has no subfolders.'
+        );
       } catch (err: any) {
         console.error('Error loading folders:', err);
+        setConnectionStage('error');
+        setConnectionMessage(
+          /google drive api is disabled|drive api has not been used|api is disabled/i.test(
+            String(err?.message || '')
+          )
+            ? 'Drive API check stopped here. Enable the API once, then reconnect.'
+            : 'Connection needs attention. Follow the highlighted action below.'
+        );
         setError(err.message || 'Failed to load folders from Google Drive');
       } finally {
         setIsLoading(false);
@@ -367,6 +428,9 @@ export const DriveFolderPickerModal: React.FC<DriveFolderPickerModalProps> = ({
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                   Google Drive API v3
                 </span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/25">
+                  Workspace: ramyachobi
+                </span>
               </h3>
               <p className="text-xs text-stone-400">
                 Browse My Drive & Shared Drives, search folders, or paste a direct folder link
@@ -447,6 +511,82 @@ export const DriveFolderPickerModal: React.FC<DriveFolderPickerModalProps> = ({
             <Users className="w-3.5 h-3.5" />
             <span>Shared</span>
           </button>
+        </div>
+
+        {/* Slow, easy-to-follow Drive connection progress */}
+        <div className="px-6 py-3 border-b border-stone-850 bg-stone-950/70">
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-[0.16em] text-stone-500 font-semibold">
+                Connection Status
+              </p>
+              <p className="text-xs text-stone-300 mt-0.5 whitespace-normal">
+                {connectionMessage}
+              </p>
+            </div>
+            <span
+              className={`text-[10px] font-mono px-2.5 py-1 rounded-full border shrink-0 ${
+                connectionStage === 'ready'
+                  ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/25'
+                  : connectionStage === 'error'
+                    ? 'bg-rose-500/10 text-rose-300 border-rose-500/25'
+                    : 'bg-amber-500/10 text-amber-300 border-amber-500/25'
+              }`}
+            >
+              {connectionStage === 'ready'
+                ? 'Connected'
+                : connectionStage === 'error'
+                  ? 'Action needed'
+                  : isLoading
+                    ? 'Checking...'
+                    : 'Ready'}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-4 gap-2">
+            {[
+              ['1', 'Google Account'],
+              ['2', 'Drive API'],
+              ['3', 'Folders'],
+              ['4', 'Ready'],
+            ].map(([number, label], index) => {
+              const complete = connectionStage === 'ready' || index < activeConnectionStep;
+              const active = index === activeConnectionStep && connectionStage !== 'ready';
+              const blocked = connectionStage === 'error' && index === activeConnectionStep;
+
+              return (
+                <div key={label} className="space-y-1">
+                  <div
+                    className={`h-1.5 rounded-full transition-all duration-700 ${
+                      blocked
+                        ? 'bg-rose-500'
+                        : complete
+                          ? 'bg-emerald-500'
+                          : active
+                            ? 'bg-amber-400 animate-pulse'
+                            : 'bg-stone-800'
+                    }`}
+                  />
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span
+                      className={`w-4 h-4 rounded-full text-[9px] font-bold flex items-center justify-center shrink-0 border ${
+                        blocked
+                          ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+                          : complete
+                            ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                            : active
+                              ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                              : 'bg-stone-900 text-stone-500 border-stone-800'
+                      }`}
+                    >
+                      {complete ? '✓' : number}
+                    </span>
+                    <span className="text-[10px] text-stone-500 truncate">{label}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         {/* Tab Context Bars */}
@@ -608,7 +748,19 @@ export const DriveFolderPickerModal: React.FC<DriveFolderPickerModalProps> = ({
               <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
               <p className="whitespace-normal leading-relaxed">{error}</p>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+              {isDriveApiDisabled && (
+                <a
+                  href="https://console.cloud.google.com/apis/library/drive.googleapis.com"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-sky-200 bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5"
+                  title="Open the Google Drive API page in Google Cloud"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  <span>1. Enable Drive API</span>
+                </a>
+              )}
               {reconnectSuggested && (
                 <button
                   type="button"
@@ -617,7 +769,7 @@ export const DriveFolderPickerModal: React.FC<DriveFolderPickerModalProps> = ({
                   className="text-amber-200 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-xs px-3 py-1.5 rounded-lg disabled:opacity-50 flex items-center gap-1.5"
                 >
                   <RefreshCw className={`w-3 h-3 ${isReconnecting ? 'animate-spin' : ''}`} />
-                  <span>{isReconnecting ? 'Reconnecting...' : 'Reconnect Google Drive'}</span>
+                  <span>{isReconnecting ? 'Reconnecting...' : isDriveApiDisabled ? '2. Reconnect Drive' : 'Reconnect Google Drive'}</span>
                 </button>
               )}
               <button
