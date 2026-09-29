@@ -18,7 +18,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Inspect current and previous Firebase projects
+      - name: Inspect Firebase data sources
         shell: bash
         run: |
           node --input-type=module <<'NODE'
@@ -29,24 +29,8 @@ jobs:
             return JSON.parse(raw);
           }
 
-          const sources = [
-            { label: 'current-main', ref: 'origin/main' },
-            { label: 'previous-working', ref: 'f36878bded58b9e114f05f2a467e76ab9147b1e7' },
-          ];
-
-          async function inspect(source) {
-            const cfg = readConfig(source.ref);
-            const result = {
-              label: source.label,
-              projectId: cfg.projectId,
-              auth: 'unknown',
-              firestore: 'unknown',
-              projects: null,
-              customerGalleries: null,
-              clientGallerySessions: null,
-            };
-
-            const signUp = await fetch(
+          async function authStatus(cfg) {
+            const res = await fetch(
               `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${cfg.apiKey}`,
               {
                 method: 'POST',
@@ -55,64 +39,71 @@ jobs:
               }
             );
 
-            if (!signUp.ok) {
-              result.auth = `failed:${signUp.status}`;
-              return result;
-            }
+            if (res.ok) return { ok: true, code: 'ok' };
 
-            const auth = await signUp.json();
-            const token = auth.idToken;
-            result.auth = 'ok';
-
-            const base =
-              `https://firestore.googleapis.com/v1/projects/${cfg.projectId}/databases/(default)/documents`;
-
-            async function countDocs(path) {
-              let pageToken = '';
-              let count = 0;
-
-              do {
-                const url = new URL(`${base}/${path}`);
-                url.searchParams.set('pageSize', '300');
-                if (pageToken) url.searchParams.set('pageToken', pageToken);
-
-                const res = await fetch(url, {
-                  headers: { authorization: `Bearer ${token}` },
-                });
-
-                if (res.status === 404) return 0;
-
-                if (!res.ok) {
-                  const body = await res.text();
-                  throw new Error(
-                    `${res.status}:${body.includes('SERVICE_DISABLED') ? 'SERVICE_DISABLED' : 'LIST_FAILED'}`
-                  );
-                }
-
-                const body = await res.json();
-                count += (body.documents || []).length;
-                pageToken = body.nextPageToken || '';
-              } while (pageToken);
-
-              return count;
-            }
-
+            let code = `http_${res.status}`;
             try {
-              result.projects = await countDocs('projects');
-              result.customerGalleries = await countDocs('customerGalleries');
-              result.clientGallerySessions = await countDocs('clientGallerySessions');
-              result.firestore = 'ok';
-            } catch (error) {
-              result.firestore = error?.message || String(error);
-            }
-
-            return result;
+              const body = await res.json();
+              code = body?.error?.message || code;
+            } catch {}
+            return { ok: false, code };
           }
 
-          const inventory = [];
+          async function countPublicGalleryDocs(cfg) {
+            const base =
+              `https://firestore.googleapis.com/v1/projects/${cfg.projectId}/databases/(default)/documents/customerGalleries`;
+
+            let pageToken = '';
+            let count = 0;
+
+            do {
+              const url = new URL(base);
+              url.searchParams.set('pageSize', '300');
+              if (pageToken) url.searchParams.set('pageToken', pageToken);
+
+              const res = await fetch(url);
+              if (res.status === 404) return { ok: true, count: 0, code: 'not_found' };
+
+              if (!res.ok) {
+                const body = await res.text();
+                return {
+                  ok: false,
+                  count: null,
+                  code: body.includes('SERVICE_DISABLED')
+                    ? 'SERVICE_DISABLED'
+                    : body.includes('PERMISSION_DENIED')
+                    ? 'PERMISSION_DENIED'
+                    : `HTTP_${res.status}`,
+                };
+              }
+
+              const body = await res.json();
+              count += (body.documents || []).length;
+              pageToken = body.nextPageToken || '';
+            } while (pageToken);
+
+            return { ok: true, count, code: 'ok' };
+          }
+
+          const sources = [
+            { label: 'current-main', ref: 'origin/main' },
+            { label: 'previous-working', ref: 'f36878bded58b9e114f05f2a467e76ab9147b1e7' },
+          ];
+
+          const results = [];
+
           for (const source of sources) {
-            inventory.push(await inspect(source));
+            const cfg = readConfig(source.ref);
+            const auth = await authStatus(cfg);
+            const publicGalleries = await countPublicGalleryDocs(cfg);
+
+            results.push({
+              label: source.label,
+              projectId: cfg.projectId,
+              anonymousAuth: auth.code,
+              publicCustomerGalleries: publicGalleries,
+            });
           }
 
-          console.log('FIREBASE_INVENTORY=' + JSON.stringify(inventory));
+          console.log('FIREBASE_SOURCE_CHECK=' + JSON.stringify(results));
           NODE
