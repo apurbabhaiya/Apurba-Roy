@@ -1,7 +1,5 @@
 import JSZip from 'jszip';
 import { CustomerGalleryPhoto } from '../types';
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from './auth';
 
 export interface ArchiveProgress {
   current: number;
@@ -133,22 +131,8 @@ export async function archiveSelectedPhotos(
     const sizeInMb = (zipBlob.size / (1024 * 1024)).toFixed(1);
     const sizeFormatted = Number(sizeInMb) < 0.1 ? `${Math.round(zipBlob.size / 1024)} KB` : `${sizeInMb} MB`;
 
-    // Persist ZIP ready status in Firestore projects doc
-    try {
-      const nowIso = new Date().toISOString();
-      const projectRef = doc(db, 'projects', projectId);
-      await updateDoc(projectRef, {
-        zipDownloadUrl: downloadUrl,
-        zipRequestStatus: 'ready',
-        zipFulfilledAt: nowIso,
-        zipRequestedCount: total,
-        updatedAt: nowIso,
-        updatedAtServer: serverTimestamp(),
-        lastActivity: `ZIP Archive Created (${total} photos)`,
-      });
-    } catch (e) {
-      console.warn('Firestore update for zipDownloadUrl notice:', e);
-    }
+    // Object URLs are browser-session scoped, so do not persist this local ZIP URL
+    // to Supabase. Persistent delivery URLs are handled by the admin fulfillment flow.
 
     onProgress?.({
       current: total,
