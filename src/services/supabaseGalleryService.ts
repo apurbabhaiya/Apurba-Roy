@@ -91,7 +91,7 @@ export async function getSupabaseGalleryByToken(
 
   const { data: claimedId, error: claimError } = await supabase.rpc(
     'claim_gallery_access',
-    { p_secure_token: secureToken }
+    { p_identifier: secureToken }
   );
   if (claimError) return null;
 
