@@ -13,60 +13,106 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Inspect Firebase collections
+      - name: Checkout repository history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Inspect current and previous Firebase projects
         shell: bash
         run: |
           node --input-type=module <<'NODE'
-          const apiKey = 'AIzaSyDkBB-_a5J9f-IeDhXaWg50h39D0rNqo2Q';
-          const projectId = 'aaaaaaaaaaa8-a7a63';
+          import { execFileSync } from 'node:child_process';
 
-          const signUp = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${apiKey}`, {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: '{}',
-          });
-
-          if (!signUp.ok) {
-            throw new Error(`Firebase anonymous auth failed: ${signUp.status} ${await signUp.text()}`);
+          function readConfig(ref) {
+            const raw = execFileSync('git', ['show', `${ref}:firebase-applet-config.json`], { encoding: 'utf8' });
+            return JSON.parse(raw);
           }
 
-          const auth = await signUp.json();
-          const token = auth.idToken;
-          const base = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents`;
+          const sources = [
+            { label: 'current-main', ref: 'origin/main' },
+            { label: 'previous-working', ref: 'f36878bded58b9e114f05f2a467e76ab9147b1e7' },
+          ];
 
-          async function listDocs(path) {
-            let pageToken = '';
-            let count = 0;
-            do {
-              const url = new URL(`${base}/${path}`);
-              url.searchParams.set('pageSize', '300');
-              if (pageToken) url.searchParams.set('pageToken', pageToken);
+          async function inspect(source) {
+            const cfg = readConfig(source.ref);
+            const result = {
+              label: source.label,
+              projectId: cfg.projectId,
+              auth: 'unknown',
+              firestore: 'unknown',
+              projects: null,
+              customerGalleries: null,
+              clientGallerySessions: null,
+            };
 
-              const res = await fetch(url, {
-                headers: { authorization: `Bearer ${token}` },
-              });
-
-              if (res.status === 404) return { count: 0, docs: [] };
-              if (!res.ok) {
-                throw new Error(`Firestore list failed for ${path}: ${res.status} ${await res.text()}`);
+            const signUp = await fetch(
+              `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${cfg.apiKey}`,
+              {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: '{}',
               }
+            );
 
-              const body = await res.json();
-              const docs = body.documents || [];
-              count += docs.length;
-              pageToken = body.nextPageToken || '';
-            } while (pageToken);
+            if (!signUp.ok) {
+              result.auth = `failed:${signUp.status}`;
+              return result;
+            }
 
-            return { count };
+            const auth = await signUp.json();
+            const token = auth.idToken;
+            result.auth = 'ok';
+
+            const base =
+              `https://firestore.googleapis.com/v1/projects/${cfg.projectId}/databases/(default)/documents`;
+
+            async function countDocs(path) {
+              let pageToken = '';
+              let count = 0;
+
+              do {
+                const url = new URL(`${base}/${path}`);
+                url.searchParams.set('pageSize', '300');
+                if (pageToken) url.searchParams.set('pageToken', pageToken);
+
+                const res = await fetch(url, {
+                  headers: { authorization: `Bearer ${token}` },
+                });
+
+                if (res.status === 404) return 0;
+
+                if (!res.ok) {
+                  const body = await res.text();
+                  throw new Error(
+                    `${res.status}:${body.includes('SERVICE_DISABLED') ? 'SERVICE_DISABLED' : 'LIST_FAILED'}`
+                  );
+                }
+
+                const body = await res.json();
+                count += (body.documents || []).length;
+                pageToken = body.nextPageToken || '';
+              } while (pageToken);
+
+              return count;
+            }
+
+            try {
+              result.projects = await countDocs('projects');
+              result.customerGalleries = await countDocs('customerGalleries');
+              result.clientGallerySessions = await countDocs('clientGallerySessions');
+              result.firestore = 'ok';
+            } catch (error) {
+              result.firestore = error?.message || String(error);
+            }
+
+            return result;
           }
 
-          const projects = await listDocs('projects');
-          const customerGalleries = await listDocs('customerGalleries');
-          const clientGallerySessions = await listDocs('clientGallerySessions');
+          const inventory = [];
+          for (const source of sources) {
+            inventory.push(await inspect(source));
+          }
 
-          console.log('FIREBASE_INVENTORY=' + JSON.stringify({
-            projects: projects.count,
-            customerGalleries: customerGalleries.count,
-            clientGallerySessions: clientGallerySessions.count,
-          }));
+          console.log('FIREBASE_INVENTORY=' + JSON.stringify(inventory));
           NODE
