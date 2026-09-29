@@ -33,6 +33,7 @@ import {
   parseDriveFolderIdFromUrl,
   listPhotosInFolder,
 } from '../services/drive';
+import { googleSupabaseSignIn } from '../services/supabaseAuth';
 
 export interface DriveFolderSelectionResult {
   folder: DriveFolder;
@@ -98,8 +99,26 @@ export const DriveFolderPickerModal: React.FC<DriveFolderPickerModalProps> = ({
   // General loading & error states
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isReconnecting, setIsReconnecting] = useState(false);
 
   const currentBreadcrumb = breadcrumbs[breadcrumbs.length - 1];
+  const reconnectSuggested = Boolean(
+    error &&
+      /reconnect google drive|permission is missing|authorization has expired|access token has expired/i.test(
+        error
+      )
+  );
+
+  const handleReconnectGoogleDrive = async () => {
+    if (isReconnecting) return;
+    setIsReconnecting(true);
+    try {
+      await googleSupabaseSignIn(true);
+    } catch (err: any) {
+      setError(err?.message || 'Unable to reconnect Google Drive.');
+      setIsReconnecting(false);
+    }
+  };
 
   // ==========================================
   // TAB 1: BROWSE DRIVE
@@ -587,15 +606,28 @@ export const DriveFolderPickerModal: React.FC<DriveFolderPickerModalProps> = ({
           <div className="mx-6 mt-4 p-3.5 rounded-2xl bg-rose-950/40 border border-rose-800/40 text-rose-300 text-xs flex items-center justify-between gap-3 animate-fade-in">
             <div className="flex items-center gap-2.5 min-w-0">
               <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
-              <p className="truncate">{error}</p>
+              <p className="whitespace-normal leading-relaxed">{error}</p>
             </div>
-            <button
-              type="button"
-              onClick={() => setError(null)}
-              className="text-stone-400 hover:text-white text-xs px-2 py-1 rounded-md hover:bg-stone-800 shrink-0"
-            >
-              Dismiss
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              {reconnectSuggested && (
+                <button
+                  type="button"
+                  onClick={handleReconnectGoogleDrive}
+                  disabled={isReconnecting}
+                  className="text-amber-200 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-xs px-3 py-1.5 rounded-lg disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  <RefreshCw className={`w-3 h-3 ${isReconnecting ? 'animate-spin' : ''}`} />
+                  <span>{isReconnecting ? 'Reconnecting...' : 'Reconnect Google Drive'}</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setError(null)}
+                className="text-stone-400 hover:text-white text-xs px-2 py-1 rounded-md hover:bg-stone-800"
+              >
+                Dismiss
+              </button>
+            </div>
           </div>
         )}
 
