@@ -77,7 +77,7 @@ export const persistAccessToken = (
   _email?: string | null
 ) => {
   try {
-    localStorage.setItem(STORAGE_PROVIDER_TOKEN, token);
+    sessionStorage.setItem(STORAGE_PROVIDER_TOKEN, token);
   } catch {}
 };
 
@@ -183,7 +183,9 @@ export const googleSignIn = async (
     data: { session },
   } = await supabase.auth.getSession();
 
-  if (session?.user && !session.user.is_anonymous) {
+  // A forced reconnect must always go through Google again so Drive scopes
+  // can be re-approved and a fresh provider token can be issued.
+  if (!forceAccountSelect && session?.user && !session.user.is_anonymous) {
     const mapped = mapUser(session.user);
     const token = getGoogleDriveAccessToken();
     if (mapped && token) {
