@@ -14,11 +14,44 @@ async function handleDriveError(res: Response, defaultMessage: string): Promise<
         throw new TokenExpiredError('Your Google Drive authorization has expired. Please reconnect your account.');
       }
       if (res.status === 403) {
-        const reason = gError.errors?.[0]?.reason;
-        if (reason === 'rateLimitExceeded' || reason === 'userRateLimitExceeded' || reason === 'dailyLimitExceeded') {
+        const reason = String(gError.errors?.[0]?.reason || '');
+        const providerMessage = String(gError.message || '');
+        const normalized = `${reason} ${providerMessage}`.toLowerCase();
+
+        if (
+          reason === 'rateLimitExceeded' ||
+          reason === 'userRateLimitExceeded' ||
+          reason === 'dailyLimitExceeded'
+        ) {
           throw new Error('Google Drive API quota limit reached. Please wait a moment and try again.');
         }
-        throw new Error('Permission denied. Ensure your Google account has access to this folder or shared drive.');
+
+        if (
+          normalized.includes('accessnotconfigured') ||
+          normalized.includes('has not been used in project') ||
+          normalized.includes('drive api has not been used') ||
+          normalized.includes('api is disabled')
+        ) {
+          throw new Error(
+            'Google Drive API is disabled for this OAuth project. Enable Google Drive API in Google Cloud, then reconnect Google Drive.'
+          );
+        }
+
+        if (
+          normalized.includes('insufficientpermissions') ||
+          normalized.includes('insufficient authentication scopes') ||
+          normalized.includes('insufficient permission')
+        ) {
+          throw new TokenExpiredError(
+            'Google Drive permission is missing. Reconnect Google Drive and approve Drive access.'
+          );
+        }
+
+        throw new Error(
+          providerMessage
+            ? `Google Drive access was denied: ${providerMessage}`
+            : 'Permission denied. Ensure this Google account can access the requested Drive folder.'
+        );
       }
       if (res.status === 404) {
         throw new Error('The requested folder or file could not be found. It may have been moved or deleted.');
