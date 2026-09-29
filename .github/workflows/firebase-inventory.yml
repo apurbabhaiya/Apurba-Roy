@@ -87,7 +87,8 @@ jobs:
 
           const sources = [
             { label: 'current-main', ref: 'origin/main' },
-            { label: 'previous-working', ref: 'f36878bded58b9e114f05f2a467e76ab9147b1e7' },
+            { label: 'middle-config', ref: '4b157fd2cb811f0cc952cf2bd891f077a5f3fa67' },
+            { label: 'previous-working', ref: '73ee19bda1db6ad643078d055ff3da4559012b79' },
           ];
 
           const results = [];
