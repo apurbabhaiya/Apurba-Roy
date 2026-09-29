@@ -1,0 +1,79 @@
+name: Google OAuth Callback Verification
+
+on:
+  push:
+    branches:
+      - migrate/firebase-to-supabase
+    paths:
+      - .github/workflows/google-oauth-callback-verify.yml
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Supabase client
+        run: npm install @supabase/supabase-js@^2
+
+      - name: Verify Google accepts Supabase callback
+        run: |
+          node --input-type=module <<'NODE'
+          import { createClient } from '@supabase/supabase-js';
+
+          const supabase = createClient(
+            'https://izfmwvqveiphyuufvxoq.supabase.co',
+            'sb_publishable_pTtO1vQIUiYpwVUHWYbCeA_hug5Y7Hn',
+            { auth: { persistSession: false, autoRefreshToken: false } }
+          );
+
+          const { data, error } = await supabase.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+              skipBrowserRedirect: true,
+              redirectTo: 'https://apurba-roy-three.vercel.app',
+              scopes: 'https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file',
+              queryParams: {
+                access_type: 'offline',
+                prompt: 'consent',
+              },
+            },
+          });
+
+          if (error || !data?.url) {
+            throw error || new Error('Supabase did not return an OAuth URL');
+          }
+
+          const first = await fetch(data.url, { redirect: 'manual' });
+          const googleUrl = first.headers.get('location') || '';
+
+          if (!googleUrl.includes('accounts.google.com')) {
+            throw new Error('Supabase did not redirect to Google');
+          }
+
+          const second = await fetch(googleUrl, {
+            redirect: 'manual',
+            headers: {
+              'user-agent': 'Mozilla/5.0',
+              'accept-language': 'en-US,en;q=0.9'
+            }
+          });
+
+          const body = await second.text();
+          const lower = body.toLowerCase();
+
+          if (
+            lower.includes('redirect_uri_mismatch') ||
+            lower.includes("this app's request is invalid") ||
+            lower.includes('access blocked')
+          ) {
+            throw new Error('Google still reports redirect_uri_mismatch');
+          }
+
+          console.log('Google accepted the configured Supabase callback URI.');
+          NODE
