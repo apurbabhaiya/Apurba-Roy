@@ -29,7 +29,7 @@ jobs:
             return JSON.parse(raw);
           }
 
-          async function authStatus(cfg) {
+          async function anonymousToken(cfg) {
             const res = await fetch(
               `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${cfg.apiKey}`,
               {
@@ -39,19 +39,22 @@ jobs:
               }
             );
 
-            if (res.ok) return { ok: true, code: 'ok' };
+            if (!res.ok) {
+              let code = `http_${res.status}`;
+              try {
+                const body = await res.json();
+                code = body?.error?.message || code;
+              } catch {}
+              return { token: null, code };
+            }
 
-            let code = `http_${res.status}`;
-            try {
-              const body = await res.json();
-              code = body?.error?.message || code;
-            } catch {}
-            return { ok: false, code };
+            const body = await res.json();
+            return { token: body.idToken, code: 'ok' };
           }
 
-          async function countPublicGalleryDocs(cfg) {
+          async function countDocs(cfg, collection, token) {
             const base =
-              `https://firestore.googleapis.com/v1/projects/${cfg.projectId}/databases/(default)/documents/customerGalleries`;
+              `https://firestore.googleapis.com/v1/projects/${cfg.projectId}/databases/(default)/documents/${collection}`;
 
             let pageToken = '';
             let count = 0;
@@ -61,7 +64,9 @@ jobs:
               url.searchParams.set('pageSize', '300');
               if (pageToken) url.searchParams.set('pageToken', pageToken);
 
-              const res = await fetch(url);
+              const headers = token ? { authorization: `Bearer ${token}` } : {};
+              const res = await fetch(url, { headers });
+
               if (res.status === 404) return { ok: true, count: 0, code: 'not_found' };
 
               if (!res.ok) {
@@ -95,16 +100,29 @@ jobs:
 
           for (const source of sources) {
             const cfg = readConfig(source.ref);
-            const auth = await authStatus(cfg);
-            const publicGalleries = await countPublicGalleryDocs(cfg);
+            const auth = await anonymousToken(cfg);
+
+            const projects = auth.token
+              ? await countDocs(cfg, 'projects', auth.token)
+              : { ok: false, count: null, code: 'NO_TOKEN' };
+
+            const customerGalleries = auth.token
+              ? await countDocs(cfg, 'customerGalleries', auth.token)
+              : await countDocs(cfg, 'customerGalleries', null);
+
+            const clientGallerySessions = auth.token
+              ? await countDocs(cfg, 'clientGallerySessions', auth.token)
+              : { ok: false, count: null, code: 'NO_TOKEN' };
 
             results.push({
               label: source.label,
               projectId: cfg.projectId,
               anonymousAuth: auth.code,
-              publicCustomerGalleries: publicGalleries,
+              projects,
+              customerGalleries,
+              clientGallerySessions,
             });
           }
 
-          console.log('FIREBASE_SOURCE_CHECK=' + JSON.stringify(results));
+          console.log('FIREBASE_AUTH_INVENTORY=' + JSON.stringify(results));
           NODE
