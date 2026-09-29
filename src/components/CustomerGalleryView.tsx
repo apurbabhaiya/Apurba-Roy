@@ -43,7 +43,6 @@ import {
   History,
   CheckSquare,
 } from 'lucide-react';
-import { doc, onSnapshot } from 'firebase/firestore';
 import {
   CustomerGallery,
   CustomerGalleryPhoto,
@@ -61,6 +60,7 @@ import {
   editCurrentSelection,
   submitProjectSelection,
   subscribeToProjectSelections,
+  subscribeToGalleryUpdates,
   requestProjectZip,
   recordSelectionHistoryEntry,
   subscribeToSelectionHistory,
@@ -74,7 +74,7 @@ import {
   ArchiveProgress,
   ArchiveResult,
 } from '../services/archiveService';
-import { ensureAnonymousAuth, db } from '../services/auth';
+import { ensureAnonymousAuth } from '../services/auth';
 import { LoadingOverlay } from './LoadingOverlay';
 import {
   getOrCreateClientSession,
@@ -194,7 +194,7 @@ export const CustomerGalleryView: React.FC<CustomerGalleryViewProps> = ({
   const [loading, setLoading] = useState(!initialGallery);
   const [error, setError] = useState<string | null>(null);
 
-  // Debounced Queuing Mechanism for Firestore Updates
+  // Debounced Queuing Mechanism for Supabase Updates
   const pendingQueueRef = useRef<Map<string, boolean>>(new Map());
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const hideSavedTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -440,7 +440,7 @@ export const CustomerGalleryView: React.FC<CustomerGalleryViewProps> = ({
     };
   }, [token, initialGallery, isAdminPreview]);
 
-  // Real-time Firestore sync: subscribe to selections subcollection
+  // Real-time Supabase sync: subscribe to selections subcollection
   useEffect(() => {
     if (!gallery?.id) return;
     const unsubscribe = subscribeToProjectSelections(gallery.id, (remoteSelectedIds) => {
@@ -453,36 +453,29 @@ export const CustomerGalleryView: React.FC<CustomerGalleryViewProps> = ({
     return () => unsubscribe();
   }, [gallery?.id]);
 
-  // Real-time Firestore sync for project document status (e.g. ZIP fulfillment link, status changes)
+  // Real-time Supabase sync for gallery status and ZIP fulfillment updates
   useEffect(() => {
     if (!gallery?.id) return;
-    try {
-      const docRef = doc(db, 'projects', gallery.id);
-      const unsub = onSnapshot(docRef, (docSnap) => {
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          setGallery((prev) => {
-            if (!prev) return null;
-            return {
-              ...prev,
-              zipRequested: !!data.zipRequested,
-              zipRequestedAt: data.zipRequestedAt || prev.zipRequestedAt,
-              zipRequestStatus: data.zipRequestStatus || prev.zipRequestStatus,
-              zipRequestNotes: data.zipRequestNotes || prev.zipRequestNotes,
-              zipDownloadUrl: data.zipDownloadUrl || prev.zipDownloadUrl,
-              zipRequestedCount: data.zipRequestedCount || prev.zipRequestedCount,
-              status: (data.status as any) || prev.status,
-            };
-          });
-        }
+    const unsub = subscribeToGalleryUpdates(gallery.id, (remoteGallery) => {
+      setGallery((prev) => {
+        if (!prev) return remoteGallery;
+        return {
+          ...prev,
+          zipRequested: remoteGallery.zipRequested,
+          zipRequestedAt: remoteGallery.zipRequestedAt || prev.zipRequestedAt,
+          zipRequestStatus: remoteGallery.zipRequestStatus || prev.zipRequestStatus,
+          zipRequestNotes: remoteGallery.zipRequestNotes || prev.zipRequestNotes,
+          zipDownloadUrl: remoteGallery.zipDownloadUrl || prev.zipDownloadUrl,
+          zipRequestedCount:
+            remoteGallery.zipRequestedCount ?? prev.zipRequestedCount,
+          status: remoteGallery.status || prev.status,
+        };
       });
-      return () => unsub();
-    } catch (e) {
-      console.warn('Realtime project doc listener notice:', e);
-    }
+    });
+    return () => unsub();
   }, [gallery?.id]);
 
-  // Real-time Firestore sync: subscribe to selection_history subcollection
+  // Real-time Supabase sync: subscribe to selection_history subcollection
   useEffect(() => {
     if (!gallery?.id) return;
     const unsub = subscribeToSelectionHistory(gallery.id, (entries) => {
@@ -652,7 +645,7 @@ export const CustomerGalleryView: React.FC<CustomerGalleryViewProps> = ({
     return () => window.removeEventListener('scroll', handleScroll);
   }, [filteredPhotos.length]);
 
-  // Debounced Photo Selection with Instant 0ms UI update and Batched Firestore updates
+  // Debounced Photo Selection with Instant 0ms UI update and Batched Supabase updates
   const togglePhotoSelection = useCallback(
     (photoId: string) => {
       if (isReadOnly) {
@@ -694,7 +687,7 @@ export const CustomerGalleryView: React.FC<CustomerGalleryViewProps> = ({
       pendingQueueRef.current.set(photoId, nextIsSelected);
       setAutoSaveStatus('saving');
 
-      // 3. Debounce Firestore writeBatch (batches multiple rapid clicks into one API call)
+      // 3. Debounce Supabase writeBatch (batches multiple rapid clicks into one API call)
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
       }
@@ -740,7 +733,7 @@ export const CustomerGalleryView: React.FC<CustomerGalleryViewProps> = ({
             setAutoSaveStatus('saved');
           }, 1500);
         } catch (err) {
-          console.warn('Debounced Firestore selection sync failed:', err);
+          console.warn('Debounced Supabase selection sync failed:', err);
           setAutoSaveStatus('offline');
         }
       }, 350);
@@ -1000,7 +993,7 @@ export const CustomerGalleryView: React.FC<CustomerGalleryViewProps> = ({
     }
   };
 
-  // Clear All & Start Again: deletes all selection documents in Firestore, keeps gallery and project active
+  // Clear All & Start Again: deletes all selection documents in Supabase, keeps gallery and project active
   const handleRestartSelections = async () => {
     if (!gallery) return;
     setIsRestarting(true);
@@ -1188,7 +1181,7 @@ export const CustomerGalleryView: React.FC<CustomerGalleryViewProps> = ({
     setSelectedIds(new Set(previousState));
     setGallery((prev) => (prev ? { ...prev, selectedCount: previousState.length } : null));
 
-    // Synchronize snapshot to Firestore & record history
+    // Synchronize snapshot to Supabase & record history
     setIsRestoringHistory(true);
     try {
       await restoreSelectionSnapshot(
@@ -1221,7 +1214,7 @@ export const CustomerGalleryView: React.FC<CustomerGalleryViewProps> = ({
     setSelectedIds(new Set(nextState));
     setGallery((prev) => (prev ? { ...prev, selectedCount: nextState.length } : null));
 
-    // Synchronize snapshot to Firestore & record history
+    // Synchronize snapshot to Supabase & record history
     setIsRestoringHistory(true);
     try {
       await restoreSelectionSnapshot(
@@ -1558,7 +1551,7 @@ export const CustomerGalleryView: React.FC<CustomerGalleryViewProps> = ({
 
       const photoIdsArray = Array.from(selectedIds);
 
-      // 2. Submit to Firestore
+      // 2. Submit to Supabase
       const res = await submitProjectSelection(
         gallery.id,
         photoIdsArray,
@@ -3495,7 +3488,7 @@ export const CustomerGalleryView: React.FC<CustomerGalleryViewProps> = ({
         <LoadingOverlay
           variant="overlay"
           statusText="Restoring selection state..."
-          subtext="Synchronizing choices with Firestore timeline"
+          subtext="Synchronizing choices with Supabase timeline"
         />
       )}
 
