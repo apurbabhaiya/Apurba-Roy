@@ -1078,10 +1078,28 @@ function bookingToForm(booking: Booking, events: EventRow[]): FormData {
   };
 }
 
+
+const ADMIN_TOKEN_KEY = "ramya_booking_admin_token_v1";
+
+function getStoredAdminToken() {
+  try {
+    return localStorage.getItem(ADMIN_TOKEN_KEY) || "";
+  } catch {
+    return "";
+  }
+}
+
+function saveAdminToken(token: string) {
+  try {
+    if (token) localStorage.setItem(ADMIN_TOKEN_KEY, token);
+    else localStorage.removeItem(ADMIN_TOKEN_KEY);
+  } catch {}
+}
+
 function AdminPanel() {
   const [ready, setReady] = useState(false);
-  const [userEmail, setUserEmail] = useState("");
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [token, setToken] = useState("");
+  const [accessCode, setAccessCode] = useState("");
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [events, setEvents] = useState<EventRow[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -1091,82 +1109,60 @@ function AdminPanel() {
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function load() {
+  async function load(activeToken?: string) {
+    const useToken = activeToken || token;
+    if (!useToken) {
+      setReady(true);
+      return;
+    }
+
     setLoading(true);
     setNotice("");
     try {
-      const results = await Promise.all([
-        db.from("booking_clients").select("*").order("created_at", {
-          ascending: false,
-        }),
-        db.from("booking_events").select("*").order("event_date", {
-          ascending: true,
-        }),
-        db.from("booking_payments").select("*").order("paid_on", {
-          ascending: false,
-        }),
-        db.from("booking_costs").select("*").order("created_at", {
-          ascending: false,
-        }),
-      ]);
+      const result = await db.rpc("booking_admin_dashboard", {
+        p_token: useToken,
+      });
+      if (result.error) throw result.error;
 
-      for (const result of results) {
-        if (result.error) throw result.error;
-      }
-
-      const nextBookings = (results[0].data || []) as Booking[];
+      const payload = result.data || {};
+      const nextBookings = (payload.bookings || []) as Booking[];
       setBookings(nextBookings);
-      setEvents((results[1].data || []) as EventRow[]);
-      setPayments((results[2].data || []) as Payment[]);
-      setCosts((results[3].data || []) as Cost[]);
-      if (!selectedId && nextBookings[0]) setSelectedId(nextBookings[0].id);
+      setEvents((payload.events || []) as EventRow[]);
+      setPayments((payload.payments || []) as Payment[]);
+      setCosts((payload.costs || []) as Cost[]);
+
+      if (!selectedId && nextBookings[0]) {
+        setSelectedId(nextBookings[0].id);
+      } else if (
+        selectedId &&
+        !nextBookings.some(function (b) {
+          return b.id === selectedId;
+        })
+      ) {
+        setSelectedId(nextBookings[0] ? nextBookings[0].id : "");
+      }
     } catch (err: any) {
-      setNotice(err && err.message ? err.message : "Could not load data.");
+      const message =
+        err && err.message ? err.message : "Could not load admin data.";
+      setNotice(message);
+      if (/session expired|invalid admin/i.test(message)) {
+        saveAdminToken("");
+        setToken("");
+      }
     } finally {
       setLoading(false);
+      setReady(true);
     }
   }
 
   useEffect(function () {
-    let active = true;
-
-    async function boot() {
-      try {
-        const sessionResult = await supabase.auth.getSession();
-        if (sessionResult.error) throw sessionResult.error;
-        const user = sessionResult.data.session
-          ? sessionResult.data.session.user
-          : null;
-
-        if (!active) return;
-
-        if (user && !user.is_anonymous) {
-          setUserEmail(user.email || "");
-          const access = await db
-            .from("booking_admins")
-            .select("user_id")
-            .eq("user_id", user.id)
-            .maybeSingle();
-
-          if (access.error) throw access.error;
-          if (!active) return;
-
-          setIsAdmin(Boolean(access.data));
-          if (access.data) await load();
-        }
-      } catch (err: any) {
-        if (active) {
-          setNotice(err && err.message ? err.message : "Authentication failed.");
-        }
-      } finally {
-        if (active) setReady(true);
-      }
+    const stored = getStoredAdminToken();
+    if (stored) {
+      setToken(stored);
+      void load(stored);
+    } else {
+      setReady(true);
     }
-
-    boot();
-    return function () {
-      active = false;
-    };
   }, []);
 
   const filtered = useMemo(
@@ -1195,20 +1191,49 @@ function AdminPanel() {
       return b.id === selectedId;
     }) || null;
 
-  async function signIn() {
-    const result = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: window.location.origin + "/booking/admin",
-        queryParams: { prompt: "select_account" },
-      },
-    });
-    if (result.error) setNotice(result.error.message);
+  async function signIn(e?: React.FormEvent) {
+    if (e) e.preventDefault();
+    if (!accessCode.trim()) return;
+
+    setLoading(true);
+    setNotice("");
+    try {
+      const result = await db.rpc("booking_admin_login", {
+        p_code: accessCode.trim(),
+      });
+      if (result.error) throw result.error;
+
+      const nextToken = String(result.data?.token || "");
+      if (!nextToken) throw new Error("Admin login token was not returned.");
+
+      saveAdminToken(nextToken);
+      setToken(nextToken);
+      setAccessCode("");
+      await load(nextToken);
+    } catch (err: any) {
+      setNotice(
+        err && err.message ? err.message : "Admin access code is invalid."
+      );
+    } finally {
+      setLoading(false);
+      setReady(true);
+    }
   }
 
   async function signOut() {
-    await supabase.auth.signOut();
-    window.location.reload();
+    try {
+      if (token) {
+        await db.rpc("booking_admin_logout", { p_token: token });
+      }
+    } catch {}
+    saveAdminToken("");
+    setToken("");
+    setBookings([]);
+    setEvents([]);
+    setPayments([]);
+    setCosts([]);
+    setSelectedId("");
+    setNotice("");
   }
 
   function exportCsv() {
@@ -1272,51 +1297,52 @@ function AdminPanel() {
     );
   }
 
-  if (!userEmail) {
+  if (!token) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-950 px-4">
-        <div className="w-full max-w-md rounded-3xl bg-white p-8">
+        <form
+          onSubmit={signIn}
+          className="w-full max-w-md rounded-3xl bg-white p-8 shadow-2xl"
+        >
           <div className="text-sm font-bold uppercase tracking-[0.2em] text-slate-500">
             Ramya Chobi
           </div>
           <h1 className="mt-2 text-3xl font-black text-slate-900">
-            Admin client sheet
+            Admin Client Sheet
           </h1>
           <p className="mt-3 text-slate-600">
-            Sign in with the authorized Google account.
+            Enter the private admin access code. Google OAuth is not required.
           </p>
+          <Field label="Admin access code">
+            <input
+              autoFocus
+              type="password"
+              autoComplete="current-password"
+              className={inputClass}
+              value={accessCode}
+              onChange={function (e) {
+                setAccessCode(e.target.value);
+              }}
+              placeholder="Enter access code"
+            />
+          </Field>
           <button
-            onClick={signIn}
-            className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-5 py-3 font-bold text-white"
+            disabled={loading || !accessCode.trim()}
+            className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-5 py-3 font-bold text-white disabled:opacity-60"
           >
-            <LogIn className="h-4 w-4" />
-            Sign in with Google
+            {loading ? (
+              <RefreshCw className="h-4 w-4 animate-spin" />
+            ) : (
+              <LogIn className="h-4 w-4" />
+            )}
+            Open admin panel
           </button>
           {notice ? (
             <div className="mt-4 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700">
               {notice}
             </div>
           ) : null}
-        </div>
-      </main>
-    );
-  }
-
-  if (!isAdmin) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-100 px-4">
-        <div className="w-full max-w-lg rounded-3xl bg-white p-8 shadow">
-          <h1 className="text-2xl font-black">
-            This Google account is not authorized for the booking admin panel.
-          </h1>
-          <p className="mt-2 text-slate-600">{userEmail}</p>
-          <button
-            onClick={signOut}
-            className="mt-6 rounded-xl bg-slate-900 px-4 py-2.5 font-bold text-white"
-          >
-            Sign out
-          </button>
-        </div>
+        </form>
       </main>
     );
   }
@@ -1340,7 +1366,9 @@ function AdminPanel() {
               CSV
             </button>
             <button
-              onClick={load}
+              onClick={function () {
+                void load();
+              }}
               className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-sm font-bold"
             >
               <RefreshCw
@@ -1445,6 +1473,7 @@ function AdminPanel() {
         <aside className="min-w-0">
           {selected ? (
             <BookingDetail
+              token={token}
               booking={selected}
               events={events}
               payments={payments}
@@ -1462,7 +1491,9 @@ function AdminPanel() {
   );
 }
 
+
 function BookingDetail(props: {
+  token: string;
   booking: Booking;
   events: EventRow[];
   payments: Payment[];
@@ -1498,10 +1529,12 @@ function BookingDetail(props: {
     booking.internal_notes || ""
   );
   const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState("");
 
   useEffect(
     function () {
       setInternalNotes(booking.internal_notes || "");
+      setNotice("");
     },
     [booking.id, booking.internal_notes]
   );
@@ -1509,24 +1542,24 @@ function BookingDetail(props: {
   async function addPayment() {
     const amount = Number(paymentAmount);
     if (!(amount > 0)) return;
+
     setSaving(true);
+    setNotice("");
     try {
-      const session = await supabase.auth.getSession();
-      const result = await db.from("booking_payments").insert({
-        booking_id: booking.id,
-        amount: amount,
-        paid_on: paymentDate,
-        method: paymentMethod || null,
-        note: paymentNote || null,
-        created_by:
-          session.data.session && session.data.session.user
-            ? session.data.session.user.id
-            : null,
+      const result = await db.rpc("booking_admin_add_payment", {
+        p_token: props.token,
+        p_booking_id: booking.id,
+        p_amount: amount,
+        p_paid_on: paymentDate,
+        p_method: paymentMethod || null,
+        p_note: paymentNote || null,
       });
       if (result.error) throw result.error;
       setPaymentAmount("");
       setPaymentNote("");
       await props.onChanged();
+    } catch (err: any) {
+      setNotice(err && err.message ? err.message : "Could not save payment.");
     } finally {
       setSaving(false);
     }
@@ -1535,26 +1568,26 @@ function BookingDetail(props: {
   async function addCost() {
     const amount = Number(costAmount);
     if (!costAmount || amount < 0) return;
+
     setSaving(true);
+    setNotice("");
     try {
-      const session = await supabase.auth.getSession();
-      const result = await db.from("booking_costs").insert({
-        booking_id: booking.id,
-        cost_type: costType,
-        amount: amount,
-        vendor: costVendor || null,
-        paid_on: costDate || null,
-        note: costNote || null,
-        created_by:
-          session.data.session && session.data.session.user
-            ? session.data.session.user.id
-            : null,
+      const result = await db.rpc("booking_admin_add_cost", {
+        p_token: props.token,
+        p_booking_id: booking.id,
+        p_cost_type: costType,
+        p_amount: amount,
+        p_vendor: costVendor || null,
+        p_paid_on: costDate || null,
+        p_note: costNote || null,
       });
       if (result.error) throw result.error;
       setCostAmount("");
       setCostVendor("");
       setCostNote("");
       await props.onChanged();
+    } catch (err: any) {
+      setNotice(err && err.message ? err.message : "Could not save cost.");
     } finally {
       setSaving(false);
     }
@@ -1562,13 +1595,18 @@ function BookingDetail(props: {
 
   async function saveNotes() {
     setSaving(true);
+    setNotice("");
     try {
-      const result = await db
-        .from("booking_clients")
-        .update({ internal_notes: internalNotes })
-        .eq("id", booking.id);
+      const result = await db.rpc("booking_admin_update_booking", {
+        p_token: props.token,
+        p_booking_id: booking.id,
+        p_status: null,
+        p_internal_notes: internalNotes,
+      });
       if (result.error) throw result.error;
       await props.onChanged();
+    } catch (err: any) {
+      setNotice(err && err.message ? err.message : "Could not save notes.");
     } finally {
       setSaving(false);
     }
@@ -1576,13 +1614,18 @@ function BookingDetail(props: {
 
   async function changeStatus(status: string) {
     setSaving(true);
+    setNotice("");
     try {
-      const result = await db
-        .from("booking_clients")
-        .update({ status: status })
-        .eq("id", booking.id);
+      const result = await db.rpc("booking_admin_update_booking", {
+        p_token: props.token,
+        p_booking_id: booking.id,
+        p_status: status,
+        p_internal_notes: null,
+      });
       if (result.error) throw result.error;
       await props.onChanged();
+    } catch (err: any) {
+      setNotice(err && err.message ? err.message : "Could not update status.");
     } finally {
       setSaving(false);
     }
@@ -1601,6 +1644,12 @@ function BookingDetail(props: {
 
   return (
     <div className="space-y-4">
+      {notice ? (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">
+          {notice}
+        </div>
+      ) : null}
+
       <section className="rounded-3xl bg-slate-950 p-5 text-white shadow-sm">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -1688,8 +1737,9 @@ function BookingDetail(props: {
           </div>
           <select
             value={booking.status}
+            disabled={saving}
             onChange={function (e) {
-              changeStatus(e.target.value);
+              void changeStatus(e.target.value);
             }}
             className={inputClass + " mt-1"}
           >
@@ -1814,8 +1864,10 @@ function BookingDetail(props: {
         </div>
         <button
           disabled={saving}
-          onClick={addPayment}
-          className="mt-3 rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white"
+          onClick={function () {
+            void addPayment();
+          }}
+          className="mt-3 rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60"
         >
           Save payment
         </button>
@@ -1841,7 +1893,7 @@ function BookingDetail(props: {
       <section className="rounded-3xl bg-white p-5 shadow-sm">
         <div className="font-black">Internal cost only</div>
         <p className="mt-1 text-xs text-slate-500">
-          Never shown on the client form or client PDF.
+          This is private admin information and never appears in the client PDF.
         </p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <select
@@ -1894,8 +1946,10 @@ function BookingDetail(props: {
         </div>
         <button
           disabled={saving}
-          onClick={addCost}
-          className="mt-3 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white"
+          onClick={function () {
+            void addCost();
+          }}
+          className="mt-3 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60"
         >
           Save internal cost
         </button>
@@ -1931,8 +1985,10 @@ function BookingDetail(props: {
         />
         <button
           disabled={saving}
-          onClick={saveNotes}
-          className="mt-3 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white"
+          onClick={function () {
+            void saveNotes();
+          }}
+          className="mt-3 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60"
         >
           Save private notes
         </button>
