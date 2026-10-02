@@ -80,15 +80,15 @@ const services = [
 const menuItems = [
   { label: 'Home', href: '#home', icon: Sparkles, kind: 'section' },
   { label: 'Portfolio', href: '#portfolio', icon: Images, kind: 'section' },
-  { label: 'Services', href: '#services', icon: Camera, kind: 'section' },
-  { label: 'Why RamyaChobi', href: '#trust', icon: ShieldCheck, kind: 'section' },
-  { label: 'About', href: '/about', icon: BookOpenCheck, kind: 'section' },
-  { label: 'Packages', href: '/packages', icon: Star, kind: 'section' },
   { label: 'Photo Selection', href: '/photo-selection', icon: Images, kind: 'app' },
-  { label: 'Client Delivery', href: '/delivery', icon: Download, kind: 'app' },
-  { label: 'Booking', href: '/booking', icon: CalendarDays, kind: 'app' },
-  { label: 'Delivery Admin', href: '/delivery-admin', icon: LayoutDashboard, kind: 'admin' },
-  { label: 'Studio / Selection Admin', href: '/studio', icon: KeyRound, kind: 'admin' },
+  { label: 'Final Delivery', href: '/delivery', icon: Download, kind: 'app' },
+  { label: 'Face Search', href: '/face-search', icon: Camera, kind: 'app' },
+  { label: 'Client Gallery', href: '/client-gallery', icon: FolderHeart, kind: 'app' },
+  { label: 'Packages', href: '/packages', icon: Star, kind: 'section' },
+  { label: 'Our Services', href: '#services', icon: Film, kind: 'section' },
+  { label: 'About RamyaChobi', href: '/about', icon: BookOpenCheck, kind: 'section' },
+  { label: 'Client Reviews', href: '#reviews', icon: Star, kind: 'section' },
+  { label: 'Contact / Booking', href: '#contact', icon: CalendarDays, kind: 'section' },
 ];
 
 function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose?: () => void }) {
@@ -349,19 +349,40 @@ export default function RamyaChobiHome() {
           </div>
         </section>
 
-        <section className="bg-stone-950 text-white">
+        <section id="reviews" className="bg-white">
+          <div className="mx-auto max-w-7xl px-5 py-20 sm:px-8 lg:px-10">
+            <div className="grid gap-8 lg:grid-cols-[.8fr_1.2fr] lg:items-center">
+              <div>
+                <div className="text-xs font-bold uppercase tracking-[0.24em] text-amber-700">Client Reviews</div>
+                <h2 className="mt-2 text-3xl font-semibold sm:text-4xl">Real feedback, not invented testimonials.</h2>
+                <p className="mt-4 leading-7 text-stone-600">
+                  This section is reserved for verified RamyaChobi client reviews. Only genuine feedback approved for publication should be shown here.
+                </p>
+              </div>
+              <div className="rounded-3xl border border-dashed border-stone-300 bg-[#faf8f4] p-8 text-center">
+                <Star className="mx-auto h-8 w-8 text-amber-700" />
+                <div className="mt-4 text-lg font-semibold">Verified client reviews will appear here.</div>
+                <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-stone-500">
+                  Once real client feedback is collected, this area can display reviewer name, event type, rating and approved review text.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="contact" className="bg-stone-950 text-white">
           <div className="mx-auto max-w-7xl px-5 py-16 sm:px-8 lg:px-10">
             <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <div className="text-xs font-bold uppercase tracking-[0.24em] text-amber-300">RamyaChobi</div>
+                <div className="text-xs font-bold uppercase tracking-[0.24em] text-amber-300">Contact / Booking</div>
                 <h2 className="mt-2 text-3xl font-semibold">Ready to plan your story?</h2>
                 <p className="mt-2 max-w-xl text-white/55">
-                  Start with the booking form, or use the client tools from the right-side menu.
+                  Start your booking, review packages, or use the client tools from the Main Menu.
                 </p>
               </div>
               <div className="flex flex-wrap gap-3">
                 <a href="/booking" className="rounded-xl bg-amber-300 px-5 py-3 font-bold text-stone-950">Book Now</a>
-                <a href="/photo-selection" className="rounded-xl border border-white/15 px-5 py-3 font-bold">Photo Selection</a>
+                <a href="/packages" className="rounded-xl border border-white/15 px-5 py-3 font-bold">View Packages</a>
               </div>
             </div>
           </div>
