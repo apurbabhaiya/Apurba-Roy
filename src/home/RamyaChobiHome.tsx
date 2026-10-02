@@ -27,31 +27,37 @@ const portfolio = [
     image: 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1200&q=85',
     title: 'Wedding Story',
     category: 'Wedding Photography',
+    caption: 'A quiet pre-wedding moment framed with timeless simplicity.',
   },
   {
     image: 'https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&w=1200&q=85',
     title: 'Celebration',
     category: 'Event Photography',
+    caption: 'Celebration, colour and genuine emotion in one frame.',
   },
   {
     image: 'https://images.unsplash.com/photo-1519225421980-715cb0215aed?auto=format&fit=crop&w=1200&q=85',
     title: 'Portrait Moments',
     category: 'Couple Portraits',
+    caption: 'Portraits built around connection rather than forced poses.',
   },
   {
     image: 'https://images.unsplash.com/photo-1507501336603-6e31db2be093?auto=format&fit=crop&w=1200&q=85',
     title: 'Family & Friends',
     category: 'Lifestyle',
+    caption: 'Natural moments with the people who make the day memorable.',
   },
   {
     image: 'https://images.unsplash.com/photo-1523438885200-e635ba2c371e?auto=format&fit=crop&w=1200&q=85',
     title: 'Reception Night',
     category: 'Wedding Reception',
+    caption: 'Reception stories photographed with warmth and detail.',
   },
   {
     image: 'https://images.unsplash.com/photo-1529636798458-92182e662485?auto=format&fit=crop&w=1200&q=85',
     title: 'Quiet Moments',
     category: 'Candid Photography',
+    caption: 'Unscripted moments that keep the feeling of the day alive.',
   },
 ];
 
@@ -198,6 +204,7 @@ export default function RamyaChobiHome() {
             image: post.cover_image_url || post.portfolio_media?.[0]?.image_url || '',
             title: post.title,
             category: post.event_type,
+            caption: post.story || '',
           }))
           .filter((item) => Boolean(item.image));
 
@@ -311,6 +318,9 @@ export default function RamyaChobiHome() {
                 <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent p-5 text-white">
                   <div className="text-xs uppercase tracking-[0.18em] text-white/55">{item.category}</div>
                   <div className="mt-1 text-xl font-semibold">{item.title}</div>
+                  {item.caption && (
+                    <div className="mt-2 line-clamp-2 max-w-xl text-sm leading-6 text-white/70">{item.caption}</div>
+                  )}
                 </div>
               </article>
             ))}
