@@ -32,6 +32,61 @@ export type DeliveryPortalData = {
   preview_items?: DeliveryPreviewItem[];
 };
 
+export type DeliveryAdminPortal = DeliveryPortalData & {
+  booking_id?: string | null;
+  gallery_id?: string | null;
+  secure_token: string;
+  client_phone?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+export type DeliveryPaymentSubmission = {
+  id: string;
+  portal_id: string;
+  payment_type: 'PACKAGE' | 'ACCESS';
+  payer_phone: string;
+  transaction_id: string;
+  amount: number | string;
+  selected_days?: number | null;
+  status: 'SUBMITTED' | 'VERIFIED' | 'REJECTED';
+  submitted_at: string;
+  verified_at?: string | null;
+  booking_payment_id?: string | null;
+  client_name?: string | null;
+  event_name?: string | null;
+};
+
+export type DeliveryBookingSummary = {
+  id: string;
+  reference_no: string;
+  client_name: string;
+  phone: string;
+  package_name?: string | null;
+  package_total: number | string;
+  advance_paid: number | string;
+  additional_paid: number | string;
+  has_portal: boolean;
+  event_name?: string | null;
+  event_date?: string | null;
+};
+
+export type DeliveryAuditLog = {
+  id: string;
+  portal_id?: string | null;
+  submission_id?: string | null;
+  action: string;
+  details?: Record<string, unknown> | null;
+  created_at: string;
+};
+
+export type DeliveryAdminDashboard = {
+  portals: DeliveryAdminPortal[];
+  submissions: DeliveryPaymentSubmission[];
+  bookings: DeliveryBookingSummary[];
+  audit_logs: DeliveryAuditLog[];
+};
+
 export async function getDeliveryPortal(token: string): Promise<DeliveryPortalData | null> {
   const { data, error } = await db.rpc('get_delivery_portal_by_token', { p_token: token });
   if (error) throw error;
@@ -53,6 +108,83 @@ export async function submitDeliveryPayment(input: {
     p_transaction_id: input.transactionId,
     p_amount: input.amount,
     p_selected_days: input.selectedDays ?? null,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function deliveryAdminLogin(accessCode: string) {
+  const { data, error } = await db.rpc('booking_admin_login', { p_code: accessCode });
+  if (error) throw error;
+  return data as { token: string; expires_at: string };
+}
+
+export async function deliveryAdminLogout(token: string) {
+  const { error } = await db.rpc('booking_admin_logout', { p_token: token });
+  if (error) throw error;
+}
+
+export async function getDeliveryAdminDashboard(token: string): Promise<DeliveryAdminDashboard> {
+  const { data, error } = await db.rpc('delivery_admin_dashboard', { p_token: token });
+  if (error) throw error;
+  return {
+    portals: data?.portals || [],
+    submissions: data?.submissions || [],
+    bookings: data?.bookings || [],
+    audit_logs: data?.audit_logs || [],
+  } as DeliveryAdminDashboard;
+}
+
+export async function createDeliveryPortalFromBooking(input: {
+  token: string;
+  bookingId: string;
+  bkashNumber?: string | null;
+  storageRetentionUntil?: string | null;
+}) {
+  const { data, error } = await db.rpc('delivery_admin_create_from_booking', {
+    p_token: input.token,
+    p_booking_id: input.bookingId,
+    p_bkash_number: input.bkashNumber || null,
+    p_storage_retention_until: input.storageRetentionUntil || null,
+  });
+  if (error) throw error;
+  return data as { id: string; secure_token: string; client_name: string };
+}
+
+export async function reviewDeliveryPayment(input: {
+  token: string;
+  submissionId: string;
+  decision: 'VERIFY' | 'REJECT';
+}) {
+  const { data, error } = await db.rpc('delivery_admin_review_payment', {
+    p_token: input.token,
+    p_submission_id: input.submissionId,
+    p_decision: input.decision,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function activateFinalDelivery(input: { token: string; portalId: string }) {
+  const { data, error } = await db.rpc('delivery_admin_activate_final_delivery', {
+    p_token: input.token,
+    p_portal_id: input.portalId,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function updateDeliverySettings(input: {
+  token: string;
+  portalId: string;
+  bkashNumber?: string | null;
+  storageRetentionUntil?: string | null;
+}) {
+  const { data, error } = await db.rpc('delivery_admin_update_settings', {
+    p_token: input.token,
+    p_portal_id: input.portalId,
+    p_bkash_number: input.bkashNumber || null,
+    p_storage_retention_until: input.storageRetentionUntil || null,
   });
   if (error) throw error;
   return data;
