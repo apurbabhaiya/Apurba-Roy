@@ -8,6 +8,7 @@ import {
   Copy,
   ExternalLink,
   FileCheck2,
+  Images,
   KeyRound,
   Link2,
   Loader2,
@@ -313,7 +314,27 @@ export default function RamyaChobiDeliveryAdmin() {
             <div className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-300">RamyaChobi</div>
             <h1 className="mt-1 text-2xl font-semibold">Client Delivery Admin</h1>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <a
+              href="/photo-selection"
+              className="inline-flex items-center gap-2 rounded-xl bg-amber-300 px-3.5 py-2 text-sm font-bold text-stone-950"
+            >
+              <Images className="h-4 w-4" /> Photo Selection
+            </a>
+            <a
+              href="/booking/admin"
+              className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-3.5 py-2 text-sm font-semibold"
+            >
+              <FileCheck2 className="h-4 w-4" /> Booking Admin
+            </a>
+            <a
+              href="/delivery"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-3.5 py-2 text-sm font-semibold"
+            >
+              <ExternalLink className="h-4 w-4" /> Delivery Demo
+            </a>
             <button onClick={() => load()} disabled={loading} className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-3.5 py-2 text-sm font-semibold">
               <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Refresh
             </button>
@@ -328,6 +349,35 @@ export default function RamyaChobiDeliveryAdmin() {
         {notice && (
           <div className="rounded-2xl border border-stone-200 bg-white p-4 text-sm font-medium shadow-sm">{notice}</div>
         )}
+
+        <section className="grid gap-4 md:grid-cols-3">
+          <a href="/photo-selection" className="group rounded-3xl bg-stone-950 p-6 text-white shadow-sm transition hover:-translate-y-0.5">
+            <Images className="h-8 w-8 text-amber-300" />
+            <h2 className="mt-4 text-xl font-semibold">Photo Selection</h2>
+            <p className="mt-2 text-sm leading-6 text-white/60">
+              Open the existing Google Drive photo-selection admin and client gallery system.
+            </p>
+            <div className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-amber-300">
+              Open Photo Selection <ExternalLink className="h-4 w-4" />
+            </div>
+          </a>
+
+          <a href="/booking/admin" className="group rounded-3xl border border-stone-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5">
+            <FileCheck2 className="h-8 w-8 text-amber-700" />
+            <h2 className="mt-4 text-xl font-semibold">Booking Management</h2>
+            <p className="mt-2 text-sm leading-6 text-stone-500">
+              Manage bookings, client details, payments, events and agreements.
+            </p>
+          </a>
+
+          <a href="/delivery" target="_blank" rel="noreferrer" className="group rounded-3xl border border-stone-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5">
+            <Link2 className="h-8 w-8 text-amber-700" />
+            <h2 className="mt-4 text-xl font-semibold">Client Delivery</h2>
+            <p className="mt-2 text-sm leading-6 text-stone-500">
+              Preview the RamyaChobi payment, Final Delivery and access-restoration landing page.
+            </p>
+          </a>
+        </section>
 
         <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {[
