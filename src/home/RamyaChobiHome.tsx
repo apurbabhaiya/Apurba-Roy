@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ArrowRight,
   BookOpenCheck,
@@ -20,6 +20,7 @@ import {
   Star,
   X,
 } from 'lucide-react';
+import { getPublicPortfolioPosts } from '../services/portfolioService';
 
 const portfolio = [
   {
@@ -79,7 +80,7 @@ const services = [
 
 const menuItems = [
   { label: 'Home', href: '#home', icon: Sparkles, kind: 'section' },
-  { label: 'Portfolio', href: '#portfolio', icon: Images, kind: 'section' },
+  { label: 'Portfolio', href: '/portfolio', icon: Images, kind: 'section' },
   { label: 'Photo Selection', href: '/photo-selection', icon: Images, kind: 'app' },
   { label: 'Final Delivery', href: '/delivery', icon: Download, kind: 'app' },
   { label: 'Face Search', href: '/face-search', icon: Camera, kind: 'app' },
@@ -149,6 +150,27 @@ function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose?: () => void }
 
 export default function RamyaChobiHome() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [featuredPortfolio, setFeaturedPortfolio] = useState<typeof portfolio>([]);
+
+  useEffect(() => {
+    getPublicPortfolioPosts(true)
+      .then((posts) => {
+        const mapped = posts
+          .map((post) => ({
+            image: post.cover_image_url || post.portfolio_media?.[0]?.image_url || '',
+            title: post.title,
+            category: post.event_type,
+          }))
+          .filter((item) => Boolean(item.image));
+
+        if (mapped.length > 0) setFeaturedPortfolio(mapped);
+      })
+      .catch(() => {
+        // Keep the visual fallback until the admin publishes Featured work.
+      });
+  }, []);
+
+  const displayPortfolio = featuredPortfolio.length > 0 ? featuredPortfolio : portfolio;
 
   return (
     <div className="min-h-screen bg-[#f5f0e7] text-stone-900">
@@ -173,7 +195,7 @@ export default function RamyaChobiHome() {
           <a href="/" className="text-lg font-semibold tracking-[0.16em]">RAMYACHOBI</a>
           <div className="hidden items-center gap-6 text-xs font-semibold uppercase tracking-[0.13em] md:flex">
             <a href="/about" className="hover:text-amber-300">About</a>
-            <a href="#portfolio" className="hover:text-amber-300">Gallery</a>
+            <a href="/portfolio" className="hover:text-amber-300">Gallery</a>
             <a href="#services" className="hover:text-amber-300">Films</a>
             <a href="/packages" className="hover:text-amber-300">Packages</a>
             <a href="/booking" className="rounded-full bg-white px-4 py-2 text-stone-950">Book Your Date</a>
@@ -202,7 +224,7 @@ export default function RamyaChobiHome() {
               We create photographs and films that feel personal, then deliver them through a clear, private and professional client experience.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <a href="#portfolio" className="inline-flex items-center gap-2 rounded-xl bg-amber-300 px-5 py-3 font-bold text-stone-950">
+              <a href="/portfolio" className="inline-flex items-center gap-2 rounded-xl bg-amber-300 px-5 py-3 font-bold text-stone-950">
                 Explore Portfolio <ArrowRight className="h-4 w-4" />
               </a>
               <a href="/booking" className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-5 py-3 font-bold text-white backdrop-blur">
@@ -234,16 +256,16 @@ export default function RamyaChobiHome() {
               <div className="text-xs font-bold uppercase tracking-[0.24em] text-amber-700">Portfolio</div>
               <h2 className="mt-2 text-3xl font-semibold sm:text-4xl">Stories, not just frames.</h2>
               <p className="mt-3 max-w-2xl leading-7 text-stone-600">
-                A premium portfolio area for your strongest wedding, event, portrait and cinematic work. Replace these demo images with your own selected work.
+                Featured work is controlled from the Admin Panel. Publish a post and mark it Featured to show it here automatically.
               </p>
             </div>
-            <div className="rounded-2xl bg-stone-950 px-4 py-3 text-sm font-semibold text-white">
-              Curated work only
-            </div>
+            <a href="/portfolio" className="rounded-2xl bg-stone-950 px-4 py-3 text-sm font-semibold text-white">
+              View Full Portfolio
+            </a>
           </div>
 
           <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {portfolio.map((item, i) => (
+            {displayPortfolio.map((item, i) => (
               <article key={item.title} className={`group relative overflow-hidden rounded-3xl bg-stone-200 ${i === 0 ? 'sm:col-span-2 lg:col-span-2' : ''}`}>
                 <div className={i === 0 ? 'aspect-[16/8]' : 'aspect-[4/3]'}>
                   <img src={item.image} alt={item.title} className="h-full w-full object-cover transition duration-700 group-hover:scale-105" />
