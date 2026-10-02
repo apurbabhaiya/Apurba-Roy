@@ -78,6 +78,43 @@ const services = [
   },
 ];
 
+const reviewGroups = [
+  {
+    title: 'Wedding Reviews',
+    reviews: [
+      {
+        avatar: 'https://i.postimg.cc/BnPncZmR/Shuvojit.jpg',
+        name: 'Shuvojit & Tisha',
+        meta: 'Reception • Dhaka',
+        text: 'কোয়ালিটি একদম প্রিমিয়াম। কালার টোন ও সিনেমাটিক ভিডিও অসাধারণ।',
+      },
+      {
+        avatar: 'https://i.postimg.cc/tg0Cr0cv/anika.jpg',
+        name: 'Anika & Rafi',
+        meta: 'Muslim Wedding • Mymensingh',
+        text: 'অনেক সুন্দর কভারেজ হয়েছে। সময়মতো সব ডেলিভারি দিয়েছে।',
+      },
+    ],
+  },
+  {
+    title: 'Pre-Wedding / Engagement Reviews',
+    reviews: [
+      {
+        avatar: 'https://i.postimg.cc/cLtLM1DG/Puja.jpg',
+        name: 'Nazmul & Sumi',
+        meta: 'Pre-Wedding • Outdoor',
+        text: 'পোজিং গাইড ও লোকেশন সাজেশন খুব ভালো ছিল।',
+      },
+      {
+        avatar: 'https://i.postimg.cc/g09kM975/mou.jpg',
+        name: 'Rifat & Nabila',
+        meta: 'Engagement • Gauripur',
+        text: 'ছবিগুলো এক কথায় অসাধারণ। অল্প সময়ে ডেলিভারি পেয়েছি।',
+      },
+    ],
+  },
+];
+
 const menuItems = [
   { label: 'Home', href: '#home', icon: Sparkles, kind: 'section' },
   { label: 'Portfolio', href: '/portfolio', icon: Images, kind: 'section' },
@@ -151,6 +188,7 @@ function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose?: () => void }
 export default function RamyaChobiHome() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [featuredPortfolio, setFeaturedPortfolio] = useState<typeof portfolio>([]);
+  const [showMoreReviews, setShowMoreReviews] = useState(false);
 
   useEffect(() => {
     getPublicPortfolioPosts(true)
@@ -373,22 +411,66 @@ export default function RamyaChobiHome() {
 
         <section id="reviews" className="bg-white">
           <div className="mx-auto max-w-7xl px-5 py-20 sm:px-8 lg:px-10">
-            <div className="grid gap-8 lg:grid-cols-[.8fr_1.2fr] lg:items-center">
+            <div className="flex flex-wrap items-end justify-between gap-5">
               <div>
                 <div className="text-xs font-bold uppercase tracking-[0.24em] text-amber-700">Client Reviews</div>
-                <h2 className="mt-2 text-3xl font-semibold sm:text-4xl">Real feedback, not invented testimonials.</h2>
-                <p className="mt-4 leading-7 text-stone-600">
-                  This section is reserved for verified RamyaChobi client reviews. Only genuine feedback approved for publication should be shown here.
+                <h2 className="mt-2 text-3xl font-semibold sm:text-4xl">What our clients say.</h2>
+                <p className="mt-3 max-w-2xl leading-7 text-stone-600">
+                  Feedback from RamyaChobi wedding, engagement and pre-wedding clients.
                 </p>
               </div>
-              <div className="rounded-3xl border border-dashed border-stone-300 bg-[#faf8f4] p-8 text-center">
-                <Star className="mx-auto h-8 w-8 text-amber-700" />
-                <div className="mt-4 text-lg font-semibold">Verified client reviews will appear here.</div>
-                <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-stone-500">
-                  Once real client feedback is collected, this area can display reviewer name, event type, rating and approved review text.
-                </p>
+              <div className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-4 py-2 text-sm font-bold text-amber-800">
+                <Star className="h-4 w-4 fill-amber-400 text-amber-500" /> 5.0 Client Feedback
               </div>
             </div>
+
+            <div className="mt-10 space-y-10">
+              {reviewGroups.slice(0, showMoreReviews ? reviewGroups.length : 1).map((group) => (
+                <div key={group.title}>
+                  <div className="mb-4 flex items-center gap-2">
+                    <Star className="h-5 w-5 fill-amber-400 text-amber-500" />
+                    <h3 className="text-xl font-semibold">{group.title}</h3>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {group.reviews.map((review) => (
+                      <article key={review.name} className="rounded-3xl border border-stone-200 bg-[#faf8f4] p-6 shadow-sm">
+                        <div className="flex items-center gap-4">
+                          <img
+                            src={review.avatar}
+                            alt={review.name}
+                            className="h-16 w-16 rounded-full object-cover ring-2 ring-white shadow-sm"
+                          />
+                          <div>
+                            <h4 className="font-semibold">{review.name}</h4>
+                            <div className="mt-1 text-sm text-stone-500">{review.meta}</div>
+                            <div className="mt-2 flex gap-0.5" aria-label="5 out of 5 stars">
+                              {[0, 1, 2, 3, 4].map((star) => (
+                                <Star key={star} className="h-4 w-4 fill-amber-400 text-amber-500" />
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                        <p className="mt-5 text-[15px] leading-7 text-stone-700">“{review.text}”</p>
+                      </article>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {reviewGroups.length > 1 && (
+              <div className="mt-8 text-center">
+                <button
+                  type="button"
+                  onClick={() => setShowMoreReviews((value) => !value)}
+                  className="inline-flex items-center gap-2 rounded-xl border border-stone-300 bg-white px-5 py-3 text-sm font-bold shadow-sm transition hover:border-stone-950"
+                >
+                  {showMoreReviews ? 'Show less' : 'See more'}
+                  <ChevronRight className={`h-4 w-4 transition ${showMoreReviews ? 'rotate-90' : ''}`} />
+                </button>
+              </div>
+            )}
           </div>
         </section>
 
