@@ -7,12 +7,13 @@ import RamyaChobiHome from "./home/RamyaChobiHome";
 import RamyaChobiPackages from "./home/RamyaChobiPackages";
 import RamyaChobiAbout from "./home/RamyaChobiAbout";
 import ClientAccessPage from "./home/ClientAccessPage";
+import PortfolioPage from "./home/PortfolioPage";
 
 export default function RouterApp() {
   const path = window.location.pathname;
 
   useEffect(() => {
-    const isPublicPage = path === "/" || path === "/about" || path === "/packages";
+    const isPublicPage = path === "/" || path === "/about" || path === "/packages" || path === "/portfolio" || path === "/stories" || path === "/blog";
     let robots = document.querySelector('meta[name="robots"]') as HTMLMetaElement | null;
     if (!robots) {
       robots = document.createElement("meta");
@@ -28,7 +29,11 @@ export default function RouterApp() {
           ? "About · RamyaChobi"
           : path === "/packages"
             ? "Packages · RamyaChobi"
-            : path === "/face-search"
+            : path === "/portfolio"
+              ? "Portfolio · RamyaChobi"
+              : path === "/stories" || path === "/blog"
+                ? "Stories · RamyaChobi"
+                : path === "/face-search"
             ? "Face Search · RamyaChobi"
             : path === "/client-gallery"
               ? "Client Gallery · RamyaChobi"
@@ -46,6 +51,8 @@ export default function RouterApp() {
   if (path === "/") return <RamyaChobiHome />;
   if (path === "/about") return <RamyaChobiAbout />;
   if (path === "/packages") return <RamyaChobiPackages />;
+  if (path === "/portfolio") return <PortfolioPage />;
+  if (path === "/stories" || path === "/blog") return <PortfolioPage featuredOnly={false} />;
   if (path === "/face-search") return <ClientAccessPage mode="face" />;
   if (path === "/client-gallery") return <ClientAccessPage mode="gallery" />;
 
