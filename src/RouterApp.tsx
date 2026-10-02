@@ -6,6 +6,7 @@ import RamyaChobiDeliveryAdmin from "./delivery/RamyaChobiDeliveryAdmin";
 import RamyaChobiHome from "./home/RamyaChobiHome";
 import RamyaChobiPackages from "./home/RamyaChobiPackages";
 import RamyaChobiAbout from "./home/RamyaChobiAbout";
+import ClientAccessPage from "./home/ClientAccessPage";
 
 export default function RouterApp() {
   const path = window.location.pathname;
@@ -27,7 +28,11 @@ export default function RouterApp() {
           ? "About · RamyaChobi"
           : path === "/packages"
             ? "Packages · RamyaChobi"
-            : path.startsWith("/delivery-admin")
+            : path === "/face-search"
+            ? "Face Search · RamyaChobi"
+            : path === "/client-gallery"
+              ? "Client Gallery · RamyaChobi"
+              : path.startsWith("/delivery-admin")
               ? "RamyaChobi · Delivery Admin"
               : path.startsWith("/delivery")
                 ? "RamyaChobi · Private Client Delivery"
@@ -41,6 +46,8 @@ export default function RouterApp() {
   if (path === "/") return <RamyaChobiHome />;
   if (path === "/about") return <RamyaChobiAbout />;
   if (path === "/packages") return <RamyaChobiPackages />;
+  if (path === "/face-search") return <ClientAccessPage mode="face" />;
+  if (path === "/client-gallery") return <ClientAccessPage mode="gallery" />;
 
   if (path.startsWith("/booking")) return <BookingPortal />;
 
