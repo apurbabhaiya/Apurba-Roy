@@ -4,40 +4,45 @@ import BookingPortal from "./booking/BookingPortal";
 import RamyaChobiDelivery from "./delivery/RamyaChobiDelivery";
 import RamyaChobiDeliveryAdmin from "./delivery/RamyaChobiDeliveryAdmin";
 import RamyaChobiHome from "./home/RamyaChobiHome";
+import RamyaChobiPackages from "./home/RamyaChobiPackages";
+import RamyaChobiAbout from "./home/RamyaChobiAbout";
 
 export default function RouterApp() {
   const path = window.location.pathname;
 
   useEffect(() => {
-    const isPublicHome = path === "/";
+    const isPublicPage = path === "/" || path === "/about" || path === "/packages";
     let robots = document.querySelector('meta[name="robots"]') as HTMLMetaElement | null;
     if (!robots) {
       robots = document.createElement("meta");
       robots.name = "robots";
       document.head.appendChild(robots);
     }
-    robots.content = isPublicHome ? "index,follow" : "noindex,nofollow";
+    robots.content = isPublicPage ? "index,follow" : "noindex,nofollow";
 
-    document.title = isPublicHome
-      ? "RamyaChobi · Photography & Cinematography"
-      : path.startsWith("/delivery-admin")
-        ? "RamyaChobi · Delivery Admin"
-        : path.startsWith("/delivery")
-          ? "RamyaChobi · Private Client Delivery"
-          : path.startsWith("/photo-selection") || path.startsWith("/gallery/") || path.startsWith("/select/")
-            ? "RamyaChobi · Photo Selection"
-            : path.startsWith("/booking")
-              ? "RamyaChobi · Booking"
-              : "RamyaChobi";
+    document.title =
+      path === "/"
+        ? "RamyaChobi · Photography & Cinematography"
+        : path === "/about"
+          ? "About · RamyaChobi"
+          : path === "/packages"
+            ? "Packages · RamyaChobi"
+            : path.startsWith("/delivery-admin")
+              ? "RamyaChobi · Delivery Admin"
+              : path.startsWith("/delivery")
+                ? "RamyaChobi · Private Client Delivery"
+                : path.startsWith("/photo-selection") || path.startsWith("/gallery/") || path.startsWith("/select/")
+                  ? "RamyaChobi · Photo Selection"
+                  : path.startsWith("/booking")
+                    ? "RamyaChobi · Booking"
+                    : "RamyaChobi";
   }, [path]);
 
-  if (path === "/") {
-    return <RamyaChobiHome />;
-  }
+  if (path === "/") return <RamyaChobiHome />;
+  if (path === "/about") return <RamyaChobiAbout />;
+  if (path === "/packages") return <RamyaChobiPackages />;
 
-  if (path.startsWith("/booking")) {
-    return <BookingPortal />;
-  }
+  if (path.startsWith("/booking")) return <BookingPortal />;
 
   if (path === "/delivery-admin" || path.startsWith("/delivery-admin/")) {
     return <RamyaChobiDeliveryAdmin />;
