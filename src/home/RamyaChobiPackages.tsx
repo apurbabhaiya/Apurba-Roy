@@ -1,126 +1,234 @@
 import React, { useMemo, useState } from 'react';
-import { ArrowRight, Check, ChevronDown, Menu, X } from 'lucide-react';
+import { ArrowRight, Check, ChevronDown, Sparkles } from 'lucide-react';
 
 type Category = 'regular' | 'outdoor' | 'sonaton';
 type SonatonSide = 'both' | 'bride' | 'groom' | 'wedding';
 
-const packages: Record<Category, Array<{
+type PackageItem = {
   tier: string;
   name: string;
+  price: number;
   badge?: string;
   coverage: string;
   crew: string[];
   deliverables: string[];
   physical: string[];
-}>> = {
-  regular: [
-    {
-      tier: 'Essential',
-      name: 'Regular Essential',
-      coverage: 'Short event coverage',
-      crew: ['1 Photographer', '1 Cinematographer'],
-      deliverables: ['Edited usable photographs', '1 highlight/reel', '1 final film'],
-      physical: ['Available as add-on'],
-    },
+};
+
+const regularPackages: PackageItem[] = [
+  {
+    tier: 'Essential',
+    name: 'Regular Basic',
+    price: 15000,
+    coverage: '4 hours coverage',
+    crew: ['1 Photographer', '1 Cinematographer', 'Drone operator not included'],
+    deliverables: ['All usable edited photos', '1 Reel', '1 Full Video', '1 Trailer'],
+    physical: ['Photobook not included', 'Pendrive not included'],
+  },
+  {
+    tier: 'Best Value',
+    name: 'Regular Standard',
+    price: 23000,
+    badge: 'Most Popular',
+    coverage: '6 hours coverage',
+    crew: ['2 Photographers', '1 Cinematographer', 'Drone operator not included'],
+    deliverables: ['All usable edited photos', '1 Reel', '1 Full Video', '1 Trailer'],
+    physical: ['Photobook not included', 'Pendrive not included'],
+  },
+  {
+    tier: 'Signature',
+    name: 'Regular Storytelling',
+    price: 55000,
+    coverage: '6 hours coverage',
+    crew: ['1 Candid Photographer', '1 Senior Photographer', '2 Cinematographers'],
+    deliverables: ['All usable edited photos', '1 Reel', '1 Full Video', '1 Trailer'],
+    physical: ['Premium album options available', 'Pendrive available'],
+  },
+];
+
+const outdoorPackages: PackageItem[] = [
+  {
+    tier: 'Budget / Essential',
+    name: 'Outdoor Essentials',
+    price: 13000,
+    coverage: '2–4 hours outdoor coverage',
+    crew: ['1 Photographer', '1 Senior Cinematographer', 'Drone operator not included'],
+    deliverables: ['Approx. 100 selected edited photos', '1 Trailer'],
+    physical: ['Photobook not included', 'Pendrive not included'],
+  },
+  {
+    tier: 'Best Value',
+    name: 'Outdoor Cinematic',
+    price: 23000,
+    badge: 'Most Popular',
+    coverage: '4–6 hours outdoor coverage',
+    crew: ['1 Senior Photographer', '1 Senior Cinematographer', '1 Drone Operator'],
+    deliverables: ['All usable edited photos', '1 Full Video', '1 Trailer'],
+    physical: ['Photobook not included', 'Pendrive not included'],
+  },
+  {
+    tier: 'Premium / Signature',
+    name: 'Outdoor Signature',
+    price: 47000,
+    coverage: '6–8 hours outdoor coverage',
+    crew: ['1 Candid Photographer', '1 Senior Photographer', '1 Senior Cinematographer', '1 Drone Operator'],
+    deliverables: ['All usable edited photos', '1 Reel', '1 Full Video', '1 Trailer'],
+    physical: ['Exclusive photobook available', 'Pendrive available'],
+  },
+];
+
+const sonatonPackages: Record<SonatonSide, PackageItem[]> = {
+  both: [
     {
       tier: 'Signature',
-      name: 'Regular Signature',
-      badge: 'Most Popular',
-      coverage: 'Extended event coverage',
-      crew: ['2 Photographers', '1 Cinematographer'],
-      deliverables: ['Edited usable photographs', 'Highlight film', 'Full film', 'Trailer'],
-      physical: ['Photobook available as add-on'],
-    },
-    {
-      tier: 'Story',
-      name: 'Regular Storytelling',
-      coverage: 'Full storytelling coverage',
-      crew: ['1 Lead Photographer', '1 Candid Photographer', '2 Cinematographers'],
-      deliverables: ['Edited usable photographs', 'Highlight film', 'Full film', 'Trailer'],
-      physical: ['Premium album options available'],
-    },
-  ],
-  outdoor: [
-    {
-      tier: 'Essential',
-      name: 'Outdoor Essential',
-      coverage: 'Pre-wedding or post-wedding session',
-      crew: ['1 Photographer', '1 Cinematographer'],
-      deliverables: ['Curated edited photographs', 'Short cinematic reel'],
-      physical: ['Digital delivery'],
-    },
-    {
-      tier: 'Cinematic',
-      name: 'Outdoor Cinematic',
-      badge: 'Most Popular',
-      coverage: 'Extended outdoor session',
-      crew: ['1 Photographer', '1 Cinematographer', 'Drone when applicable'],
-      deliverables: ['Edited photographs', 'Cinematic film', 'Trailer'],
-      physical: ['Album available as add-on'],
-    },
-    {
-      tier: 'Signature',
-      name: 'Outdoor Signature',
-      coverage: 'Premium outdoor storytelling session',
-      crew: ['1 Lead Photographer', '1 Candid Photographer', '1 Cinematographer'],
-      deliverables: ['Edited photographs', 'Cinematic film', 'Trailer'],
-      physical: ['Premium album options available'],
-    },
-  ],
-  sonaton: [
-    {
-      tier: 'Signature',
-      name: 'Sonaton Signature',
-      coverage: 'Traditional wedding-event coverage',
-      crew: ['Photography team', 'Cinematography team'],
-      deliverables: ['Edited photographs', 'Highlight film', 'Full film'],
-      physical: ['Album options available'],
+      name: 'Sonaton Both Side Signature',
+      price: 124000,
+      coverage: 'Bride + groom side traditional wedding coverage',
+      crew: ['1 Photographer + 1 Cinematographer on each side'],
+      deliverables: ['Pre-Wedding', 'Holud for Bride', 'Holud for Groom', 'Bride & Groom side rituals', 'Reception'],
+      physical: ['Standard Photobook', 'Pendrive'],
     },
     {
       tier: 'Prestige',
-      name: 'Sonaton Prestige',
+      name: 'Sonaton Both Side Prestige',
+      price: 184000,
       badge: 'Most Popular',
-      coverage: 'Multi-event traditional wedding coverage',
-      crew: ['Extended photography team', 'Cinematography team', 'Drone when applicable'],
-      deliverables: ['Edited photographs', 'Highlight film', 'Full film', 'Trailer'],
-      physical: ['Standard album options available'],
+      coverage: 'Extended both-side multi-event coverage',
+      crew: ['2 Photographers', '1 Cinematographer', '1 Drone Operator on each side where applicable'],
+      deliverables: ['Pre-Wedding', 'Holud for Bride', 'Holud for Groom', 'Bride & Groom side rituals', 'Reception'],
+      physical: ['Standard Photobook', 'Pendrive'],
     },
     {
       tier: 'Storytelling',
-      name: 'Sonaton Storytelling',
-      coverage: 'Complete multi-event story coverage',
-      crew: ['Lead + candid photographers', 'Multi-camera cinematography team'],
-      deliverables: ['Edited photographs', 'Highlight film', 'Full film', 'Trailer'],
-      physical: ['Premium album options available'],
+      name: 'Sonaton Both Side Storytelling',
+      price: 339000,
+      coverage: 'Complete both-side wedding storytelling',
+      crew: ['2 Photographers', '1–2 Cinematographers', '1 Drone Operator on each side where applicable'],
+      deliverables: ['Engagement', 'Pre-Wedding', 'Mehendi', 'Colour Fest', 'Holud for Bride', 'Holud for Groom', 'Bride & Groom side rituals', 'Reception', 'Post-Wedding'],
+      physical: ['Premium Photobook', 'Pendrive'],
+    },
+  ],
+  bride: [
+    {
+      tier: 'Signature',
+      name: 'Sonaton Bride Side Signature',
+      price: 44000,
+      coverage: 'Bride-side focused traditional wedding coverage',
+      crew: ['1 Photographer', '1 Cinematographer'],
+      deliverables: ['Holud for Bride', 'Bride-side rituals', 'Wedding Night / Bidaay'],
+      physical: ['Photobook not included', 'Pendrive not included'],
+    },
+    {
+      tier: 'Prestige',
+      name: 'Sonaton Bride Side Prestige',
+      price: 89000,
+      badge: 'Most Popular',
+      coverage: 'Extended bride-side multi-event coverage',
+      crew: ['2 Photographers', '1 Cinematographer', '1 Drone Operator'],
+      deliverables: ['Holud for Bride', 'Bride-side rituals', 'Wedding Night / Bidaay'],
+      physical: ['Standard Photobook', 'Pendrive'],
+    },
+    {
+      tier: 'Storytelling',
+      name: 'Sonaton Bride Side Storytelling',
+      price: 219000,
+      coverage: 'Complete bride-side storytelling coverage',
+      crew: ['2 Photographers', '1–2 Cinematographers', '1 Drone Operator'],
+      deliverables: ['Pre-Wedding', 'Mehendi', 'Colour Fest', 'Holud for Bride', 'Bride-side rituals', 'Wedding Night / Bidaay'],
+      physical: ['Exclusive Photobook', 'Pendrive'],
+    },
+  ],
+  groom: [
+    {
+      tier: 'Signature',
+      name: 'Sonaton Groom Side Signature',
+      price: 63000,
+      coverage: 'Groom-side focused traditional wedding coverage',
+      crew: ['1 Photographer', '1 Cinematographer'],
+      deliverables: ['Holud for Groom', 'Groom-side rituals', 'Reception / Vat Kapor'],
+      physical: ['Photobook not included', 'Pendrive not included'],
+    },
+    {
+      tier: 'Prestige',
+      name: 'Sonaton Groom Side Prestige',
+      price: 134000,
+      badge: 'Most Popular',
+      coverage: 'Extended groom-side multi-event coverage',
+      crew: ['2 Photographers', '1 Cinematographer', '1 Drone Operator'],
+      deliverables: ['Holud for Groom', 'Groom-side rituals', 'Reception / Vat Kapor'],
+      physical: ['Standard Photobook', 'Pendrive'],
+    },
+    {
+      tier: 'Storytelling',
+      name: 'Sonaton Groom Side Storytelling',
+      price: 209000,
+      coverage: 'Complete groom-side storytelling coverage',
+      crew: ['2 Photographers', '2 Cinematographers', '1 Drone Operator'],
+      deliverables: ['Pre-Wedding', 'Holud for Groom', 'Groom-side rituals', 'Reception / Vat Kapor'],
+      physical: ['Exclusive Photobook', 'Pendrive'],
+    },
+  ],
+  wedding: [
+    {
+      tier: 'Signature',
+      name: 'Sonaton Wedding Day Signature',
+      price: 34000,
+      coverage: 'Wedding-day focused ceremonial coverage',
+      crew: ['1 Photographer', '1 Cinematographer'],
+      deliverables: ['Odhivash Outdoor', 'Home Rituals', 'Wedding Night'],
+      physical: ['Photobook not included', 'Pendrive not included'],
+    },
+    {
+      tier: 'Prestige',
+      name: 'Sonaton Wedding Day Prestige',
+      price: 55000,
+      badge: 'Most Popular',
+      coverage: 'Extended wedding-day coverage',
+      crew: ['2 Photographers', '1 Cinematographer', '1 Drone Operator'],
+      deliverables: ['Odhivash Outdoor', 'Home Rituals', 'Wedding Night'],
+      physical: ['Standard Photobook', 'Pendrive'],
+    },
+    {
+      tier: 'Storytelling',
+      name: 'Sonaton Wedding Day Storytelling',
+      price: 109000,
+      coverage: 'Premium wedding-day storytelling coverage',
+      crew: ['2 Photographers', '2 Cinematographers', '1 Drone Operator'],
+      deliverables: ['Pre-Wedding', 'Odhivash Outdoor', 'Home Rituals', 'Wedding Night'],
+      physical: ['Exclusive Photobook', 'Pendrive'],
     },
   ],
 };
 
 const sonatonNotes: Record<SonatonSide, string> = {
-  both: 'Coverage for celebrations where both bride and groom sides are part of the complete wedding story.',
-  bride: 'Bride-side focused coverage across the selected traditional events.',
-  groom: 'Groom-side focused coverage across the selected traditional events.',
-  wedding: 'Wedding-day focused coverage centred on the main ceremonial events.',
+  both: 'Complete storytelling for celebrations where both bride and groom sides are covered as one connected wedding story.',
+  bride: 'Bride-side focused coverage from Holud through the key wedding rituals and family moments.',
+  groom: 'Groom-side focused coverage including family rituals, wedding events and reception moments.',
+  wedding: 'Focused wedding-day collections built around the main ceremonial events and rituals.',
 };
+
+function formatPrice(price: number) {
+  return `৳ ${price.toLocaleString('en-US')}`;
+}
 
 function TopNav() {
   return (
-    <nav className="sticky top-0 z-40 border-b border-stone-300 bg-[#f7f3ed]/95 backdrop-blur">
+    <nav className="sticky top-0 z-40 border-b border-[#d9c9bd] bg-[#fbf7f3]/95 backdrop-blur">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 sm:px-8 lg:px-10">
-        <a href="/" className="text-lg font-semibold tracking-[0.16em]">RAMYACHOBI</a>
+        <a href="/" className="text-lg font-semibold tracking-[0.16em] text-[#241a18]">RAMYACHOBI</a>
         <div className="hidden items-center gap-6 text-xs font-semibold uppercase tracking-[0.13em] md:flex">
-          <a href="/about" className="hover:text-amber-700">About</a>
-          <a href="/#portfolio" className="hover:text-amber-700">Gallery</a>
-          <a href="/#services" className="hover:text-amber-700">Films</a>
-          <a href="/packages" className="border-b border-stone-900 pb-1">Packages</a>
-          <a href="/booking" className="rounded-full bg-stone-950 px-4 py-2 text-white">Book Your Date</a>
+          <a href="/about" className="transition hover:text-[#7b3f4a]">About</a>
+          <a href="/portfolio" className="transition hover:text-[#7b3f4a]">Gallery</a>
+          <a href="/#services" className="transition hover:text-[#7b3f4a]">Films</a>
+          <a href="/packages" className="border-b border-[#7b3f4a] pb-1 text-[#7b3f4a]">Packages</a>
+          <a href="/booking" className="rounded-full bg-[#2b1f1d] px-4 py-2 text-white transition hover:bg-[#7b3f4a]">Book Your Date</a>
         </div>
       </div>
     </nav>
   );
 }
 
-function PackageCard({ item }: { item: (typeof packages.regular)[number] }) {
+function PackageCard({ item }: { item: PackageItem }) {
   const [open, setOpen] = useState<string | null>('deliverables');
 
   const rows = [
@@ -130,37 +238,39 @@ function PackageCard({ item }: { item: (typeof packages.regular)[number] }) {
   ] as const;
 
   return (
-    <article className="relative flex min-h-[520px] flex-col border border-stone-300 bg-white p-5">
+    <article className="relative flex min-h-[560px] flex-col overflow-hidden rounded-[1.75rem] border border-[#dfd1c7] bg-white p-6 shadow-[0_18px_60px_rgba(56,36,31,0.08)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_24px_70px_rgba(56,36,31,0.13)]">
       {item.badge && (
-        <div className="absolute right-0 top-0 bg-amber-800 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white">
+        <div className="absolute right-4 top-4 rounded-full bg-[#7b3f4a] px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white">
           {item.badge}
         </div>
       )}
-      <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-800">{item.tier}</div>
-      <h3 className="mt-2 text-2xl font-serif">{item.name}</h3>
-      <div className="mt-2 text-2xl font-semibold">Contact for pricing</div>
-      <div className="mt-5 border-y border-stone-300 py-3">
-        <div className="text-[10px] font-bold uppercase tracking-wider text-amber-800">Coverage</div>
-        <div className="mt-1 text-sm text-stone-600">{item.coverage}</div>
+
+      <div className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#a06d43]">{item.tier}</div>
+      <h3 className="mt-3 pr-20 font-serif text-2xl leading-tight text-[#241a18]">{item.name}</h3>
+      <div className="mt-4 text-3xl font-semibold tracking-tight text-[#7b3f4a]">{formatPrice(item.price)}</div>
+
+      <div className="mt-6 rounded-2xl bg-[#f7f0ea] p-4">
+        <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#a06d43]">Coverage</div>
+        <div className="mt-1.5 text-sm leading-6 text-[#5e504b]">{item.coverage}</div>
       </div>
 
-      <div className="mt-3 divide-y divide-stone-200">
+      <div className="mt-4 divide-y divide-[#eadfd7]">
         {rows.map(([id, label, values]) => (
           <div key={id}>
             <button
               type="button"
               onClick={() => setOpen(open === id ? null : id)}
-              className="flex w-full items-center justify-between py-3 text-left text-sm font-semibold"
+              className="flex w-full items-center justify-between py-3.5 text-left text-sm font-semibold text-[#302421]"
             >
               {label}
               <ChevronDown className={`h-4 w-4 transition ${open === id ? 'rotate-180' : ''}`} />
             </button>
             {open === id && (
-              <div className="space-y-2 pb-3">
-                {values.map((v) => (
-                  <div key={v} className="flex gap-2 text-sm text-stone-600">
-                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
-                    <span>{v}</span>
+              <div className="space-y-2.5 pb-4">
+                {values.map((value) => (
+                  <div key={value} className="flex gap-2.5 text-sm leading-5 text-[#6b5b55]">
+                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-[#a06d43]" />
+                    <span>{value}</span>
                   </div>
                 ))}
               </div>
@@ -169,7 +279,10 @@ function PackageCard({ item }: { item: (typeof packages.regular)[number] }) {
         ))}
       </div>
 
-      <a href="/booking" className="mt-auto flex items-center justify-center gap-2 bg-stone-950 px-4 py-3 text-xs font-bold uppercase tracking-wider text-white">
+      <a
+        href="/booking"
+        className="mt-auto inline-flex items-center justify-center gap-2 rounded-xl bg-[#2b1f1d] px-4 py-3.5 text-xs font-bold uppercase tracking-[0.14em] text-white transition hover:bg-[#7b3f4a]"
+      >
         Book Your Date <ArrowRight className="h-4 w-4" />
       </a>
     </article>
@@ -180,53 +293,68 @@ export default function RamyaChobiPackages() {
   const [category, setCategory] = useState<Category>('regular');
   const [sonatonSide, setSonatonSide] = useState<SonatonSide>('both');
 
+  const currentPackages = useMemo<PackageItem[]>(() => {
+    if (category === 'regular') return regularPackages;
+    if (category === 'outdoor') return outdoorPackages;
+    return sonatonPackages[sonatonSide];
+  }, [category, sonatonSide]);
+
   const title = useMemo(() => {
-    if (category === 'regular') return 'Regular';
-    if (category === 'outdoor') return 'Outdoor';
+    if (category === 'regular') return 'Regular Collections';
+    if (category === 'outdoor') return 'Outdoor Collections';
     return 'Sonaton Collection';
   }, [category]);
 
   return (
-    <div className="min-h-screen bg-[#f7f3ed] text-stone-950">
+    <div className="min-h-screen bg-[#fbf7f3] text-[#241a18]">
       <TopNav />
 
-      <main className="mx-auto max-w-6xl px-5 py-16 sm:px-8 lg:px-10">
-        <div className="mx-auto max-w-2xl text-center">
-          <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-amber-800">RamyaChobi · Packages & Services</div>
-          <h1 className="mt-4 font-serif text-4xl leading-tight sm:text-5xl">Wedding Photography & Cinematography Packages</h1>
-          <p className="mt-5 text-sm leading-6 text-stone-600">
-            Choose the coverage style first, then review the team, deliverables and booking flow. Prices are intentionally left open until RamyaChobi’s final rate card is added.
-          </p>
-        </div>
+      <main>
+        <section className="relative overflow-hidden border-b border-[#e3d7cf] bg-[radial-gradient(circle_at_top_left,_#f2dfd6,_transparent_42%),linear-gradient(135deg,#fbf7f3_0%,#f6eee8_100%)]">
+          <div className="mx-auto max-w-6xl px-5 py-16 text-center sm:px-8 sm:py-20 lg:px-10">
+            <div className="inline-flex items-center gap-2 rounded-full border border-[#d8bca9] bg-white/70 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.22em] text-[#7b3f4a]">
+              <Sparkles className="h-4 w-4" /> RamyaChobi Packages 2026
+            </div>
+            <h1 className="mx-auto mt-6 max-w-4xl font-serif text-4xl leading-tight sm:text-5xl lg:text-6xl">
+              Wedding Photography & Cinematography Packages
+            </h1>
+            <p className="mx-auto mt-5 max-w-2xl text-sm leading-7 text-[#6a5952] sm:text-base">
+              Choose the collection that fits your event, team requirement and storytelling style. Every package can be discussed before final booking confirmation.
+            </p>
+          </div>
+        </section>
 
-        <div className="mx-auto mt-12 grid max-w-3xl grid-cols-3 border-y border-stone-300">
-          {([
-            ['regular', 'Regular'],
-            ['outdoor', 'Outdoor'],
-            ['sonaton', 'Sonaton'],
-          ] as Array<[Category, string]>).map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setCategory(id)}
-              className={`py-3 text-[10px] font-bold uppercase tracking-[0.18em] ${category === id ? 'bg-stone-950 text-white' : 'text-stone-600'}`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        <section className="mx-auto max-w-6xl px-5 py-12 sm:px-8 lg:px-10">
+          <div className="mx-auto grid max-w-2xl grid-cols-3 rounded-2xl border border-[#ddcfc5] bg-white p-1.5 shadow-sm">
+            {([
+              ['regular', 'Regular'],
+              ['outdoor', 'Outdoor'],
+              ['sonaton', 'Sonaton'],
+            ] as Array<[Category, string]>).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setCategory(id)}
+                className={`rounded-xl px-3 py-3 text-xs font-bold uppercase tracking-[0.14em] transition ${category === id ? 'bg-[#7b3f4a] text-white shadow-sm' : 'text-[#74635c] hover:bg-[#f7f0ea]'}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
 
-        <section className="mt-12">
-          <div className="flex flex-wrap items-end justify-between gap-3 border-b border-stone-300 pb-4">
-            <h2 className="font-serif text-3xl">{title}</h2>
-            <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-stone-500">
-              Photography & Cinematography
+          <div className="mt-12 flex flex-wrap items-end justify-between gap-4 border-b border-[#ddcfc5] pb-5">
+            <div>
+              <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#a06d43]">Photography + Cinematography</div>
+              <h2 className="mt-2 font-serif text-3xl sm:text-4xl">{title}</h2>
+            </div>
+            <div className="rounded-full bg-[#f2e5dd] px-4 py-2 text-xs font-semibold text-[#7b3f4a]">
+              Transparent package pricing
             </div>
           </div>
 
           {category === 'sonaton' && (
-            <>
-              <div className="mt-6 flex flex-wrap justify-center gap-2">
+            <div className="mt-7">
+              <div className="flex flex-wrap justify-center gap-2.5">
                 {([
                   ['both', 'Both Side'],
                   ['bride', 'Bride Side'],
@@ -237,37 +365,56 @@ export default function RamyaChobiPackages() {
                     key={id}
                     type="button"
                     onClick={() => setSonatonSide(id)}
-                    className={`border px-4 py-2 text-[10px] font-bold uppercase tracking-wider ${sonatonSide === id ? 'border-stone-950 bg-stone-950 text-white' : 'border-stone-400 bg-transparent'}`}
+                    className={`rounded-full border px-4 py-2.5 text-xs font-bold transition ${sonatonSide === id ? 'border-[#2b1f1d] bg-[#2b1f1d] text-white' : 'border-[#d8c8bd] bg-white text-[#6d5a53] hover:border-[#7b3f4a]'}`}
                   >
                     {label}
                   </button>
                 ))}
               </div>
-              <p className="mx-auto mt-5 max-w-2xl text-center text-sm text-stone-500">{sonatonNotes[sonatonSide]}</p>
-            </>
+              <p className="mx-auto mt-5 max-w-3xl text-center text-sm leading-6 text-[#74635c]">{sonatonNotes[sonatonSide]}</p>
+            </div>
           )}
 
-          <div className="mt-8 grid gap-4 md:grid-cols-3">
-            {packages[category].map((item) => <PackageCard key={item.name} item={item} />)}
+          <div className="mt-9 grid gap-5 md:grid-cols-3">
+            {currentPackages.map((item) => <PackageCard key={item.name} item={item} />)}
           </div>
-        </section>
 
-        <section className="mx-auto mt-16 max-w-4xl">
-          <div className="flex items-end justify-between border-b border-stone-300 pb-3">
-            <h2 className="font-serif text-3xl">FAQ</h2>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-stone-500">Questions & Answers</span>
-          </div>
-          {[
-            ['How do I book my wedding date?', 'Choose a suitable package, open the booking form and submit your event details. RamyaChobi can then confirm availability and payment terms.'],
-            ['Can I check whether my date is available?', 'Submit the booking form with your preferred event date. Availability must be confirmed before the booking is treated as final.'],
-            ['Can I book multiple events?', 'Yes. The booking system supports multiple event entries under the same client booking.'],
-            ['When is Final Delivery available?', 'Final Delivery is activated after full package payment is verified, according to the RamyaChobi delivery policy.'],
-          ].map(([q, a]) => (
-            <details key={q} className="border-b border-stone-300 py-4">
-              <summary className="cursor-pointer list-none text-sm font-medium">{q}<span className="float-right">+</span></summary>
-              <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-600">{a}</p>
-            </details>
-          ))}
+          <section className="mx-auto mt-20 max-w-4xl">
+            <div className="flex items-end justify-between border-b border-[#ddcfc5] pb-4">
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#a06d43]">Need to know</div>
+                <h2 className="mt-1 font-serif text-3xl">Frequently Asked Questions</h2>
+              </div>
+              <span className="hidden text-[10px] font-bold uppercase tracking-wider text-[#8a766d] sm:block">Questions & Answers</span>
+            </div>
+
+            {[
+              ['How do I book my wedding date?', 'Choose a suitable package, open the booking form and submit your event details. RamyaChobi will confirm availability and the payment terms before the booking is final.'],
+              ['Can I check whether my date is available?', 'Yes. Submit the booking form with your preferred date and event details. Availability must be confirmed by RamyaChobi.'],
+              ['Can I book multiple events under one booking?', 'Yes. The booking flow supports multiple events and can keep them under one client booking.'],
+              ['Can I customize a package?', 'You can discuss coverage, crew, albums and additional requirements before the booking is confirmed.'],
+              ['When is Final Delivery available?', 'Final Delivery becomes available after the full package payment has been verified, according to the RamyaChobi delivery policy.'],
+            ].map(([question, answer]) => (
+              <details key={question} className="group border-b border-[#e4d9d1] py-5">
+                <summary className="cursor-pointer list-none text-sm font-semibold text-[#312522]">
+                  {question}
+                  <span className="float-right text-[#7b3f4a] transition group-open:rotate-45">+</span>
+                </summary>
+                <p className="mt-3 max-w-3xl text-sm leading-7 text-[#74635c]">{answer}</p>
+              </details>
+            ))}
+          </section>
+
+          <section className="mt-16 rounded-[2rem] bg-[#2b1f1d] px-6 py-10 text-center text-white sm:px-10">
+            <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-[#e6bd96]">Your story starts here</div>
+            <h2 className="mx-auto mt-3 max-w-2xl font-serif text-3xl sm:text-4xl">Choose your collection, then reserve your date.</h2>
+            <p className="mx-auto mt-4 max-w-xl text-sm leading-7 text-white/65">
+              Send your event details through the booking form and RamyaChobi will confirm availability before finalizing your package.
+            </p>
+            <a href="/booking" className="mt-7 inline-flex items-center gap-2 rounded-xl bg-[#e7c19c] px-5 py-3 font-bold text-[#2b1f1d] transition hover:bg-white">
+              Book Your Date <ArrowRight className="h-4 w-4" />
+            </a>
+          </section>
         </section>
       </main>
     </div>
