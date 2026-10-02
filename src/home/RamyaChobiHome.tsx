@@ -82,6 +82,8 @@ const menuItems = [
   { label: 'Portfolio', href: '#portfolio', icon: Images, kind: 'section' },
   { label: 'Services', href: '#services', icon: Camera, kind: 'section' },
   { label: 'Why RamyaChobi', href: '#trust', icon: ShieldCheck, kind: 'section' },
+  { label: 'About', href: '/about', icon: BookOpenCheck, kind: 'section' },
+  { label: 'Packages', href: '/packages', icon: Star, kind: 'section' },
   { label: 'Photo Selection', href: '/photo-selection', icon: Images, kind: 'app' },
   { label: 'Client Delivery', href: '/delivery', icon: Download, kind: 'app' },
   { label: 'Booking', href: '/booking', icon: CalendarDays, kind: 'app' },
@@ -164,6 +166,20 @@ export default function RamyaChobiHome() {
       >
         <Menu className="h-4 w-4" /> Menu
       </button>
+
+
+      <nav className="absolute inset-x-0 top-0 z-30 border-b border-white/15 bg-black/10 text-white backdrop-blur-sm">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 sm:px-8 lg:px-10 xl:pr-80">
+          <a href="/" className="text-lg font-semibold tracking-[0.16em]">RAMYACHOBI</a>
+          <div className="hidden items-center gap-6 text-xs font-semibold uppercase tracking-[0.13em] md:flex">
+            <a href="/about" className="hover:text-amber-300">About</a>
+            <a href="#portfolio" className="hover:text-amber-300">Gallery</a>
+            <a href="#services" className="hover:text-amber-300">Films</a>
+            <a href="/packages" className="hover:text-amber-300">Packages</a>
+            <a href="/booking" className="rounded-full bg-white px-4 py-2 text-stone-950">Book Your Date</a>
+          </div>
+        </div>
+      </nav>
 
       <header id="home" className="relative isolate min-h-[88vh] overflow-hidden bg-stone-950 text-white">
         <img
