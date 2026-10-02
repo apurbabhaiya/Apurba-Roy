@@ -31,6 +31,7 @@ import {
   reviewDeliveryPayment,
   updateDeliverySettings,
 } from '../services/deliveryPortalService';
+import PortfolioManager from '../components/PortfolioManager';
 
 const ADMIN_TOKEN_KEY = 'ramya_booking_admin_token_v1';
 
@@ -312,7 +313,7 @@ export default function RamyaChobiDeliveryAdmin() {
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4">
           <div>
             <div className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-300">RamyaChobi</div>
-            <h1 className="mt-1 text-2xl font-semibold">Client Delivery Admin</h1>
+            <h1 className="mt-1 text-2xl font-semibold">RamyaChobi Admin Panel</h1>
           </div>
           <div className="flex flex-wrap gap-2">
             <a
@@ -378,6 +379,8 @@ export default function RamyaChobiDeliveryAdmin() {
             </p>
           </a>
         </section>
+
+        <PortfolioManager adminToken={token} />
 
         <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {[
