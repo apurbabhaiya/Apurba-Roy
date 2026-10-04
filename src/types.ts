@@ -299,6 +299,9 @@ export interface CustomerGallery {
   collectedFolderId?: string; // Created 'Customer Selected' Google Drive folder ID
   askCustomerName?: boolean; // Optional: prompt for client name on first visit
   askCustomerPhone?: boolean; // Optional: prompt for mobile number on first visit
+  requireSocialFollow?: boolean;
+  watermarkEnabled?: boolean;
+  watermarkText?: string;
   // High-Resolution ZIP request fields
   zipRequested?: boolean;
   zipRequestedAt?: string;
