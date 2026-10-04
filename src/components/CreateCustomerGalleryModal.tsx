@@ -65,6 +65,8 @@ export const CreateCustomerGalleryModal: React.FC<CreateCustomerGalleryModalProp
   const [allowEditing, setAllowEditing] = useState(false);
   const [askCustomerName, setAskCustomerName] = useState(false);
   const [askCustomerPhone, setAskCustomerPhone] = useState(false);
+  const [requireSocialFollow, setRequireSocialFollow] = useState(false);
+  const [watermarkEnabled, setWatermarkEnabled] = useState(false);
   const [status, setStatus] = useState<CustomerGalleryStatus>('active');
   const [notesForCustomer, setNotesForCustomer] = useState(
     'Please select your favorite photos for your album. Click any photo to preview in high quality.'
@@ -167,6 +169,9 @@ export const CreateCustomerGalleryModal: React.FC<CreateCustomerGalleryModalProp
         allowEditing,
         askCustomerName,
         askCustomerPhone,
+        requireSocialFollow,
+        watermarkEnabled,
+        watermarkText: 'Ramyachobi',
         status,
         totalPhotos: mappedPhotos.length || 0,
         selectedCount: 0,
