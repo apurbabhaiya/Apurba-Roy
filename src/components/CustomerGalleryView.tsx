@@ -206,6 +206,9 @@ export const CustomerGalleryView: React.FC<CustomerGalleryViewProps> = ({
 
   // PIN Protection State
   const [isPinUnlocked, setIsPinUnlocked] = useState(false);
+  const [socialFollowConfirmed, setSocialFollowConfirmed] = useState(false);
+  const [facebookFollow, setFacebookFollow] = useState(false);
+  const [instagramFollow, setInstagramFollow] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState<string | null>(null);
   const [isVerifyingPin, setIsVerifyingPin] = useState(false);
@@ -342,6 +345,10 @@ export const CustomerGalleryView: React.FC<CustomerGalleryViewProps> = ({
       console.warn('Anonymous auth check notice:', err);
     });
   }, []);
+
+  useEffect(() => {
+    if (gallery && typeof window !== 'undefined' && localStorage.getItem(`rcfoto_social_follow_${gallery.id}`) === 'true') setSocialFollowConfirmed(true);
+  }, [gallery]);
 
   // Fetch gallery by token or projectId and hydrate
   useEffect(() => {
@@ -1589,15 +1596,23 @@ export const CustomerGalleryView: React.FC<CustomerGalleryViewProps> = ({
   };
 
   // Download individual photo
-  const handleDownloadPhoto = (photo: CustomerGalleryPhoto) => {
+  const handleDownloadPhoto = async (photo: CustomerGalleryPhoto) => {
     if (!gallery?.allowDownloads) return;
-    const link = document.createElement('a');
-    link.href = photo.previewUrl || photo.thumbnailUrl;
-    link.download = photo.name || 'photo.jpg';
-    link.target = '_blank';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const source = photo.previewUrl || photo.thumbnailUrl;
+    if (!gallery.watermarkEnabled) {
+      const link = document.createElement('a'); link.href = source; link.download = photo.name || 'photo.jpg'; link.target = '_blank'; link.click(); return;
+    }
+    try {
+      const image = new Image(); image.crossOrigin = 'anonymous';
+      await new Promise<void>((resolve, reject) => { image.onload = () => resolve(); image.onerror = reject; image.src = source; });
+      const canvas = document.createElement('canvas'); canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
+      const ctx = canvas.getContext('2d'); if (!ctx) throw new Error('canvas unavailable'); ctx.drawImage(image, 0, 0);
+      ctx.font = `bold ${Math.max(24, Math.round(canvas.width / 35))}px sans-serif`; ctx.fillStyle = 'rgba(255,255,255,.72)'; ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 3;
+      ctx.strokeText(gallery.watermarkText || 'Ramyachobi', 28, canvas.height - 32); ctx.fillText(gallery.watermarkText || 'Ramyachobi', 28, canvas.height - 32);
+      const link = document.createElement('a'); link.href = canvas.toDataURL('image/jpeg', .95); link.download = photo.name || 'ramyachobi-photo.jpg'; link.click();
+    } catch {
+      const link = document.createElement('a'); link.href = source; link.download = photo.name || 'photo.jpg'; link.target = '_blank'; link.click();
+    }
   };
 
   // Loading Screen
@@ -1680,6 +1695,27 @@ export const CustomerGalleryView: React.FC<CustomerGalleryViewProps> = ({
     );
   }
 
+  // Social follow gate. This is a client confirmation flow because Meta does not expose a public API to verify an arbitrary visitor's follow status.
+  if (gallery.requireSocialFollow && !isAdminPreview && !socialFollowConfirmed) {
+    return (
+      <div className="min-h-screen bg-stone-950 flex items-center justify-center p-6 text-stone-100">
+        <div className="w-full max-w-md bg-stone-900 border border-stone-800 rounded-3xl p-7 shadow-2xl text-center">
+          <div className="w-14 h-14 rounded-2xl bg-amber-500 text-stone-950 flex items-center justify-center mx-auto mb-4 font-bold">RC</div>
+          <h1 className="text-2xl font-serif mb-2">Follow RamyaChobi to open your photos</h1>
+          <p className="text-sm text-stone-400 mb-6">Open both pages, follow them, then return here and confirm. Photo selection and face-search unlock after both confirmations.</p>
+          <div className="grid grid-cols-2 gap-3 mb-5">
+            <a href="https://www.facebook.com/RamyaChobi/" target="_blank" rel="noreferrer" className="rounded-xl bg-blue-600 px-3 py-3 text-sm font-semibold">Open Facebook</a>
+            <a href="https://www.instagram.com/romochobi/" target="_blank" rel="noreferrer" className="rounded-xl bg-pink-600 px-3 py-3 text-sm font-semibold">Open Instagram</a>
+          </div>
+          <label className="flex items-center gap-3 text-left text-sm text-stone-300 mb-3"><input type="checkbox" checked={facebookFollow} onChange={(e) => setFacebookFollow(e.target.checked)} className="w-4 h-4 accent-amber-500" /> I followed Facebook</label>
+          <label className="flex items-center gap-3 text-left text-sm text-stone-300 mb-5"><input type="checkbox" checked={instagramFollow} onChange={(e) => setInstagramFollow(e.target.checked)} className="w-4 h-4 accent-amber-500" /> I followed Instagram</label>
+          <button disabled={!facebookFollow || !instagramFollow} onClick={() => { localStorage.setItem(`rcfoto_social_follow_${gallery.id}`, 'true'); setSocialFollowConfirmed(true); }} className="w-full rounded-xl bg-amber-500 disabled:opacity-40 px-4 py-3 font-bold text-stone-950">Continue to Photo Selection</button>
+          <p className="mt-4 text-[11px] text-stone-500">This confirmation is saved for this browser and gallery link.</p>
+        </div>
+      </div>
+    );
+  }
+
   // PIN Protection Screen
   if (gallery.pinEnabled && !isPinUnlocked) {
     return (
@@ -1737,6 +1773,10 @@ export const CustomerGalleryView: React.FC<CustomerGalleryViewProps> = ({
         </div>
       </div>
     );
+  }
+
+  if (gallery && typeof window !== 'undefined' && localStorage.getItem(`rcfoto_social_follow_${gallery.id}`) === 'true') {
+    // The state is hydrated below through the effect to avoid blocking the first render.
   }
 
   // Main Customer Gallery View
