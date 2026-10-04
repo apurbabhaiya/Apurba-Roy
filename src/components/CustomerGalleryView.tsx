@@ -1608,7 +1608,9 @@ export const CustomerGalleryView: React.FC<CustomerGalleryViewProps> = ({
       const canvas = document.createElement('canvas'); canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
       const ctx = canvas.getContext('2d'); if (!ctx) throw new Error('canvas unavailable'); ctx.drawImage(image, 0, 0);
       ctx.font = `bold ${Math.max(24, Math.round(canvas.width / 35))}px sans-serif`; ctx.fillStyle = 'rgba(255,255,255,.72)'; ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 3;
-      ctx.strokeText(gallery.watermarkText || 'Ramyachobi', 28, canvas.height - 32); ctx.fillText(gallery.watermarkText || 'Ramyachobi', 28, canvas.height - 32);
+      if (gallery.watermarkLogoUrl) {
+        try { const logo = new Image(); logo.crossOrigin = 'anonymous'; await new Promise<void>((resolve, reject) => { logo.onload = () => resolve(); logo.onerror = reject; logo.src = gallery.watermarkLogoUrl!; }); const w = Math.round(canvas.width * .18); const h = Math.round(w * (logo.naturalHeight / Math.max(1, logo.naturalWidth))); ctx.globalAlpha = .78; ctx.drawImage(logo, canvas.width - w - 28, 28, w, h); ctx.globalAlpha = 1; } catch { ctx.strokeText(gallery.watermarkText || 'Ramyachobi', 28, canvas.height - 32); ctx.fillText(gallery.watermarkText || 'Ramyachobi', 28, canvas.height - 32); }
+      } else { ctx.strokeText(gallery.watermarkText || 'Ramyachobi', 28, canvas.height - 32); ctx.fillText(gallery.watermarkText || 'Ramyachobi', 28, canvas.height - 32); }
       const link = document.createElement('a'); link.href = canvas.toDataURL('image/jpeg', .95); link.download = photo.name || 'ramyachobi-photo.jpg'; link.click();
     } catch {
       const link = document.createElement('a'); link.href = source; link.download = photo.name || 'photo.jpg'; link.target = '_blank'; link.click();
