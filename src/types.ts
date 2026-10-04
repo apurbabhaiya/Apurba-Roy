@@ -302,6 +302,7 @@ export interface CustomerGallery {
   requireSocialFollow?: boolean;
   watermarkEnabled?: boolean;
   watermarkText?: string;
+  watermarkLogoUrl?: string;
   // High-Resolution ZIP request fields
   zipRequested?: boolean;
   zipRequestedAt?: string;
