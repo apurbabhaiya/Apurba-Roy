@@ -433,9 +433,7 @@ export async function listPhotosInFolder(
   const visitedFolders = new Set<string>([folderId]);
 
   let processedCount = 0;
-  const maxFoldersToScan = 80; // Safety threshold
-
-  while (folderQueue.length > 0 && processedCount < maxFoldersToScan) {
+  while (folderQueue.length > 0) {
     const current = folderQueue.shift()!;
     processedCount++;
 
