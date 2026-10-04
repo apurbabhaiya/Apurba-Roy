@@ -24,3 +24,12 @@ export async function submitClientReview(input: Omit<ClientReview, 'id' | 'creat
   const { error } = await supabase.from('client_reviews').insert({ ...input, status: 'pending' });
   if (error) throw error;
 }
+
+export async function getPendingClientReviews(): Promise<ClientReview[]> {
+  const { data, error } = await supabase.from('client_reviews').select('*').eq('status', 'pending').order('created_at', { ascending: false });
+  if (error) throw error; return (data || []) as ClientReview[];
+}
+export async function updateClientReviewStatus(id: string, status: 'approved' | 'rejected' | 'pending'): Promise<void> {
+  const { error } = await supabase.from('client_reviews').update({ status }).eq('id', id);
+  if (error) throw error;
+}
