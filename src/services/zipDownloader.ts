@@ -104,11 +104,8 @@ export async function downloadPhotosAsZip(
         }
       }
 
-      // 2. Fallback to image URL (thumbnail or webView)
-      if (!blob && (photo.thumbnailLink || photo.webViewLink)) {
-        const urlToFetch = photo.webViewLink || photo.thumbnailLink;
-        blob = await fetchImageBlobWithFallback(urlToFetch!);
-      }
+      // Never fall back to a thumbnail or webView URL: that can silently resize or recompress the file.
+      // Only an original Drive binary is valid for the archive.
 
       if (blob) {
         folder.file(photo.name, blob);
@@ -345,10 +342,11 @@ export async function downloadSinglePhoto(
       }
     }
 
-    // 2. Fallback to image URL (webView or thumbnail)
-    const url = photo.webViewLink || photo.thumbnailLink;
+    // Do not download webViewLink/thumbnailLink: those are previews and may be resized or recompressed.
+    const url = photo.webContentLink;
     if (!blob && url) {
-      blob = await fetchImageBlobWithFallback(url);
+      const res = await fetch(url, { credentials: 'include' });
+      if (res.ok) blob = await res.blob();
     }
 
     const filename = photo.name.includes('.') ? photo.name : `${photo.name}.jpg`;
