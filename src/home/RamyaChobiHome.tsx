@@ -21,6 +21,7 @@ import {
   X,
 } from 'lucide-react';
 import { getPublicPortfolioPosts } from '../services/portfolioService';
+import { getApprovedClientReviews, submitClientReview, type ClientReview } from '../services/reviewService';
 
 const portfolio = [
   {
@@ -195,6 +196,10 @@ export default function RamyaChobiHome() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [featuredPortfolio, setFeaturedPortfolio] = useState<typeof portfolio>([]);
   const [showMoreReviews, setShowMoreReviews] = useState(false);
+  const [liveReviews, setLiveReviews] = useState<ClientReview[]>([]);
+  const [reviewForm, setReviewForm] = useState({ client_name: '', review_text: '', rating: 5, review_type: 'Photography', favorite_photo_name: '', event_name: '' });
+  const [reviewNotice, setReviewNotice] = useState('');
+  useEffect(() => { getApprovedClientReviews().then(setLiveReviews).catch(() => undefined); }, []);
 
   useEffect(() => {
     getPublicPortfolioPosts(true)
@@ -467,6 +472,35 @@ export default function RamyaChobiHome() {
                   </div>
                 </div>
               ))}
+            </div>
+
+            {liveReviews.length > 0 && (
+              <div className="mt-8 grid gap-5 md:grid-cols-2">
+                {liveReviews.map((review) => (
+                  <article key={review.id} className="rounded-3xl border border-stone-200 bg-[#faf8f4] p-6 shadow-sm">
+                    <div className="flex items-center justify-between"><h4 className="font-semibold">{review.client_name}</h4><span className="text-amber-600">{'★'.repeat(review.rating)}</span></div>
+                    <div className="mt-1 text-sm text-stone-500">{review.review_type}{review.event_name ? ` • ${review.event_name}` : ''}</div>
+                    <p className="mt-4 text-[15px] leading-7 text-stone-700">“{review.review_text}”</p>
+                    {review.favorite_photo_name && <p className="mt-3 text-xs text-stone-500">Favourite photo: {review.favorite_photo_name}</p>}
+                  </article>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-10 rounded-3xl border border-stone-200 bg-[#faf8f4] p-6">
+              <h3 className="text-xl font-serif">Share your RamyaChobi experience</h3>
+              <p className="mt-1 text-sm text-stone-500">Your review will appear after studio approval. You can also post the same review on Facebook.</p>
+              <form className="mt-5 grid gap-3 sm:grid-cols-2" onSubmit={async (e) => { e.preventDefault(); try { await submitClientReview({ ...reviewForm, rating: Number(reviewForm.rating), favorite_photo_url: null, facebook_review_url: 'https://www.facebook.com/RamyaChobi/reviews', instagram_handle: '@romochobi' }); setReviewNotice('Review submitted for approval. Thank you.'); setReviewForm({ client_name: '', review_text: '', rating: 5, review_type: 'Photography', favorite_photo_name: '', event_name: '' }); } catch { setReviewNotice('Could not submit the review. Please try again.'); } }}>
+                <input required value={reviewForm.client_name} onChange={e => setReviewForm({ ...reviewForm, client_name: e.target.value })} placeholder="Your name" className="rounded-xl border border-stone-300 px-4 py-3" />
+                <input value={reviewForm.event_name} onChange={e => setReviewForm({ ...reviewForm, event_name: e.target.value })} placeholder="Event / location" className="rounded-xl border border-stone-300 px-4 py-3" />
+                <select value={reviewForm.review_type} onChange={e => setReviewForm({ ...reviewForm, review_type: e.target.value })} className="rounded-xl border border-stone-300 px-4 py-3"><option>Photography</option><option>Cinematography</option><option>Photo Selection</option><option>Delivery</option></select>
+                <select value={reviewForm.rating} onChange={e => setReviewForm({ ...reviewForm, rating: Number(e.target.value) })} className="rounded-xl border border-stone-300 px-4 py-3"><option value={5}>5 stars</option><option value={4}>4 stars</option><option value={3}>3 stars</option><option value={2}>2 stars</option><option value={1}>1 star</option></select>
+                <input value={reviewForm.favorite_photo_name} onChange={e => setReviewForm({ ...reviewForm, favorite_photo_name: e.target.value })} placeholder="Favourite photo name (optional)" className="rounded-xl border border-stone-300 px-4 py-3 sm:col-span-2" />
+                <textarea required value={reviewForm.review_text} onChange={e => setReviewForm({ ...reviewForm, review_text: e.target.value })} placeholder="Write your review" rows={4} className="rounded-xl border border-stone-300 px-4 py-3 sm:col-span-2" />
+                <button className="rounded-xl bg-stone-950 px-5 py-3 font-bold text-white sm:col-span-2">Submit review</button>
+              </form>
+              {reviewNotice && <p className="mt-3 text-sm font-semibold text-amber-800">{reviewNotice}</p>}
+              <a className="mt-4 inline-flex text-sm font-semibold text-blue-700 underline" href="https://www.facebook.com/RamyaChobi/reviews" target="_blank" rel="noreferrer">Post this review on Facebook</a>
             </div>
 
             {reviewGroups.length > 1 && (
