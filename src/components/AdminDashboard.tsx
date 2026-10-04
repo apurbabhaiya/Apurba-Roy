@@ -36,6 +36,7 @@ import {
   ShieldCheck,
   FileJson,
   FileSpreadsheet,
+  ImagePlus,
 } from 'lucide-react';
 import type { AppUser } from '../services/auth';
 import { Album, ClientSelectionSubmission, SubmissionStatus, CustomerGallery } from '../types';
@@ -47,6 +48,8 @@ import { AnalyticsPanel } from './AnalyticsPanel';
 import { AdminPaymentVerificationPanel } from './AdminPaymentVerificationPanel';
 import { SendEmailNotificationModal, EmailTemplateType } from './SendEmailNotificationModal';
 import { IntegratePaymentGatewayModal } from './IntegratePaymentGatewayModal';
+import { WatermarkSettingsPanel } from './WatermarkSettingsPanel';
+import { ReviewModerationPanel } from './ReviewModerationPanel';
 import { listPhotosInFolder } from '../services/drive';
 import {
   saveAlbum,
@@ -95,7 +98,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [copiedAlbumId, setCopiedAlbumId] = useState<string | null>(null);
   const [syncingAlbumId, setSyncingAlbumId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'customer_galleries' | 'albums' | 'submissions' | 'payments' | 'analytics'>('customer_galleries');
+  const [activeTab, setActiveTab] = useState<'customer_galleries' | 'albums' | 'submissions' | 'payments' | 'analytics' | 'watermark' | 'reviews'>('customer_galleries');
   const [submissionSearch, setSubmissionSearch] = useState('');
   const [submissionStatusFilter, setSubmissionStatusFilter] = useState<'all' | 'completed' | 'in_progress'>('all');
   const [downloadingSubId, setDownloadingSubId] = useState<string | null>(null);
@@ -562,6 +565,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               )}
             </button>
 
+            <button onClick={() => setActiveTab('reviews')} className={`px-4 py-2 rounded-xl text-xs font-semibold transition flex items-center gap-2 ${activeTab === 'reviews' ? 'bg-stone-800 text-stone-100 border border-stone-700' : 'text-stone-400 hover:text-stone-200 hover:bg-stone-900/60'}`}><MessageSquare className="w-3.5 h-3.5 text-amber-400"/><span>Reviews</span></button>
+
+            <button
+              onClick={() => setActiveTab('watermark')}
+              className={`px-4 py-2 rounded-xl text-xs font-semibold transition flex items-center gap-2 ${
+                activeTab === 'watermark' ? 'bg-stone-800 text-stone-100 border border-stone-700 shadow-xs' : 'text-stone-400 hover:text-stone-200 hover:bg-stone-900/60'
+              }`}
+            >
+              <ImagePlus className="w-3.5 h-3.5 text-amber-400" />
+              <span>Watermark & Logo</span>
+            </button>
+
             <button
               onClick={() => setActiveTab('analytics')}
               className={`px-4 py-2 rounded-xl text-xs font-semibold transition flex items-center gap-2 ${
@@ -589,7 +604,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
 
         {/* Dynamic View: Customer Galleries vs Payments vs Analytics vs Submissions vs Master-Detail Albums */}
-        {activeTab === 'customer_galleries' ? (
+        {activeTab === 'reviews' ? (
+          <ReviewModerationPanel />
+        ) : activeTab === 'watermark' ? (
+          <WatermarkSettingsPanel />
+        ) : activeTab === 'customer_galleries' ? (
           <CustomerGalleriesPanel
             accessToken={accessToken}
             onNeedGoogleSignIn={onSignIn}
