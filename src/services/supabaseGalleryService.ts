@@ -74,6 +74,7 @@ const mapGallery = (
   requireSocialFollow: row.require_social_follow ?? false,
   watermarkEnabled: row.watermark_enabled ?? false,
   watermarkText: row.watermark_text || 'Ramyachobi',
+  watermarkLogoUrl: row.watermark_logo_url || undefined,
   zipRequested: row.zip_requested ?? false,
   zipRequestedAt: row.zip_requested_at || undefined,
   zipRequestStatus: row.zip_request_status || undefined,
