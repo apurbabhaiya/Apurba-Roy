@@ -184,7 +184,7 @@ export async function listDriveFolders(
       folders.push(...data.files);
     }
     pageToken = data.nextPageToken;
-  } while (pageToken && folders.length < 500);
+  } while (pageToken);
 
   return folders;
 }
@@ -340,7 +340,7 @@ async function fetchImagesInSingleFolder(
   accessToken: string,
   folderId: string,
   folderName: string,
-  maxPerFolder = 500
+  maxPerFolder?: number
 ): Promise<DrivePhoto[]> {
   const photos: DrivePhoto[] = [];
   let pageToken: string | undefined = undefined;
@@ -400,7 +400,7 @@ async function fetchImagesInSingleFolder(
     }
 
     pageToken = data.nextPageToken;
-  } while (pageToken && photos.length < maxPerFolder);
+  } while (pageToken && (maxPerFolder === undefined || photos.length < maxPerFolder));
 
   return photos;
 }
