@@ -27,8 +27,8 @@ async function deliveryMedia(token: string, fileId: string, mode: 'PREVIEW' | 'O
 
 async function driveResponse(fileId: string, mode: 'PREVIEW' | 'ORIGINAL', range?: string) {
   const auth = process.env.GOOGLE_DRIVE_ACCESS_TOKEN || '';
-  const headers: Record<string, string> = {};
-  if (auth) headers.Authorization = `Bearer ${auth}`;
+  if (!auth) throw new Error('Protected Google Drive server configuration is missing.');
+  const headers: Record<string, string> = { Authorization: `Bearer ${auth}` };
   if (range) headers.Range = range;
 
   if (mode === 'PREVIEW') {
@@ -43,20 +43,10 @@ async function driveResponse(fileId: string, mode: 'PREVIEW' | 'ORIGINAL', range
         }
       }
     }
-    return fetch(`https://drive.google.com/thumbnail?id=${encodeURIComponent(fileId)}&sz=w1600`, { headers: range ? { Range: range } : undefined });
+    return fetch(`https://drive.google.com/thumbnail?id=${encodeURIComponent(fileId)}&sz=w1600`, { headers: range ? { ...headers, Range: range } : headers });
   }
 
-  if (auth) {
-    return fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`, { headers });
-  }
-
-  let response = await fetch(`https://drive.google.com/uc?export=download&id=${encodeURIComponent(fileId)}`, { headers: range ? { Range: range } : undefined, redirect: 'follow' });
-  if ((response.headers.get('content-type') || '').includes('text/html')) {
-    const html = await response.text();
-    const confirm = html.match(/confirm=([0-9A-Za-z_-]+)/)?.[1];
-    if (confirm) response = await fetch(`https://drive.usercontent.google.com/download?id=${encodeURIComponent(fileId)}&export=download&confirm=${confirm}`, { redirect: 'follow' });
-  }
-  return response;
+  return fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`, { headers });
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
