@@ -50,6 +50,20 @@ export type DeliveryPortalData = {
   hero_image_url?: string | null;
   preview_items?: DeliveryPreviewItem[];
   delivery_files?: DeliveryFinalFile[];
+  client_phone?: string | null;
+  whatsapp_number?: string | null;
+  total_paid?: number | string;
+  free_access_days?: number;
+  grace_period_days?: number;
+  daily_late_fee?: number | string;
+  late_days?: number;
+  calculated_late_fee?: number | string;
+  late_fee_paid?: number | string;
+  late_fee_balance?: number | string;
+  total_payable?: number | string;
+  late_fee_status?: string | null;
+  client_message?: string | null;
+  client_note?: string | null;
 };
 
 export type DeliveryAdminPortal = DeliveryPortalData & {
@@ -57,6 +71,19 @@ export type DeliveryAdminPortal = DeliveryPortalData & {
   gallery_id?: string | null;
   secure_token: string;
   client_phone?: string | null;
+  whatsapp_number?: string | null;
+  free_access_days?: number;
+  grace_period_days?: number;
+  daily_late_fee?: number | string;
+  late_fee_enabled?: boolean;
+  late_fee_waived?: boolean;
+  late_fee_override?: number | string | null;
+  late_fee_paid?: number | string;
+  client_message?: string | null;
+  client_note?: string | null;
+  internal_admin_note?: string | null;
+  total_paid?: number | string;
+  late_fee?: Record<string, unknown> | null;
   created_at?: string | null;
   updated_at?: string | null;
   delivery_files?: DeliveryAdminFile[];
@@ -76,6 +103,20 @@ export type DeliveryPaymentSubmission = {
   booking_payment_id?: string | null;
   client_name?: string | null;
   event_name?: string | null;
+};
+
+export type DeliveryPaymentLedger = {
+  id: string;
+  portal_id: string;
+  payment_date: string;
+  payment_method: 'CASH' | 'BKASH' | 'NAGAD' | 'BANK' | 'OTHER';
+  amount: number | string;
+  transaction_id?: string | null;
+  note?: string | null;
+  status: 'PENDING' | 'VERIFIED' | 'REJECTED';
+  verified_at?: string | null;
+  verified_by?: string | null;
+  created_at?: string | null;
 };
 
 export type DeliveryBookingSummary = {
@@ -106,6 +147,7 @@ export type DeliveryAdminDashboard = {
   submissions: DeliveryPaymentSubmission[];
   bookings: DeliveryBookingSummary[];
   audit_logs: DeliveryAuditLog[];
+  payment_ledger: Record<string, DeliveryPaymentLedger[]>;
 };
 
 export async function getDeliveryPortal(token: string): Promise<DeliveryPortalData | null> {
@@ -153,6 +195,7 @@ export async function getDeliveryAdminDashboard(token: string): Promise<Delivery
     submissions: data?.submissions || [],
     bookings: data?.bookings || [],
     audit_logs: data?.audit_logs || [],
+    payment_ledger: data?.payment_ledger || {},
   } as DeliveryAdminDashboard;
 }
 
@@ -268,4 +311,126 @@ export async function syncDeliveryFolder(input: { adminToken: string; portalId: 
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data?.error || 'Folder import failed.');
   return data as { success: boolean; imported: number };
+}
+
+
+export async function updateDeliveryPortal(input: {
+  token: string;
+  portalId: string;
+  clientName?: string | null;
+  clientPhone?: string | null;
+  whatsappNumber?: string | null;
+  eventName?: string | null;
+  packagePrice?: number | null;
+  finalDeliveryAt?: string | null;
+  accessExpiryAt?: string | null;
+  freeAccessDays?: number | null;
+  gracePeriodDays?: number | null;
+  dailyLateFee?: number | null;
+  lateFeeEnabled?: boolean | null;
+  lateFeeWaived?: boolean | null;
+  lateFeeOverride?: number | null;
+  clientMessage?: string | null;
+  clientNote?: string | null;
+  internalAdminNote?: string | null;
+}) {
+  const { data, error } = await db.rpc('delivery_admin_update_portal', {
+    p_token: input.token,
+    p_portal_id: input.portalId,
+    p_client_name: input.clientName ?? null,
+    p_client_phone: input.clientPhone ?? null,
+    p_whatsapp_number: input.whatsappNumber ?? null,
+    p_event_name: input.eventName ?? null,
+    p_package_price: input.packagePrice ?? null,
+    p_final_delivery_at: input.finalDeliveryAt ?? null,
+    p_access_expiry_at: input.accessExpiryAt ?? null,
+    p_free_access_days: input.freeAccessDays ?? null,
+    p_grace_period_days: input.gracePeriodDays ?? null,
+    p_daily_late_fee: input.dailyLateFee ?? null,
+    p_late_fee_enabled: input.lateFeeEnabled ?? null,
+    p_late_fee_waived: input.lateFeeWaived ?? null,
+    p_late_fee_override: input.lateFeeOverride ?? null,
+    p_client_message: input.clientMessage ?? null,
+    p_client_note: input.clientNote ?? null,
+    p_internal_admin_note: input.internalAdminNote ?? null,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function listDeliveryPayments(input: { token: string; portalId: string }): Promise<DeliveryPaymentLedger[]> {
+  const { data, error } = await db.rpc('delivery_admin_list_payments', {
+    p_token: input.token,
+    p_portal_id: input.portalId,
+  });
+  if (error) throw error;
+  return (data || []) as DeliveryPaymentLedger[];
+}
+
+export async function addDeliveryPayment(input: {
+  token: string;
+  portalId: string;
+  paymentDate?: string | null;
+  paymentMethod: DeliveryPaymentLedger['payment_method'];
+  amount: number;
+  transactionId?: string | null;
+  note?: string | null;
+  status?: DeliveryPaymentLedger['status'];
+}) {
+  const { data, error } = await db.rpc('delivery_admin_add_payment', {
+    p_token: input.token,
+    p_portal_id: input.portalId,
+    p_payment_date: input.paymentDate || new Date().toISOString(),
+    p_payment_method: input.paymentMethod,
+    p_amount: input.amount,
+    p_transaction_id: input.transactionId || null,
+    p_note: input.note || null,
+    p_status: input.status || 'PENDING',
+  });
+  if (error) throw error;
+  return data as DeliveryPaymentLedger;
+}
+
+export async function updateDeliveryPayment(input: {
+  token: string;
+  paymentId: string;
+  paymentDate?: string | null;
+  paymentMethod?: DeliveryPaymentLedger['payment_method'];
+  amount?: number;
+  transactionId?: string | null;
+  note?: string | null;
+  status?: DeliveryPaymentLedger['status'];
+}) {
+  const { data, error } = await db.rpc('delivery_admin_update_payment', {
+    p_token: input.token,
+    p_payment_id: input.paymentId,
+    p_payment_date: input.paymentDate ?? null,
+    p_payment_method: input.paymentMethod ?? null,
+    p_amount: input.amount ?? null,
+    p_transaction_id: input.transactionId ?? null,
+    p_note: input.note ?? null,
+    p_status: input.status ?? null,
+  });
+  if (error) throw error;
+  return data as DeliveryPaymentLedger;
+}
+
+export async function deleteDeliveryPayment(input: { token: string; paymentId: string }) {
+  const { data, error } = await db.rpc('delivery_admin_delete_payment', {
+    p_token: input.token,
+    p_payment_id: input.paymentId,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function restoreDeliveryAccess(input: { token: string; portalId: string; restoreDays?: number; waiveFee?: boolean }) {
+  const { data, error } = await db.rpc('delivery_admin_restore_access', {
+    p_token: input.token,
+    p_portal_id: input.portalId,
+    p_restore_days: input.restoreDays ?? 30,
+    p_waive_fee: input.waiveFee ?? false,
+  });
+  if (error) throw error;
+  return data;
 }
