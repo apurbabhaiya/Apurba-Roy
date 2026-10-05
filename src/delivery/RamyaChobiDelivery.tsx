@@ -15,6 +15,7 @@ import {
   ShieldCheck,
   Smartphone,
   WalletCards,
+  MessageCircle,
 } from 'lucide-react';
 import {
   DeliveryPortalData,
@@ -57,6 +58,13 @@ function daysRemaining(value?: string | null) {
 
 function mediaUrl(token: string, fileId: string, mode: 'PREVIEW' | 'ORIGINAL') {
   return `/api/delivery-media?token=${encodeURIComponent(token)}&fileId=${encodeURIComponent(fileId)}&mode=${mode}`;
+}
+
+function whatsappHref(phone?: string | null) {
+  const digits = String(phone || '').replace(/\D/g, '');
+  const normalized = digits.startsWith('880') ? digits : digits.startsWith('0') ? `88${digits}` : `880${digits}`;
+  const text = encodeURIComponent('আসসালামু আলাইকুম। আপনার RamyaChobi Final Delivery সম্পর্কে যোগাযোগ করছি। আপনার বাকি পেমেন্ট ও ফাইল ডাউনলোডের বিষয়ে বিস্তারিত জানাতে চাই।');
+  return `https://wa.me/${normalized}?text=${text}`;
 }
 
 function StatCard(props: { label: string; value: React.ReactNode; note?: string }) {
@@ -113,9 +121,13 @@ export default function RamyaChobiDelivery({ token }: { token: string }) {
   const isFullyPaid = data?.payment_status === 'FULLY_PAID';
   const freeDays = daysRemaining(data?.free_access_expires_at);
   const temporaryDays = daysRemaining(data?.access_expires_at);
-  const feePerDay = Number(data?.access_fee_per_day || 20);
+  const feePerDay = Number(data?.daily_late_fee ?? data?.access_fee_per_day ?? 10);
   const remainingDue = Number(data?.remaining_due || 0);
-  const isAccessPayment = isLocked && !isUnavailable;
+  const lateDays = Number(data?.late_days || 0);
+  const lateFee = Number(data?.calculated_late_fee || 0);
+  const lateFeeBalance = Number(data?.late_fee_balance || 0);
+  const totalPayable = Number(data?.total_payable || remainingDue + lateFeeBalance);
+  const isAccessPayment = isLocked && isFullyPaid && lateFeeBalance > 0 && !isUnavailable;
 
   useEffect(() => {
     if (!data) return;
@@ -300,10 +312,14 @@ export default function RamyaChobiDelivery({ token }: { token: string }) {
             <div className="mt-6 space-y-4">
               <div className="flex items-center justify-between text-white/65"><span>Package price</span><strong className="text-white">{money(data.package_price)}</strong></div>
               <div className="flex items-center justify-between text-white/65"><span>Advance paid</span><strong className="text-white">{money(data.advance_paid)}</strong></div>
-              <div className="flex items-center justify-between text-white/65"><span>Verified total paid</span><strong className="text-white">{money(data.verified_total_paid)}</strong></div>
+              <div className="flex items-center justify-between text-white/65"><span>Total paid</span><strong className="text-white">{money(data.total_paid ?? data.verified_total_paid)}</strong></div>
+              <div className="flex items-center justify-between text-white/65"><span>Late days</span><strong className="text-white">{lateDays}</strong></div>
+              <div className="flex items-center justify-between text-white/65"><span>Late fee ({money(feePerDay)}/day)</span><strong className="text-white">{money(lateFeeBalance || lateFee)}</strong></div>
               <div className="border-t border-white/10 pt-4 flex items-center justify-between">
                 <span className="font-semibold">Remaining due</span>
                 <strong className="text-2xl text-amber-300">{money(data.remaining_due)}</strong>
+              </div>
+              <div className="flex items-center justify-between border-t border-white/10 pt-4"><span className="font-semibold">Total payable</span><strong className="text-2xl text-amber-300">{money(totalPayable)}</strong>
               </div>
             </div>
             <div className="mt-6 rounded-2xl bg-white/5 p-4 text-sm text-white/65">
@@ -327,7 +343,7 @@ export default function RamyaChobiDelivery({ token }: { token: string }) {
                 <LockKeyhole className="h-10 w-10 text-amber-700" />
                 <h2 className="mt-4 text-3xl font-semibold">Your Gallery Access Has Expired</h2>
                 <p className="mt-3 max-w-xl leading-7 text-stone-600">
-                  Your complimentary 30-day Final Delivery period has ended. If your files are still retained, you can restore viewing and download access for {money(feePerDay)} per day.
+                  Your complimentary {data.free_access_days || 30}-day Final Delivery period has ended. Late access is {money(feePerDay)} per day. The current late fee is {money(lateFeeBalance)} for {lateDays} day(s).
                 </p>
                 <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
                   {[1, 2, 3, 5, 7].map((day) => (
@@ -541,6 +557,12 @@ export default function RamyaChobiDelivery({ token }: { token: string }) {
           </div>
         </section>
       </main>
+
+      {data.client_phone && (
+        <a href={whatsappHref(data.whatsapp_number || data.client_phone)} target="_blank" rel="noreferrer" aria-label="WhatsApp contact" className="fixed bottom-5 right-5 z-30 inline-flex items-center gap-2 rounded-full bg-green-600 px-4 py-3 text-sm font-bold text-white shadow-xl">
+          <MessageCircle className="h-5 w-5" /> WhatsApp
+        </a>
+      )}
 
       <footer className="border-t border-stone-200 bg-white px-5 py-8 text-center text-sm text-stone-500">
         <div className="font-semibold tracking-[0.16em] text-stone-900">RAMYACHOBI</div>
