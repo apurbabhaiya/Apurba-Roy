@@ -35,6 +35,7 @@ import {
   upsertDeliveryFile,
   deleteDeliveryFile,
   syncDeliveryFolder,
+  validateAndSaveDeliveryFile,
   updateDeliveryPortal,
   listDeliveryPayments,
   addDeliveryPayment,
@@ -118,7 +119,8 @@ export default function RamyaChobiDeliveryAdmin() {
   const [settingsBkash, setSettingsBkash] = useState('');
   const [settingsRetention, setSettingsRetention] = useState('');
   const [filesByPortal, setFilesByPortal] = useState<Record<string, DeliveryAdminFile[]>>({});
-  const [fileDrafts, setFileDrafts] = useState<Record<string, { url: string; title: string; type: 'PHOTO' | 'VIDEO' | 'FOLDER'; sortOrder: string }>>({});
+  const [fileDrafts, setFileDrafts] = useState<Record<string, { url: string; fileName: string; title: string; type: 'PHOTO' | 'VIDEO' | 'FOLDER'; sortOrder: string }>>({});
+  const [fileMetaByPortal, setFileMetaByPortal] = useState<Record<string, { name?: string; mimeType?: string; size?: string | null }>>({});
   const [ledgerByPortal, setLedgerByPortal] = useState<Record<string, DeliveryPaymentLedger[]>>({});
   const [portalSearch, setPortalSearch] = useState('');
   const [selectedPortalId, setSelectedPortalId] = useState('');
@@ -416,29 +418,41 @@ export default function RamyaChobiDeliveryAdmin() {
     navigator.clipboard?.writeText(link);
     setNotice('Private client link copied.');
   }
-  function updateFileDraft(portalId: string, patch: Partial<{ url: string; title: string; type: 'PHOTO' | 'VIDEO' | 'FOLDER'; sortOrder: string }>) {
+  function updateFileDraft(portalId: string, patch: Partial<{ url: string; fileName: string; title: string; type: 'PHOTO' | 'VIDEO' | 'FOLDER'; sortOrder: string }>) {
     setFileDrafts((current) => ({
       ...current,
-      [portalId]: { url: current[portalId]?.url || '', title: current[portalId]?.title || '', type: current[portalId]?.type || 'PHOTO', sortOrder: current[portalId]?.sortOrder || '', ...patch },
+      [portalId]: { url: current[portalId]?.url || '', fileName: current[portalId]?.fileName || '', title: current[portalId]?.title || '', type: current[portalId]?.type || 'PHOTO', sortOrder: current[portalId]?.sortOrder || '', ...patch },
     }));
   }
 
   async function addFinalDeliveryFile(portalId: string) {
-    const draft = fileDrafts[portalId] || { url: '', title: '', type: 'PHOTO' as const, sortOrder: '' };
+    const draft = fileDrafts[portalId] || { url: '', fileName: '', title: '', type: 'PHOTO' as const, sortOrder: '' };
     if (!draft.url.trim()) { setNotice('Paste a Google Drive file or folder link first.'); return; }
-    setLoading(true); setNotice('');
+    setLoading(true); setNotice('Validating private Google Drive link...');
     try {
       if (draft.type === 'FOLDER') {
+        const verified = await validateAndSaveDeliveryFile({ adminToken: token, portalId, sourceUrl: draft.url.trim(), fileType: 'FOLDER', persist: false });
         const result = await syncDeliveryFolder({ adminToken: token, portalId, folderUrl: draft.url.trim() });
-        setNotice(`${result.imported} file(s) imported from Google Drive folder.`);
+        setFileMetaByPortal((current) => ({ ...current, [portalId]: { name: verified.metadata.name, mimeType: verified.metadata.mimeType, size: verified.metadata.size || null } }));
+        setNotice(`Link verified: ${verified.metadata.name}. ${result.imported} file(s) imported from the private folder.`);
       } else {
-        await upsertDeliveryFile({ token, portalId, sourceUrl: draft.url.trim(), fileType: draft.type, title: draft.title.trim() || null, sortOrder: Number(draft.sortOrder || 0) });
-        setNotice('Final Delivery file added.');
+        const verified = await validateAndSaveDeliveryFile({
+          adminToken: token,
+          portalId,
+          sourceUrl: draft.url.trim(),
+          fileType: draft.type,
+          fileName: draft.fileName.trim() || null,
+          title: draft.title.trim() || null,
+          sortOrder: Number(draft.sortOrder || 0),
+          persist: true,
+        });
+        setFileMetaByPortal((current) => ({ ...current, [portalId]: { name: verified.metadata.name, mimeType: verified.metadata.mimeType, size: verified.metadata.size || null } }));
+        setNotice(`Link verified successfully: ${verified.metadata.name} (${verified.metadata.mimeType}). Private file connected.`);
       }
       const files = await listDeliveryFiles({ token, portalId });
       setFilesByPortal((current) => ({ ...current, [portalId]: files }));
-      setFileDrafts((current) => ({ ...current, [portalId]: { url: '', title: '', type: draft.type, sortOrder: '' } }));
-    } catch (error: any) { setNotice(error?.message || 'Could not add Final Delivery file.'); }
+      setFileDrafts((current) => ({ ...current, [portalId]: { url: '', fileName: '', title: '', type: draft.type, sortOrder: '' } }));
+    } catch (error: any) { setNotice(error?.message || 'Google Drive link validation failed.'); }
     finally { setLoading(false); }
   }
 
