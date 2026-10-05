@@ -452,13 +452,13 @@ export default function RamyaChobiDelivery({ token }: { token: string }) {
                     </div>
                   </div>
                 );
-              }) : previews.map((item, index) => (
+              }) : previewEnabled ? previews.map((item, index) => (
                 <div key={index} className="group relative aspect-[4/3] overflow-hidden rounded-2xl bg-stone-100">
                   <img src={item.url} alt={item.title || `Gallery item ${index + 1}`} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
                   {!canDownload && <div className="absolute inset-0 flex items-center justify-center bg-black/10"><span className="-rotate-12 rounded bg-black/45 px-2 py-1 text-xs font-semibold tracking-[0.18em] text-white">RAMYACHOBI PREVIEW</span></div>}
                   <div className="absolute bottom-2 left-2 flex items-center gap-1 rounded-full bg-black/55 px-2 py-1 text-[11px] font-medium text-white backdrop-blur">{item.type === 'video' ? <PlayCircle className="h-3 w-3" /> : <ImageIcon className="h-3 w-3" />}{item.type === 'video' ? 'Video' : 'Photo'}</div>
                 </div>
-              ))}
+              )) : <div className="col-span-full flex min-h-40 items-center justify-center rounded-2xl bg-stone-100 p-6 text-center text-sm text-stone-600"><LockKeyhole className="mr-2 h-5 w-5" />Preview access is disabled by the administrator.</div>}
             </div>
             <div className="mt-5 grid gap-2 sm:grid-cols-4">
               <div className="rounded-xl bg-stone-50 p-3 text-xs"><span className="block text-stone-500">Preview</span><strong>{previewEnabled ? 'ON' : 'OFF'}</strong></div>
