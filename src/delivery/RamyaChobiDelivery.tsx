@@ -433,9 +433,14 @@ export default function RamyaChobiDelivery({ token }: { token: string }) {
                     )}
                     <div className="flex items-center justify-between gap-2 p-2">
                       <span className="truncate text-xs font-medium">{label}</span>
-                      {canDownload && file.file_type !== 'FOLDER' && (
-                        <a href={mediaUrl(token, file.id, 'ORIGINAL')} className="shrink-0 rounded-lg bg-stone-950 px-2 py-1 text-[11px] font-semibold text-white">Download</a>
-                      )}
+                      <div className="flex shrink-0 items-center gap-1">
+                        {canDownload && file.file_type !== 'FOLDER' && (
+                          <a href={mediaUrl(token, file.id, 'ORIGINAL')} className="rounded-lg bg-stone-950 px-2 py-1 text-[11px] font-semibold text-white">Download</a>
+                        )}
+                        {canDownload && file.google_drive_link && (
+                          <a href={file.google_drive_link} target="_blank" rel="noreferrer" className="rounded-lg bg-emerald-700 px-2 py-1 text-[11px] font-semibold text-white">Drive</a>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
@@ -448,6 +453,13 @@ export default function RamyaChobiDelivery({ token }: { token: string }) {
               ))}
             </div>
             {downloadError && <div className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{downloadError}</div>}
+
+            {data.google_drive_access_enabled && (
+              <div className="mt-5 flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+                <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" />
+                <div><strong>Payment verified.</strong> Original downloads and Google Drive access links are now available for your final files.</div>
+              </div>
+            )}
 
             {!canDownload && (
               <div className="mt-5 flex items-start gap-3 rounded-2xl bg-stone-50 p-4 text-sm text-stone-600">
