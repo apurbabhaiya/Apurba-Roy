@@ -24,7 +24,15 @@ function json(res: VercelResponse, status: number, message: string) { res.status
 async function fetchOriginal(fileId: string, token?: string): Promise<Response> {
   const auth = token || process.env.GOOGLE_DRIVE_ACCESS_TOKEN || '';
   if (auth) return fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`, { headers: { Authorization: `Bearer ${auth}` } });
-  return fetch(`https://drive.google.com/uc?export=download&id=${encodeURIComponent(fileId)}`, { redirect: 'follow' });
+  let response = await fetch(`https://drive.google.com/uc?export=download&id=${encodeURIComponent(fileId)}`, { redirect: 'follow' });
+  if ((response.headers.get('content-type') || '').includes('text/html')) {
+    const html = await response.text();
+    const confirm = html.match(/confirm=([0-9A-Za-z_-]+)/)?.[1];
+    if (!confirm) throw new Error('Google Drive did not expose the original binary. Check that the file is shared for download.');
+    const cookie = response.headers.get('set-cookie') || '';
+    response = await fetch(`https://drive.usercontent.google.com/download?id=${encodeURIComponent(fileId)}&export=download&confirm=${confirm}`, { headers: cookie ? { cookie } : undefined, redirect: 'follow' });
+  }
+  return response;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
