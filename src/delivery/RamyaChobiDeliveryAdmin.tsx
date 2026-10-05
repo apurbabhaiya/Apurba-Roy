@@ -35,6 +35,13 @@ import {
   upsertDeliveryFile,
   deleteDeliveryFile,
   syncDeliveryFolder,
+  updateDeliveryPortal,
+  listDeliveryPayments,
+  addDeliveryPayment,
+  updateDeliveryPayment,
+  deleteDeliveryPayment,
+  restoreDeliveryAccess,
+  DeliveryPaymentLedger,
 } from '../services/deliveryPortalService';
 import PortfolioManager from '../components/PortfolioManager';
 
@@ -112,6 +119,11 @@ export default function RamyaChobiDeliveryAdmin() {
   const [settingsRetention, setSettingsRetention] = useState('');
   const [filesByPortal, setFilesByPortal] = useState<Record<string, DeliveryAdminFile[]>>({});
   const [fileDrafts, setFileDrafts] = useState<Record<string, { url: string; title: string; type: 'PHOTO' | 'VIDEO' | 'FOLDER'; sortOrder: string }>>({});
+  const [ledgerByPortal, setLedgerByPortal] = useState<Record<string, DeliveryPaymentLedger[]>>({});
+  const [portalSearch, setPortalSearch] = useState('');
+  const [selectedPortalId, setSelectedPortalId] = useState('');
+  const [portalEdit, setPortalEdit] = useState<Record<string, any>>({});
+  const [ledgerDrafts, setLedgerDrafts] = useState<Record<string, { date: string; method: DeliveryPaymentLedger['payment_method']; amount: string; transactionId: string; note: string; status: DeliveryPaymentLedger['status'] }>>({});
 
   async function load(useToken?: string) {
     const activeToken = useToken || token;
@@ -129,6 +141,11 @@ export default function RamyaChobiDeliveryAdmin() {
         catch { return [portal.id, []] as const; }
       }));
       setFilesByPortal(Object.fromEntries(fileEntries));
+      const ledgerEntries = await Promise.all((data.portals || []).map(async (portal: DeliveryAdminPortal) => {
+        try { return [portal.id, await listDeliveryPayments({ token: activeToken, portalId: portal.id })] as const; }
+        catch { return [portal.id, []] as const; }
+      }));
+      setLedgerByPortal(Object.fromEntries(ledgerEntries));
     } catch (error: any) {
       const message = error?.message || 'Could not load delivery admin data.';
       setNotice(message);
@@ -158,6 +175,12 @@ export default function RamyaChobiDeliveryAdmin() {
   const bookings = dashboard?.bookings || [];
   const availableBookings = bookings.filter((b) => !b.has_portal);
   const pendingRequests = submissions.filter((s) => s.status === 'SUBMITTED');
+  const filteredPortals = portals.filter((portal) => {
+    const query = portalSearch.trim().toLowerCase();
+    if (!query) return true;
+    return [portal.client_name, portal.event_name, portal.client_phone, portal.whatsapp_number]
+      .filter(Boolean).some((value) => String(value).toLowerCase().includes(query));
+  });
 
   const counts = useMemo(() => {
     return {
@@ -168,6 +191,116 @@ export default function RamyaChobiDeliveryAdmin() {
       requests: pendingRequests.length,
     };
   }, [portals, pendingRequests]);
+
+  function startPortalEdit(portal: DeliveryAdminPortal) {
+    setSelectedPortalId(portal.id);
+    setPortalEdit({
+      clientName: portal.client_name || '',
+      clientPhone: portal.client_phone || '',
+      whatsappNumber: portal.whatsapp_number || portal.client_phone || '',
+      eventName: portal.event_name || '',
+      packagePrice: String(portal.package_price || ''),
+      finalDeliveryAt: toDateTimeLocal(portal.final_delivery_at),
+      accessExpiryAt: toDateTimeLocal(portal.free_access_expires_at || portal.access_expires_at),
+      freeAccessDays: String(portal.free_access_days ?? 30),
+      gracePeriodDays: String(portal.grace_period_days ?? 0),
+      dailyLateFee: String(portal.daily_late_fee ?? 10),
+      lateFeeEnabled: portal.late_fee_enabled !== false,
+      lateFeeWaived: portal.late_fee_waived === true,
+      lateFeeOverride: portal.late_fee_override == null ? '' : String(portal.late_fee_override),
+      clientMessage: portal.client_message || '',
+      clientNote: portal.client_note || '',
+      internalAdminNote: portal.internal_admin_note || '',
+    });
+  }
+
+  function updatePortalEdit(patch: Record<string, unknown>) {
+    setPortalEdit((current) => ({ ...current, ...patch }));
+  }
+
+  async function savePortalEdit() {
+    if (!selectedPortalId) return;
+    setLoading(true); setNotice('');
+    try {
+      await updateDeliveryPortal({
+        token, portalId: selectedPortalId,
+        clientName: portalEdit.clientName || null,
+        clientPhone: portalEdit.clientPhone || null,
+        whatsappNumber: portalEdit.whatsappNumber || null,
+        eventName: portalEdit.eventName || null,
+        packagePrice: Number(portalEdit.packagePrice || 0),
+        finalDeliveryAt: portalEdit.finalDeliveryAt ? new Date(portalEdit.finalDeliveryAt).toISOString() : null,
+        accessExpiryAt: portalEdit.accessExpiryAt ? new Date(portalEdit.accessExpiryAt).toISOString() : null,
+        freeAccessDays: Number(portalEdit.freeAccessDays || 30),
+        gracePeriodDays: Number(portalEdit.gracePeriodDays || 0),
+        dailyLateFee: Number(portalEdit.dailyLateFee || 0),
+        lateFeeEnabled: Boolean(portalEdit.lateFeeEnabled),
+        lateFeeWaived: Boolean(portalEdit.lateFeeWaived),
+        lateFeeOverride: portalEdit.lateFeeOverride === '' ? null : Number(portalEdit.lateFeeOverride),
+        clientMessage: portalEdit.clientMessage || null,
+        clientNote: portalEdit.clientNote || null,
+        internalAdminNote: portalEdit.internalAdminNote || null,
+      });
+      setNotice('Client portal details updated.');
+      await load();
+    } catch (error: any) { setNotice(error?.message || 'Could not update client portal.'); }
+    finally { setLoading(false); }
+  }
+
+  function ledgerDraft(portalId: string) {
+    return ledgerDrafts[portalId] || { date: new Date().toISOString().slice(0, 10), method: 'CASH' as const, amount: '', transactionId: '', note: '', status: 'VERIFIED' as const };
+  }
+
+  function updateLedgerDraft(portalId: string, patch: Partial<ReturnType<typeof ledgerDraft>>) {
+    setLedgerDrafts((current) => ({ ...current, [portalId]: { ...ledgerDraft(portalId), ...patch } }));
+  }
+
+  async function saveLedgerPayment(portalId: string) {
+    const draft = ledgerDraft(portalId);
+    if (!Number(draft.amount)) { setNotice('Enter a payment amount first.'); return; }
+    setLoading(true); setNotice('');
+    try {
+      await addDeliveryPayment({ token, portalId, paymentDate: draft.date, paymentMethod: draft.method, amount: Number(draft.amount), transactionId: draft.transactionId || null, note: draft.note || null, status: draft.status });
+      setNotice('Payment ledger entry added.');
+      await load();
+    } catch (error: any) { setNotice(error?.message || 'Could not add payment.'); }
+    finally { setLoading(false); }
+  }
+
+  async function setLedgerStatus(payment: DeliveryPaymentLedger, status: DeliveryPaymentLedger['status']) {
+    setLoading(true); setNotice('');
+    try {
+      await updateDeliveryPayment({ token, paymentId: payment.id, status });
+      setNotice(`Payment marked ${status.toLowerCase()}.`);
+      await load();
+    } catch (error: any) { setNotice(error?.message || 'Could not update payment.'); }
+    finally { setLoading(false); }
+  }
+
+  async function removeLedgerPayment(paymentId: string) {
+    if (!window.confirm('Delete this payment ledger entry?')) return;
+    setLoading(true); setNotice('');
+    try { await deleteDeliveryPayment({ token, paymentId }); setNotice('Payment entry deleted.'); await load(); }
+    catch (error: any) { setNotice(error?.message || 'Could not delete payment.'); }
+    finally { setLoading(false); }
+  }
+
+  async function restorePortal(portalId: string, waiveFee: boolean) {
+    setLoading(true); setNotice('');
+    try {
+      await restoreDeliveryAccess({ token, portalId, restoreDays: 30, waiveFee });
+      setNotice(waiveFee ? 'Late fee waived and access restored.' : 'Access restored after late fee review.');
+      await load();
+    } catch (error: any) { setNotice(error?.message || 'Could not restore access.'); }
+    finally { setLoading(false); }
+  }
+
+  function portalWhatsapp(phone?: string | null) {
+    const digits = String(phone || '').replace(/\D/g, '');
+    const normalized = digits.startsWith('880') ? digits : digits.startsWith('0') ? `88${digits}` : `880${digits}`;
+    const text = encodeURIComponent('আসসালামু আলাইকুম। আপনার RamyaChobi Final Delivery সম্পর্কে যোগাযোগ করছি। আপনার বাকি পেমেন্ট ও ফাইল ডাউনলোডের বিষয়ে বিস্তারিত জানাতে চাই।');
+    return `https://wa.me/${normalized}?text=${text}`;
+  }
 
   async function signIn(e: React.FormEvent) {
     e.preventDefault();
@@ -545,7 +678,7 @@ export default function RamyaChobiDeliveryAdmin() {
         <section className="rounded-3xl border border-stone-200 bg-white p-6 shadow-sm">
           <h2 className="text-xl font-semibold">Client delivery portals</h2>
           <div className="mt-5 space-y-4">
-            {portals.map((portal) => {
+            {filteredPortals.map((portal) => {
               const canActivate = portal.payment_status === 'FULLY_PAID' && portal.delivery_status !== 'FINAL_DELIVERED';
               return (
                 <div key={portal.id} className="rounded-2xl border border-stone-200 p-4">
