@@ -68,7 +68,7 @@ export async function archiveSelectedPhotos(
 
       try {
         let fileBlob: Blob | null = null;
-        const imageUrl = photo.thumbnailUrl || (photo.driveFileId ? `https://drive.google.com/uc?export=view&id=${photo.driveFileId}` : '');
+        const imageUrl = photo.originalUrl || (photo.driveFileId ? `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(photo.driveFileId)}?alt=media` : '');
 
         if (imageUrl) {
           try {
