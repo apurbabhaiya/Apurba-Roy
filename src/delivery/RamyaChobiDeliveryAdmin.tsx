@@ -34,6 +34,7 @@ import {
   listDeliveryFiles,
   upsertDeliveryFile,
   deleteDeliveryFile,
+  syncDeliveryFolder,
 } from '../services/deliveryPortalService';
 import PortfolioManager from '../components/PortfolioManager';
 
@@ -294,11 +295,16 @@ export default function RamyaChobiDeliveryAdmin() {
     if (!draft.url.trim()) { setNotice('Paste a Google Drive file or folder link first.'); return; }
     setLoading(true); setNotice('');
     try {
-      await upsertDeliveryFile({ token, portalId, sourceUrl: draft.url.trim(), fileType: draft.type, title: draft.title.trim() || null });
+      if (draft.type === 'FOLDER') {
+        const result = await syncDeliveryFolder({ adminToken: token, portalId, folderUrl: draft.url.trim() });
+        setNotice(`${result.imported} file(s) imported from Google Drive folder.`);
+      } else {
+        await upsertDeliveryFile({ token, portalId, sourceUrl: draft.url.trim(), fileType: draft.type, title: draft.title.trim() || null });
+        setNotice('Final Delivery file added.');
+      }
       const files = await listDeliveryFiles({ token, portalId });
       setFilesByPortal((current) => ({ ...current, [portalId]: files }));
       setFileDrafts((current) => ({ ...current, [portalId]: { url: '', title: '', type: draft.type } }));
-      setNotice('Final Delivery file added.');
     } catch (error: any) { setNotice(error?.message || 'Could not add Final Delivery file.'); }
     finally { setLoading(false); }
   }
