@@ -1598,7 +1598,7 @@ export const CustomerGalleryView: React.FC<CustomerGalleryViewProps> = ({
   // Download individual photo
   const handleDownloadPhoto = async (photo: CustomerGalleryPhoto) => {
     if (!gallery?.allowDownloads) return;
-    const source = (gallery.allowOriginalDownloads && photo.originalUrl) || photo.previewUrl || photo.thumbnailUrl;
+    const source = (gallery.allowOriginalDownloads && (photo.originalUrl || ('https://drive.google.com/uc?export=download&id=' + encodeURIComponent(photo.driveFileId)))) || photo.previewUrl || photo.thumbnailUrl;
     if (!gallery.watermarkEnabled || gallery.allowOriginalDownloads) {
       const link = document.createElement('a'); link.href = source; link.download = photo.name || 'photo.jpg'; link.target = '_blank'; link.click(); return;
     }
