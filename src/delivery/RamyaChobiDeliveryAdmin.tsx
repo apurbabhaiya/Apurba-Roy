@@ -676,16 +676,37 @@ export default function RamyaChobiDeliveryAdmin() {
         </section>
 
         <section className="rounded-3xl border border-stone-200 bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-semibold">Client delivery portals</h2>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-xl font-semibold">Client delivery portals</h2>
+            <div className="flex flex-wrap items-center gap-2">
+              <input value={portalSearch} onChange={(e) => setPortalSearch(e.target.value)} placeholder="Search client, event or phone" className="rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm" />
+              <span className="text-sm text-stone-500">{filteredPortals.length} of {portals.length}</span>
+              <button type="button" onClick={() => {
+                if (!filteredPortals.length) return;
+                const current = filteredPortals.findIndex((p) => p.id === selectedPortalId);
+                const next = filteredPortals[(current <= 0 ? filteredPortals.length : current) - 1];
+                setSelectedPortalId(next.id);
+                document.getElementById(`portal-${next.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }} className="rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm font-semibold">Previous</button>
+              <button type="button" onClick={() => {
+                if (!filteredPortals.length) return;
+                const current = filteredPortals.findIndex((p) => p.id === selectedPortalId);
+                const next = filteredPortals[(current + 1) % filteredPortals.length];
+                setSelectedPortalId(next.id);
+                document.getElementById(`portal-${next.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }} className="rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm font-semibold">Next</button>
+            </div>
+          </div>
           <div className="mt-5 space-y-4">
             {filteredPortals.map((portal) => {
               const canActivate = portal.payment_status === 'FULLY_PAID' && portal.delivery_status !== 'FINAL_DELIVERED';
               return (
-                <div key={portal.id} className="rounded-2xl border border-stone-200 p-4">
+                <div id={`portal-${portal.id}`} key={portal.id} className={`rounded-2xl border p-4 ${selectedPortalId === portal.id ? 'border-amber-400 ring-2 ring-amber-100' : 'border-stone-200'}`}>
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
                       <div className="text-lg font-semibold">{portal.client_name}</div>
                       <div className="mt-1 text-sm text-stone-500">{portal.event_name || 'Event'} · {portal.package_name || 'Package'}</div>
+                      <div className="mt-2 text-xs text-stone-500">{portal.client_phone || portal.whatsapp_number || 'No phone saved'}</div>
                       <div className="mt-3 flex flex-wrap gap-2">
                         <StatusPill value={portal.payment_status} />
                         <StatusPill value={portal.delivery_status} />
@@ -695,6 +716,7 @@ export default function RamyaChobiDeliveryAdmin() {
                     <div className="text-right">
                       <div className="text-xs uppercase tracking-wider text-stone-400">Remaining due</div>
                       <div className="mt-1 text-xl font-semibold">{money(portal.remaining_due)}</div>
+                      <div className="mt-1 text-xs text-stone-500">Paid {money(portal.total_paid ?? portal.verified_total_paid)}</div>
                     </div>
                   </div>
 
@@ -703,6 +725,7 @@ export default function RamyaChobiDeliveryAdmin() {
                     <div className="rounded-xl bg-stone-50 p-3"><span className="block text-stone-500">Free access ends</span><strong>{fmt(portal.free_access_expires_at)}</strong></div>
                     <div className="rounded-xl bg-stone-50 p-3"><span className="block text-stone-500">Temporary access</span><strong>{fmt(portal.access_expires_at)}</strong></div>
                     <div className="rounded-xl bg-stone-50 p-3"><span className="block text-stone-500">Storage retention</span><strong>{fmt(portal.storage_retention_until)}</strong></div>
+                    <div className="rounded-xl bg-stone-50 p-3"><span className="block text-stone-500">Late fee</span><strong>{Number((portal.late_fee as any)?.balance ?? (portal.late_fee as any)?.calculated_fee ?? 0) > 0 ? money((portal.late_fee as any)?.balance ?? (portal.late_fee as any)?.calculated_fee) : 'None'}</strong></div>
                   </div>
 
                   <section className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
@@ -732,7 +755,32 @@ export default function RamyaChobiDeliveryAdmin() {
                     </div>
                   </section>
 
+                  <section className="mt-4 rounded-2xl border border-stone-200 bg-stone-50 p-4">
+                    <div className="flex items-center justify-between gap-2"><h3 className="font-semibold">Payment ledger</h3><span className="text-xs text-stone-500">Verified payments count toward total paid</span></div>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
+                      <input type="date" value={ledgerDraft(portal.id).date} onChange={(e) => updateLedgerDraft(portal.id, { date: e.target.value })} className="rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm" />
+                      <select value={ledgerDraft(portal.id).method} onChange={(e) => updateLedgerDraft(portal.id, { method: e.target.value as any })} className="rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm"><option value="CASH">Cash</option><option value="BKASH">bKash</option><option value="NAGAD">Nagad</option><option value="BANK">Bank</option></select>
+                      <input type="number" min="0" value={ledgerDraft(portal.id).amount} onChange={(e) => updateLedgerDraft(portal.id, { amount: e.target.value })} placeholder="Amount" className="rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm" />
+                      <input value={ledgerDraft(portal.id).transactionId} onChange={(e) => updateLedgerDraft(portal.id, { transactionId: e.target.value })} placeholder="Transaction ID" className="rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm" />
+                      <select value={ledgerDraft(portal.id).status} onChange={(e) => updateLedgerDraft(portal.id, { status: e.target.value as any })} className="rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm"><option value="VERIFIED">Verified</option><option value="PENDING">Pending</option><option value="REJECTED">Rejected</option></select>
+                      <button onClick={() => saveLedgerPayment(portal.id)} disabled={loading} className="rounded-xl bg-stone-950 px-3 py-2 text-sm font-bold text-white">Add payment</button>
+                    </div>
+                    <input value={ledgerDraft(portal.id).note} onChange={(e) => updateLedgerDraft(portal.id, { note: e.target.value })} placeholder="Payment note" className="mt-2 w-full rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm" />
+                    <div className="mt-3 space-y-2">
+                      {(ledgerByPortal[portal.id] || []).map((payment) => (
+                        <div key={payment.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-white px-3 py-2 text-sm">
+                          <div><strong>{money(payment.amount)}</strong> · {payment.payment_method} · {payment.payment_date} <StatusPill value={payment.status} />{payment.note ? <span className="ml-2 text-stone-500">{payment.note}</span> : null}</div>
+                          <div className="flex gap-1"><button onClick={() => setLedgerStatus(payment, payment.status === 'VERIFIED' ? 'PENDING' : 'VERIFIED')} className="rounded-lg bg-amber-50 px-2 py-1 text-xs font-bold text-amber-800">{payment.status === 'VERIFIED' ? 'Mark pending' : 'Verify'}</button><button onClick={() => removeLedgerPayment(payment.id)} className="rounded-lg bg-red-50 px-2 py-1 text-xs font-bold text-red-700">Delete</button></div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+
                   <div className="mt-4 flex flex-wrap gap-2">
+                    {portal.client_phone && <a href={portalWhatsapp(portal.whatsapp_number || portal.client_phone)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-3.5 py-2 text-sm font-bold text-white">WhatsApp</a>}
+                    <button onClick={() => startPortalEdit(portal)} className="inline-flex items-center gap-2 rounded-xl bg-amber-100 px-3.5 py-2 text-sm font-bold text-amber-900">Edit Client</button>
+                    <button onClick={() => restorePortal(portal.id, false)} disabled={loading} className="inline-flex items-center gap-2 rounded-xl bg-indigo-50 px-3.5 py-2 text-sm font-bold text-indigo-800">Restore Access</button>
+                    <button onClick={() => restorePortal(portal.id, true)} disabled={loading} className="inline-flex items-center gap-2 rounded-xl bg-violet-50 px-3.5 py-2 text-sm font-bold text-violet-800">Waive Fee</button>
                     <button onClick={() => copyLink(portal)} className="inline-flex items-center gap-2 rounded-xl bg-stone-950 px-3.5 py-2 text-sm font-bold text-white">
                       <Copy className="h-4 w-4" /> Copy Client Link
                     </button>
@@ -748,6 +796,31 @@ export default function RamyaChobiDeliveryAdmin() {
                       <Settings2 className="h-4 w-4" /> Delivery Settings
                     </button>
                   </div>
+
+                  {selectedPortalId === portal.id && Object.keys(portalEdit).length > 0 && (
+                    <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                      <h3 className="font-semibold">Edit client details, message and access policy</h3>
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        <input value={portalEdit.clientName || ''} onChange={(e) => updatePortalEdit({ clientName: e.target.value })} placeholder="Client name" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5" />
+                        <input value={portalEdit.eventName || ''} onChange={(e) => updatePortalEdit({ eventName: e.target.value })} placeholder="Event name" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5" />
+                        <input value={portalEdit.clientPhone || ''} onChange={(e) => updatePortalEdit({ clientPhone: e.target.value })} placeholder="Phone number" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5" />
+                        <input value={portalEdit.whatsappNumber || ''} onChange={(e) => updatePortalEdit({ whatsappNumber: e.target.value })} placeholder="WhatsApp number" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5" />
+                        <input value={portalEdit.packagePrice || ''} onChange={(e) => updatePortalEdit({ packagePrice: e.target.value })} type="number" placeholder="Package price" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5" />
+                        <input value={portalEdit.freeAccessDays || ''} onChange={(e) => updatePortalEdit({ freeAccessDays: e.target.value })} type="number" placeholder="Free access days" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5" />
+                        <input value={portalEdit.dailyLateFee || ''} onChange={(e) => updatePortalEdit({ dailyLateFee: e.target.value })} type="number" placeholder="Daily late fee" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5" />
+                        <input value={portalEdit.gracePeriodDays || ''} onChange={(e) => updatePortalEdit({ gracePeriodDays: e.target.value })} type="number" placeholder="Grace days" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5" />
+                        <input value={portalEdit.lateFeeOverride || ''} onChange={(e) => updatePortalEdit({ lateFeeOverride: e.target.value })} type="number" placeholder="Fee override (optional)" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5" />
+                        <label className="flex items-center gap-2 rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm"><input type="checkbox" checked={Boolean(portalEdit.lateFeeEnabled)} onChange={(e) => updatePortalEdit({ lateFeeEnabled: e.target.checked })} /> Late fee enabled</label>
+                        <label className="flex items-center gap-2 rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm"><input type="checkbox" checked={Boolean(portalEdit.lateFeeWaived)} onChange={(e) => updatePortalEdit({ lateFeeWaived: e.target.checked })} /> Waive fee</label>
+                        <input value={portalEdit.finalDeliveryAt || ''} onChange={(e) => updatePortalEdit({ finalDeliveryAt: e.target.value })} type="datetime-local" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5" />
+                        <input value={portalEdit.accessExpiryAt || ''} onChange={(e) => updatePortalEdit({ accessExpiryAt: e.target.value })} type="datetime-local" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5" />
+                      </div>
+                      <textarea value={portalEdit.clientMessage || ''} onChange={(e) => updatePortalEdit({ clientMessage: e.target.value })} placeholder="Client-facing delivery message" className="mt-3 min-h-20 w-full rounded-xl border border-stone-300 bg-white px-3 py-2.5" />
+                      <textarea value={portalEdit.clientNote || ''} onChange={(e) => updatePortalEdit({ clientNote: e.target.value })} placeholder="Client note" className="mt-3 min-h-16 w-full rounded-xl border border-stone-300 bg-white px-3 py-2.5" />
+                      <textarea value={portalEdit.internalAdminNote || ''} onChange={(e) => updatePortalEdit({ internalAdminNote: e.target.value })} placeholder="Internal admin note" className="mt-3 min-h-16 w-full rounded-xl border border-stone-300 bg-white px-3 py-2.5" />
+                      <div className="mt-3 flex gap-2"><button onClick={savePortalEdit} disabled={loading} className="rounded-xl bg-stone-950 px-4 py-2.5 text-sm font-bold text-white">Save changes</button><button onClick={() => setPortalEdit({})} className="rounded-xl border border-stone-300 bg-white px-4 py-2.5 text-sm font-bold">Cancel</button></div>
+                    </div>
+                  )}
 
                   {editingPortal?.id === portal.id && (
                     <div className="mt-4 grid gap-3 rounded-2xl bg-stone-50 p-4 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_auto]">
