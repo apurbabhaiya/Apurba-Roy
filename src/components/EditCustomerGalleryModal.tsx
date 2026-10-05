@@ -32,6 +32,7 @@ export const EditCustomerGalleryModal: React.FC<EditCustomerGalleryModalProps> =
   const [status, setStatus] = useState<CustomerGalleryStatus>(gallery.status);
   const [allowDownloads, setAllowDownloads] = useState(gallery.allowDownloads);
   const [watermarkEnabled, setWatermarkEnabled] = useState(Boolean(gallery.watermarkEnabled));
+  const [allowOriginalDownloads, setAllowOriginalDownloads] = useState(Boolean(gallery.allowOriginalDownloads));
   const [allowEditing, setAllowEditing] = useState(gallery.allowEditing);
   const [askCustomerName, setAskCustomerName] = useState(gallery.askCustomerName || false);
   const [askCustomerPhone, setAskCustomerPhone] = useState(gallery.askCustomerPhone || false);
@@ -63,6 +64,7 @@ export const EditCustomerGalleryModal: React.FC<EditCustomerGalleryModalProps> =
         status,
         allowDownloads,
         watermarkEnabled,
+        allowOriginalDownloads,
         allowEditing,
         askCustomerName,
         askCustomerPhone,
@@ -188,7 +190,14 @@ export const EditCustomerGalleryModal: React.FC<EditCustomerGalleryModalProps> =
           </div>
 
           <div className="space-y-2 pt-1">
-<label className="flex items-center justify-between gap-3 p-3 rounded-xl bg-stone-950 border border-stone-850 cursor-pointer"><div><span className="text-xs text-stone-300">ডাউনলোডে Watermark</span><p className="text-[11px] text-stone-500 mt-1">বন্ধ করলে এই গ্যালারির ডাউনলোডে watermark যুক্ত হবে না।</p></div><input type="checkbox" checked={watermarkEnabled} onChange={e => setWatermarkEnabled(e.target.checked)} className="w-4 h-4 accent-amber-500" /></label>
+            <label className="flex items-center justify-between gap-3 p-3 rounded-xl bg-stone-950 border border-stone-850 cursor-pointer">
+              <div><span className="text-xs text-stone-300">ডাউনলোডে Watermark</span><p className="text-[11px] text-stone-500 mt-1">বন্ধ করলে এই গ্যালারির ডাউনলোডে watermark যুক্ত হবে না।</p></div>
+              <input type="checkbox" checked={watermarkEnabled} onChange={e => setWatermarkEnabled(e.target.checked)} className="w-4 h-4 accent-amber-500" />
+            </label>
+            <label className="flex items-center justify-between p-3 rounded-xl bg-stone-950 border border-stone-850 cursor-pointer">
+              <div><span className="text-xs text-stone-300">Original Download Permission</span><p className="text-[11px] text-stone-500 mt-1">এই client-এর জন্য watermark bypass করে original ফাইল download অনুমতি।</p></div>
+              <input type="checkbox" checked={allowOriginalDownloads} onChange={e => setAllowOriginalDownloads(e.target.checked)} className="w-4 h-4 accent-amber-500" />
+            </label>
             <label className="flex items-center justify-between p-3 rounded-xl bg-stone-950 border border-stone-850 cursor-pointer">
               <span className="text-xs text-stone-300">Allow Customer Download</span>
               <input
