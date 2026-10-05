@@ -96,7 +96,7 @@ export async function downloadPhotosAsZip(
       let blob: Blob | null = null;
 
       // 1. Try Google Drive API direct download if accessToken is available and valid Drive ID
-      if (options.accessToken && !photo.id.startsWith('p')) {
+      if (options.accessToken && photo.id) {
         try {
           blob = await downloadDriveFileBlob(options.accessToken, photo.id);
         } catch (err) {
@@ -334,7 +334,7 @@ export async function downloadSinglePhoto(
     let blob: Blob | null = null;
 
     // 1. Try Google Drive API direct download if accessToken is available and not a mock/sample id
-    if (accessToken && !photo.id.startsWith('p')) {
+    if (accessToken && photo.id) {
       try {
         blob = await downloadDriveFileBlob(accessToken, photo.id);
       } catch (err) {
