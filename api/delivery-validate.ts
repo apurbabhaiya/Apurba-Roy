@@ -98,7 +98,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     const mimeType = String(metadata.mimeType || '').toLowerCase();
     const fileName = String(metadata.name || '').toLowerCase();
-    const photoExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.heic', '.heif', '.tif', '.tiff', '.bmp'];
+    const photoExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.heic', '.heif', '.tif', '.tiff', '.bmp', '.raw', '.arw', '.cr2', '.cr3', '.nef', '.dng', '.raf', '.orf', '.rw2', '.pef', '.srw', '.3fr', '.iiq'];
     const videoExtensions = ['.mp4', '.mov', '.m4v', '.avi', '.mkv', '.webm', '.wmv', '.flv', '.mpeg', '.mpg', '.3gp'];
     const hasPhotoExtension = photoExtensions.some((extension) => fileName.endsWith(extension));
     const hasVideoExtension = videoExtensions.some((extension) => fileName.endsWith(extension));
