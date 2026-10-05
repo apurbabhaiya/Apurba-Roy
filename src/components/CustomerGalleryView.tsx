@@ -1598,8 +1598,8 @@ export const CustomerGalleryView: React.FC<CustomerGalleryViewProps> = ({
   // Download individual photo
   const handleDownloadPhoto = async (photo: CustomerGalleryPhoto) => {
     if (!gallery?.allowDownloads) return;
-    const source = photo.previewUrl || photo.thumbnailUrl;
-    if (!gallery.watermarkEnabled) {
+    const source = (gallery.allowOriginalDownloads && photo.originalUrl) || photo.previewUrl || photo.thumbnailUrl;
+    if (!gallery.watermarkEnabled || gallery.allowOriginalDownloads) {
       const link = document.createElement('a'); link.href = source; link.download = photo.name || 'photo.jpg'; link.target = '_blank'; link.click(); return;
     }
     try {
@@ -1613,7 +1613,7 @@ export const CustomerGalleryView: React.FC<CustomerGalleryViewProps> = ({
       } else { ctx.strokeText(gallery.watermarkText || 'Ramyachobi', 28, canvas.height - 32); ctx.fillText(gallery.watermarkText || 'Ramyachobi', 28, canvas.height - 32); }
       const link = document.createElement('a'); link.href = canvas.toDataURL('image/jpeg', .95); link.download = photo.name || 'ramyachobi-photo.jpg'; link.click();
     } catch {
-      setSelectionNotice('Watermark তৈরি করা যায়নি। Download বন্ধ রাখা হয়েছে। আবার চেষ্টা করুন।');
+      setSelectionNotice('Watermark তৈরি করা যায়নি। Download বন্ধ রাখা হয়েছে। আবার চেষ্টা করুন অথবা ফটোগ্রাফারের সাথে যোগাযোগ করুন।');
     }
   };
 
