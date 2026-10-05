@@ -29,7 +29,7 @@ const fallbackHero =
 const faq = [
   ['When will I receive Final Delivery?', 'Final Delivery is activated after your complete package payment has been verified.'],
   ['How long is free gallery access?', 'You receive 30 days of complimentary viewing and download access from the Final Delivery date.'],
-  ['What happens after 30 days?', 'Gallery and download access lock automatically. If your files are still retained, you can restore access for ৳20 per day.'],
+  ['What happens after 30 days?', 'Gallery and download access lock automatically. If your files are still retained, access can be restored after the applicable late access fee is verified.'],
   ['Does access expiry mean my files are deleted?', 'No. Gallery access expiry and file deletion are separate. Files follow RamyaChobi\'s storage retention policy.'],
 ];
 
