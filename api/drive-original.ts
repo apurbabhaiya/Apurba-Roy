@@ -16,8 +16,18 @@ async function getDriveResponse(fileId: string, token?: string): Promise<Respons
       headers: { Authorization: `Bearer ${auth}` },
     });
   }
-  // Public Drive files can still be streamed without exposing a token.
-  return fetch(`https://drive.google.com/uc?export=download&id=${encodeURIComponent(fileId)}`, { redirect: 'follow' });
+  // Public Drive files can still be streamed without exposing a token. Google
+  // sometimes places a large-file confirmation page in front of the binary.
+  let response = await fetch(`https://drive.google.com/uc?export=download&id=${encodeURIComponent(fileId)}`, { redirect: 'follow' });
+  const type = response.headers.get('content-type') || '';
+  if (type.includes('text/html')) {
+    const html = await response.text();
+    const confirm = html.match(/confirm=([0-9A-Za-z_-]+)/)?.[1];
+    if (!confirm) throw new Error('Google Drive did not expose the original binary. Check that the file is shared for download.');
+    const cookie = response.headers.get('set-cookie') || '';
+    response = await fetch(`https://drive.usercontent.google.com/download?id=${encodeURIComponent(fileId)}&export=download&confirm=${confirm}`, { headers: cookie ? { cookie } : undefined, redirect: 'follow' });
+  }
+  return response;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
