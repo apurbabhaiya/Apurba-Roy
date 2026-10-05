@@ -55,7 +55,7 @@ export const CreateCustomerGalleryModal: React.FC<CreateCustomerGalleryModalProp
   const [galleryName, setGalleryName] = useState('Photo Selection');
   const [customerMobile, setCustomerMobile] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
-  const [maxSelections, setMaxSelections] = useState('100');
+  const [maxSelections, setMaxSelections] = useState('0');
   const [selectionDeadline, setSelectionDeadline] = useState(
     new Date(Date.now() + 86400000 * 30).toISOString().split('T')[0]
   );
@@ -150,7 +150,7 @@ export const CreateCustomerGalleryModal: React.FC<CreateCustomerGalleryModalProp
 
       const nowIso = new Date().toISOString();
       const parsedMax = parseInt(maxSelections, 10);
-      const maxVal = !isNaN(parsedMax) && parsedMax > 0 ? parsedMax : 100;
+      const maxVal = 0;
 
       const newGallery: CustomerGallery = {
         id: 'cg_' + Math.random().toString(36).substring(2, 9),
