@@ -243,23 +243,13 @@ export function generateSecureToken(length = 15): string {
   return result;
 }
 
-function drivePreviewUrl(driveFileId: string, rawThumbnail: string | undefined, width: number): string {
-  const fallback = `https://drive.google.com/thumbnail?id=${encodeURIComponent(driveFileId)}&sz=w${width}`;
-  if (!rawThumbnail || !rawThumbnail.startsWith('http')) return fallback;
-  try {
-    const url = new URL(rawThumbnail);
-    // Drive thumbnailLink values normally end in =s220 or =s800. Resize only the
-    // preview URL and never use the original/download URL here.
-    if (url.hostname.includes('googleusercontent.com') || url.hostname.includes('google.com')) {
-      url.searchParams.delete('sz');
-      url.pathname = url.pathname.replace(/=s\d+$/, `=w${width}`);
-      if (!url.pathname.endsWith(`=w${width}`)) url.searchParams.set('sz', `w${width}`);
-      return url.toString();
-    }
-    return rawThumbnail;
-  } catch {
-    return fallback;
-  }
+function drivePreviewUrl(driveFileId: string, _rawThumbnail: string | undefined, width: number): string {
+  // Stored Drive thumbnailLink values can be temporary `drive-storage` URLs.
+  // They expire even though the file ID is still valid, which leaves every
+  // card showing a broken image. Always derive the preview from the stable ID
+  // endpoint. This endpoint returns a resized preview only; original downloads
+  // continue to use /api/drive-original.
+  return `https://drive.google.com/thumbnail?id=${encodeURIComponent(driveFileId)}&sz=w${width}`;
 }
 
 export function generateDriveThumbnailUrl(driveFileId: string, rawThumbnail?: string): string {
