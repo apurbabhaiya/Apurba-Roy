@@ -17,7 +17,7 @@ const mapPhoto = (row: PhotoRow): CustomerGalleryPhoto => ({
   name: row.file_name || 'Photo',
   thumbnailUrl: row.thumbnail_url || '',
   previewUrl: row.preview_url || row.thumbnail_url || '',
-  originalUrl: row.original_url || undefined,
+  originalUrl: row.original_url || row.download_url || (row.drive_file_id ? `https://drive.google.com/uc?export=download&id=${encodeURIComponent(row.drive_file_id)}` : undefined),
   mimeType: row.mime_type || undefined,
   size: row.size_text || undefined,
   width: row.width || undefined,
