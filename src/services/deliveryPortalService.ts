@@ -66,6 +66,10 @@ export type DeliveryPortalData = {
   client_message?: string | null;
   client_note?: string | null;
   google_drive_access_enabled?: boolean;
+  preview_enabled?: boolean;
+  photo_download_permission?: boolean;
+  video_download_permission?: boolean;
+  drive_link_access_enabled?: boolean;
 };
 
 export type DeliveryAdminPortal = DeliveryPortalData & {
@@ -89,6 +93,10 @@ export type DeliveryAdminPortal = DeliveryPortalData & {
   created_at?: string | null;
   updated_at?: string | null;
   delivery_files?: DeliveryAdminFile[];
+  preview_enabled?: boolean;
+  photo_download_permission?: boolean;
+  video_download_permission?: boolean;
+  drive_link_access_enabled?: boolean;
 };
 
 export type DeliveryPaymentSubmission = {
@@ -315,6 +323,27 @@ export async function syncDeliveryFolder(input: { adminToken: string; portalId: 
   return data as { success: boolean; imported: number };
 }
 
+
+
+export async function setDeliveryPermissions(input: {
+  token: string;
+  portalId: string;
+  previewEnabled: boolean;
+  photoDownloadPermission: boolean;
+  videoDownloadPermission: boolean;
+  driveLinkAccessEnabled: boolean;
+}) {
+  const { data, error } = await db.rpc('delivery_admin_set_permissions', {
+    p_token: input.token,
+    p_portal_id: input.portalId,
+    p_preview_enabled: input.previewEnabled,
+    p_photo_download_permission: input.photoDownloadPermission,
+    p_video_download_permission: input.videoDownloadPermission,
+    p_drive_link_access_enabled: input.driveLinkAccessEnabled,
+  });
+  if (error) throw error;
+  return data;
+}
 
 export async function updateDeliveryPortal(input: {
   token: string;
