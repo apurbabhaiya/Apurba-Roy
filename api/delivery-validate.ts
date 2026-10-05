@@ -1,0 +1,127 @@
+type VercelRequest = any;
+type VercelResponse = any;
+
+function json(res: VercelResponse, status: number, body: unknown) {
+  res.status(status).setHeader('content-type', 'application/json; charset=utf-8').end(JSON.stringify(body));
+}
+
+function supabaseConfig() {
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+  if (!url || !key) throw new Error('Protected delivery server configuration is missing.');
+  return { url, key };
+}
+
+function driveConfig() {
+  const accessToken = process.env.GOOGLE_DRIVE_ACCESS_TOKEN || '';
+  if (!accessToken) throw new Error('GOOGLE_DRIVE_ACCESS_TOKEN is not configured in Vercel.');
+  return accessToken;
+}
+
+async function adminUpsert(body: Record<string, unknown>) {
+  const { url, key } = supabaseConfig();
+  const response = await fetch(\`\${url}/rest/v1/rpc/delivery_admin_upsert_file\`, {
+    method: 'POST',
+    headers: { apikey: key, Authorization: \`Bearer \${key}\`, 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) throw new Error((await response.text()).slice(0, 400) || 'Could not save the delivery file.');
+  return response.json();
+}
+
+function extractDriveId(sourceUrl: string, kind: 'file' | 'folder') {
+  const value = sourceUrl.trim();
+  const pattern = kind === 'folder'
+    ? /\/folders\/([A-Za-z0-9_-]+)/i
+    : /\/file\/d\/([A-Za-z0-9_-]+)/i;
+  const direct = value.match(pattern)?.[1];
+  if (direct) return direct;
+  return value.match(/[?&]id=([A-Za-z0-9_-]+)/i)?.[1] || null;
+}
+
+async function driveMetadata(id: string) {
+  const accessToken = driveConfig();
+  const fields = 'id,name,mimeType,size,thumbnailLink,modifiedTime,trashed,parents';
+  const response = await fetch(\`https://www.googleapis.com/drive/v3/files/\${encodeURIComponent(id)}?fields=\${encodeURIComponent(fields)}&supportsAllDrives=true\`, {
+    headers: { Authorization: \`Bearer \${accessToken}\` },
+  });
+  if (!response.ok) {
+    const text = (await response.text()).slice(0, 300);
+    if (response.status === 404) throw new Error('Google Drive file was not found or is not shared with the connected account.');
+    if (response.status === 403) throw new Error('Google Drive permission denied. Keep the file private, but share it with the connected Google Drive connection.');
+    throw new Error(text || 'Google Drive metadata could not be read.');
+  }
+  const data = await response.json();
+  if (data.trashed) throw new Error('This Google Drive item is in the trash.');
+  return data;
+}
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') return json(res, 405, { error: 'Only POST is supported.' });
+
+  try {
+    const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
+    const adminToken = String(body.adminToken || '').trim();
+    const portalId = String(body.portalId || '').trim();
+    const sourceUrl = String(body.sourceUrl || '').trim();
+    const fileType = String(body.fileType || 'PHOTO').toUpperCase();
+    const title = String(body.title || '').trim();
+    const fileNameInput = String(body.fileName || '').trim();
+    const sortOrder = Math.max(0, Number(body.sortOrder || 0));
+    const isVisible = body.isVisible !== false;
+    const existingFileId = body.fileId ? String(body.fileId) : null;
+
+    if (!adminToken || !portalId || !sourceUrl) return json(res, 400, { error: 'Admin token, portal ID and Google Drive link are required.' });
+    if (!/^[0-9a-f-]{36}$/i.test(portalId)) return json(res, 400, { error: 'Invalid delivery portal.' });
+    if (existingFileId && !/^[0-9a-f-]{36}$/i.test(existingFileId)) return json(res, 400, { error: 'Invalid delivery file.' });
+    if (!['PHOTO', 'VIDEO', 'FOLDER'].includes(fileType)) return json(res, 400, { error: 'File type must be Photo, Video or Folder.' });
+
+    const kind = fileType === 'FOLDER' ? 'folder' : 'file';
+    const driveId = extractDriveId(sourceUrl, kind);
+    if (!driveId) return json(res, 400, { error: \`Could not extract a Google Drive \${kind} ID from this link.\` });
+
+    const metadata = await driveMetadata(driveId);
+    if (fileType === 'FOLDER' && metadata.mimeType !== 'application/vnd.google-apps.folder') {
+      return json(res, 400, { error: 'This link is not a Google Drive folder.' });
+    }
+    if (fileType === 'PHOTO' && !String(metadata.mimeType || '').startsWith('image/')) {
+      return json(res, 400, { error: \`The selected item is \${metadata.mimeType || 'not an image'}, not a photo.\` });
+    }
+    if (fileType === 'VIDEO' && !String(metadata.mimeType || '').startsWith('video/')) {
+      return json(res, 400, { error: \`The selected item is \${metadata.mimeType || 'not a video'}, not a video.\` });
+    }
+
+    if (fileType === 'FOLDER' || body.persist === false) {
+      return json(res, 200, {
+        verified: true,
+        fileType,
+        driveId,
+        metadata: { id: metadata.id, name: metadata.name, mimeType: metadata.mimeType, size: metadata.size || null, modifiedTime: metadata.modifiedTime || null },
+      });
+    }
+
+    const saved = await adminUpsert({
+      p_token: adminToken,
+      p_portal_id: portalId,
+      p_file_id: existingFileId,
+      p_source_url: sourceUrl,
+      p_file_type: fileType,
+      p_title: title || metadata.name || null,
+      p_file_name: fileNameInput || metadata.name || null,
+      p_mime_type: metadata.mimeType || null,
+      p_sort_order: sortOrder,
+      p_is_visible: isVisible,
+    });
+
+    return json(res, 200, {
+      verified: true,
+      saved: true,
+      fileType,
+      driveId,
+      metadata: { id: metadata.id, name: metadata.name, mimeType: metadata.mimeType, size: metadata.size || null, modifiedTime: metadata.modifiedTime || null },
+      file: saved ? { id: saved.id, file_name: saved.file_name, file_type: saved.file_type, mime_type: saved.mime_type, title: saved.title, sort_order: saved.sort_order, is_visible: saved.is_visible } : null,
+    });
+  } catch (error: any) {
+    return json(res, 502, { error: error?.message || 'Google Drive link validation failed.' });
+  }
+}
