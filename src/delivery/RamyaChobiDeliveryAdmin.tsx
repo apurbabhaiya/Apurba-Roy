@@ -104,7 +104,7 @@ export default function RamyaChobiDeliveryAdmin() {
   const [ready, setReady] = useState(false);
   const [notice, setNotice] = useState('');
   const [selectedBooking, setSelectedBooking] = useState('');
-  const [newBkash, setNewBkash] = useState('');
+  const [newBkash, setNewBkash] = useState('01776044951');
   const [newRetention, setNewRetention] = useState('');
   const [editingPortal, setEditingPortal] = useState<DeliveryAdminPortal | null>(null);
   const [settingsBkash, setSettingsBkash] = useState('');
@@ -212,7 +212,7 @@ export default function RamyaChobiDeliveryAdmin() {
       });
       setNotice(`Delivery portal created for ${result.client_name}.`);
       setSelectedBooking('');
-      setNewBkash('');
+      setNewBkash('01776044951');
       setNewRetention('');
       await load();
     } catch (error: any) {
@@ -252,7 +252,7 @@ export default function RamyaChobiDeliveryAdmin() {
 
   function startEdit(portal: DeliveryAdminPortal) {
     setEditingPortal(portal);
-    setSettingsBkash(portal.bkash_number || '');
+    setSettingsBkash(portal.bkash_number || '01776044951');
     setSettingsRetention(toDateTimeLocal(portal.storage_retention_until));
   }
 
