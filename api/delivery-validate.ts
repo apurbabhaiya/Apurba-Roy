@@ -51,7 +51,7 @@ function extractDriveId(sourceUrl: string, kind: 'file' | 'folder') {
 
 async function driveMetadata(id: string) {
   const accessToken = driveConfig();
-  const fields = 'id,name,mimeType,size,thumbnailLink,modifiedTime,trashed,parents';
+  const fields = 'id,name,mimeType,size,fileExtension,thumbnailLink,modifiedTime,trashed,parents';
   const response = await fetch(\`https://www.googleapis.com/drive/v3/files/\${encodeURIComponent(id)}?fields=\${encodeURIComponent(fields)}&supportsAllDrives=true\`, {
     headers: { Authorization: \`Bearer \${accessToken}\` },
   });
@@ -96,11 +96,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (fileType === 'FOLDER' && metadata.mimeType !== 'application/vnd.google-apps.folder') {
       return json(res, 400, { error: 'This link is not a Google Drive folder.' });
     }
-    if (fileType === 'PHOTO' && !String(metadata.mimeType || '').startsWith('image/')) {
-      return json(res, 400, { error: \`The selected item is \${metadata.mimeType || 'not an image'}, not a photo.\` });
+    const mimeType = String(metadata.mimeType || '').toLowerCase();
+    const fileName = String(metadata.name || '').toLowerCase();
+    const photoExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.heic', '.heif', '.tif', '.tiff', '.bmp'];
+    const videoExtensions = ['.mp4', '.mov', '.m4v', '.avi', '.mkv', '.webm', '.wmv', '.flv', '.mpeg', '.mpg', '.3gp'];
+    const hasPhotoExtension = photoExtensions.some((extension) => fileName.endsWith(extension));
+    const hasVideoExtension = videoExtensions.some((extension) => fileName.endsWith(extension));
+    const isPhoto = mimeType.startsWith('image/') || (mimeType === 'application/octet-stream' && hasPhotoExtension);
+    const isVideo = mimeType.startsWith('video/') || mimeType === 'application/vnd.google-apps.video' || (mimeType === 'application/octet-stream' && hasVideoExtension);
+    if (fileType === 'PHOTO' && !isPhoto) {
+      return json(res, 400, { error: \`The selected Drive item is \${metadata.mimeType || 'unknown type'}, not a photo. Choose a JPG/PNG/photo file.\` });
     }
-    if (fileType === 'VIDEO' && !String(metadata.mimeType || '').startsWith('video/')) {
-      return json(res, 400, { error: \`The selected item is \${metadata.mimeType || 'not a video'}, not a video.\` });
+    if (fileType === 'VIDEO' && !isVideo) {
+      return json(res, 400, { error: \`The selected Drive item is \${metadata.mimeType || 'unknown type'}, not a video. Choose an MP4/MOV/video file.\` });
     }
 
     if (fileType === 'FOLDER' || body.persist === false) {
