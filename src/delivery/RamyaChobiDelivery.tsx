@@ -55,6 +55,10 @@ function daysRemaining(value?: string | null) {
   return Math.max(0, Math.ceil((new Date(value).getTime() - Date.now()) / 86400000));
 }
 
+function mediaUrl(token: string, fileId: string, mode: 'PREVIEW' | 'ORIGINAL') {
+  return `/api/delivery-media?token=${encodeURIComponent(token)}&fileId=${encodeURIComponent(fileId)}&mode=${mode}`;
+}
+
 function StatCard(props: { label: string; value: React.ReactNode; note?: string }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
@@ -76,6 +80,8 @@ export default function RamyaChobiDelivery({ token }: { token: string }) {
   const [selectedDays, setSelectedDays] = useState(1);
   const [amount, setAmount] = useState('');
   const [openFaq, setOpenFaq] = useState<number | null>(0);
+  const [downloadError, setDownloadError] = useState('');
+  const [downloading, setDownloading] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -181,6 +187,24 @@ export default function RamyaChobiDelivery({ token }: { token: string }) {
   }
 
   const previews = data.preview_items || [];
+  const finalFiles = data.delivery_files || [];
+
+  async function downloadAll() {
+    if (!canDownload || finalFiles.length === 0) return;
+    setDownloading(true); setDownloadError('');
+    try {
+      const response = await fetch('/api/delivery-zip', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ token, files: finalFiles.filter((file) => file.file_type !== 'FOLDER').map((file) => file.id) }),
+      });
+      if (!response.ok) throw new Error((await response.text()).slice(0, 200) || 'ZIP download failed.');
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a'); link.href = url; link.download = 'ramyachobi-originals.zip'; link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 3000);
+    } catch (error: any) { setDownloadError(error?.message || 'Download failed.'); }
+    finally { setDownloading(false); }
+  }
 
   return (
     <div className="min-h-screen bg-[#f6f2ea] text-stone-900">
@@ -341,31 +365,53 @@ export default function RamyaChobiDelivery({ token }: { token: string }) {
               </div>
               <div className="flex gap-2">
                 <button
-                  disabled={!canDownload}
+                  disabled={!canDownload || finalFiles.filter((file) => file.file_type !== 'FOLDER').length === 0 || downloading}
+                  onClick={downloadAll}
                   className="inline-flex items-center gap-2 rounded-xl bg-stone-950 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500"
-                  title={canDownload ? 'Secure Drive download endpoint can be attached here' : 'Locked until Final Delivery'}
+                  title={canDownload ? 'Download protected original files' : 'Locked until Final Delivery'}
                 >
-                  <Download className="h-4 w-4" /> Download All
+                  <Download className="h-4 w-4" /> {downloading ? 'Preparing ZIP...' : 'Download All'}
                 </button>
               </div>
             </div>
 
             <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-              {previews.map((item, index) => (
+              {finalFiles.length > 0 ? finalFiles.map((file) => {
+                const preview = mediaUrl(token, file.id, 'PREVIEW');
+                const label = file.title || file.file_name || (file.file_type === 'VIDEO' ? 'Final video' : file.file_type === 'FOLDER' ? 'Final delivery folder' : 'Final photo');
+                return (
+                  <div key={file.id} className="group relative overflow-hidden rounded-2xl bg-stone-100">
+                    <div className="aspect-[4/3]">
+                      {file.file_type === 'VIDEO' ? (
+                        <video src={preview} controls controlsList="nodownload" preload="metadata" className="h-full w-full object-cover" />
+                      ) : file.file_type === 'FOLDER' ? (
+                        <div className="flex h-full items-center justify-center p-4 text-center text-sm text-stone-500"><FileArchive className="mr-2 h-5 w-5" />Protected folder</div>
+                      ) : (
+                        <img src={preview} alt={label} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
+                      )}
+                    </div>
+                    {!canDownload && file.file_type !== 'FOLDER' && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/10 pointer-events-none">
+                        <span className="-rotate-12 rounded bg-black/45 px-2 py-1 text-xs font-semibold tracking-[0.18em] text-white">RAMYACHOBI PREVIEW</span>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between gap-2 p-2">
+                      <span className="truncate text-xs font-medium">{label}</span>
+                      {canDownload && file.file_type !== 'FOLDER' && (
+                        <a href={mediaUrl(token, file.id, 'ORIGINAL')} className="shrink-0 rounded-lg bg-stone-950 px-2 py-1 text-[11px] font-semibold text-white">Download</a>
+                      )}
+                    </div>
+                  </div>
+                );
+              }) : previews.map((item, index) => (
                 <div key={index} className="group relative aspect-[4/3] overflow-hidden rounded-2xl bg-stone-100">
                   <img src={item.url} alt={item.title || `Gallery item ${index + 1}`} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
-                  {!canDownload && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/10">
-                      <span className="-rotate-12 rounded bg-black/45 px-2 py-1 text-xs font-semibold tracking-[0.18em] text-white">RAMYACHOBI PREVIEW</span>
-                    </div>
-                  )}
-                  <div className="absolute bottom-2 left-2 flex items-center gap-1 rounded-full bg-black/55 px-2 py-1 text-[11px] font-medium text-white backdrop-blur">
-                    {item.type === 'video' ? <PlayCircle className="h-3 w-3" /> : <ImageIcon className="h-3 w-3" />}
-                    {item.type === 'video' ? 'Video' : 'Photo'}
-                  </div>
+                  {!canDownload && <div className="absolute inset-0 flex items-center justify-center bg-black/10"><span className="-rotate-12 rounded bg-black/45 px-2 py-1 text-xs font-semibold tracking-[0.18em] text-white">RAMYACHOBI PREVIEW</span></div>}
+                  <div className="absolute bottom-2 left-2 flex items-center gap-1 rounded-full bg-black/55 px-2 py-1 text-[11px] font-medium text-white backdrop-blur">{item.type === 'video' ? <PlayCircle className="h-3 w-3" /> : <ImageIcon className="h-3 w-3" />}{item.type === 'video' ? 'Video' : 'Photo'}</div>
                 </div>
               ))}
             </div>
+            {downloadError && <div className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{downloadError}</div>
 
             {!canDownload && (
               <div className="mt-5 flex items-start gap-3 rounded-2xl bg-stone-50 p-4 text-sm text-stone-600">
