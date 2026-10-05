@@ -433,7 +433,7 @@ export default function RamyaChobiDelivery({ token }: { token: string }) {
               <div className="mt-6 rounded-2xl bg-white/10 p-4">
                 <div className="text-xs uppercase tracking-[0.18em] text-white/60">bKash Send Money</div>
                 <div className="mt-2 flex items-center justify-between gap-4">
-                  <div className="text-2xl font-semibold">{data.bkash_number || '01XXXXXXXXX'}</div>
+                  <div className="text-2xl font-semibold">{data.bkash_number || '01776044951'}</div>
                   <button
                     type="button"
                     onClick={() => navigator.clipboard?.writeText(data.bkash_number || '')}
