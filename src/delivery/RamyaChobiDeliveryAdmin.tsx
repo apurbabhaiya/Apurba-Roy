@@ -122,6 +122,7 @@ export default function RamyaChobiDeliveryAdmin() {
   const [filesByPortal, setFilesByPortal] = useState<Record<string, DeliveryAdminFile[]>>({});
   const [fileDrafts, setFileDrafts] = useState<Record<string, { url: string; fileName: string; title: string; type: 'PHOTO' | 'VIDEO' | 'FOLDER'; sortOrder: string }>>({});
   const [fileMetaByPortal, setFileMetaByPortal] = useState<Record<string, { name?: string; mimeType?: string; size?: string | null }>>({});
+  const [fileErrorByPortal, setFileErrorByPortal] = useState<Record<string, string>>({});
   const [ledgerByPortal, setLedgerByPortal] = useState<Record<string, DeliveryPaymentLedger[]>>({});
   const [portalSearch, setPortalSearch] = useState('');
   const [selectedPortalId, setSelectedPortalId] = useState('');
@@ -462,6 +463,7 @@ export default function RamyaChobiDeliveryAdmin() {
     const draft = fileDrafts[portalId] || { url: '', fileName: '', title: '', type: 'PHOTO' as const, sortOrder: '' };
     if (!draft.url.trim()) { setNotice('Paste a Google Drive file or folder link first.'); return; }
     setLoading(true); setNotice('Validating private Google Drive link...');
+    setFileErrorByPortal((current) => ({ ...current, [portalId]: '' }));
     try {
       if (draft.type === 'FOLDER') {
         const verified = await validateAndSaveDeliveryFile({ adminToken: token, portalId, sourceUrl: draft.url.trim(), fileType: 'FOLDER', persist: false });
@@ -485,7 +487,11 @@ export default function RamyaChobiDeliveryAdmin() {
       const files = await listDeliveryFiles({ token, portalId });
       setFilesByPortal((current) => ({ ...current, [portalId]: files }));
       setFileDrafts((current) => ({ ...current, [portalId]: { url: '', fileName: '', title: '', type: draft.type, sortOrder: '' } }));
-    } catch (error: any) { setNotice(error?.message || 'Google Drive link validation failed.'); }
+    } catch (error: any) {
+      const message = error?.message || 'Google Drive link validation failed.';
+      setFileErrorByPortal((current) => ({ ...current, [portalId]: message }));
+      setNotice(message);
+    }
     finally { setLoading(false); }
   }
 
@@ -805,6 +811,11 @@ export default function RamyaChobiDeliveryAdmin() {
                     {fileMetaByPortal[portal.id] && (
                       <div className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
                         <strong>Private file connected:</strong> {fileMetaByPortal[portal.id].name || 'Google Drive item'} · {fileMetaByPortal[portal.id].mimeType || 'Unknown type'}{fileMetaByPortal[portal.id].size ? ` · ${fileMetaByPortal[portal.id].size} bytes` : ''}
+                      </div>
+                    )}
+                    {fileErrorByPortal[portal.id] && (
+                      <div className="mt-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs leading-5 text-red-800">
+                        <strong>Video/file link could not be saved:</strong> {fileErrorByPortal[portal.id]}
                       </div>
                     )}
                     <div className="mt-3 space-y-2">
