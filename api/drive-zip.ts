@@ -1,6 +1,8 @@
 type VercelRequest = any;
 type VercelResponse = any;
 
+export const config = { maxDuration: 300 };
+
 type ZipFile = { id: string; name?: string };
 type CentralEntry = { name: Buffer; crc: number; size: number; offset: number };
 
