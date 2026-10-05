@@ -224,6 +224,7 @@ export interface CustomerGalleryPhoto {
   name: string;
   thumbnailUrl: string;
   previewUrl: string;
+  originalUrl?: string;
   mimeType?: string;
   size?: string;
   width?: number;
@@ -303,6 +304,7 @@ export interface CustomerGallery {
   watermarkEnabled?: boolean;
   watermarkText?: string;
   watermarkLogoUrl?: string;
+  allowOriginalDownloads?: boolean;
   // High-Resolution ZIP request fields
   zipRequested?: boolean;
   zipRequestedAt?: string;
@@ -337,6 +339,5 @@ export interface ClientGallerySession {
   deviceInfoOptional?: string;
   notes?: string;
 }
-
 
 
