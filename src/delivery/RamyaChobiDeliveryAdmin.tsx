@@ -750,15 +750,21 @@ export default function RamyaChobiDeliveryAdmin() {
                       </div>
                       <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-stone-600">{(filesByPortal[portal.id] || []).length} file(s)</span>
                     </div>
-                    <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_130px_1fr_90px_auto]">
-                      <input value={fileDrafts[portal.id]?.url || ''} onChange={(e) => updateFileDraft(portal.id, { url: e.target.value })} placeholder="Google Drive file or folder link" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm" />
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-[1.6fr_120px_1fr_1fr_90px_auto]">
+                      <input value={fileDrafts[portal.id]?.url || ''} onChange={(e) => updateFileDraft(portal.id, { url: e.target.value })} placeholder="Private Google Drive file or folder link" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm" />
                       <select value={fileDrafts[portal.id]?.type || 'PHOTO'} onChange={(e) => updateFileDraft(portal.id, { type: e.target.value as 'PHOTO' | 'VIDEO' | 'FOLDER' })} className="rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm">
                         <option value="PHOTO">Photo</option><option value="VIDEO">Video</option><option value="FOLDER">Folder</option>
                       </select>
+                      <input value={fileDrafts[portal.id]?.fileName || ''} onChange={(e) => updateFileDraft(portal.id, { fileName: e.target.value })} placeholder="File name (optional)" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm" />
                       <input value={fileDrafts[portal.id]?.title || ''} onChange={(e) => updateFileDraft(portal.id, { title: e.target.value })} placeholder="Display title (optional)" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm" />
                       <input value={fileDrafts[portal.id]?.sortOrder || ''} onChange={(e) => updateFileDraft(portal.id, { sortOrder: e.target.value })} type="number" placeholder="Order" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm" />
-                      <button onClick={() => addFinalDeliveryFile(portal.id)} disabled={loading} className="rounded-xl bg-amber-300 px-3.5 py-2 text-sm font-bold text-stone-950 disabled:opacity-50">Add Link</button>
+                      <button onClick={() => addFinalDeliveryFile(portal.id)} disabled={loading} className="rounded-xl bg-amber-300 px-3.5 py-2 text-sm font-bold text-stone-950 disabled:opacity-50">{loading ? 'Validating...' : 'Verify & Save'}</button>
                     </div>
+                    {fileMetaByPortal[portal.id] && (
+                      <div className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                        <strong>Private file connected:</strong> {fileMetaByPortal[portal.id].name || 'Google Drive item'} · {fileMetaByPortal[portal.id].mimeType || 'Unknown type'}{fileMetaByPortal[portal.id].size ? ` · ${fileMetaByPortal[portal.id].size} bytes` : ''}
+                      </div>
+                    )}
                     <div className="mt-3 space-y-2">
                       {(filesByPortal[portal.id] || []).map((file) => (
                         <div key={file.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-white px-3 py-2 text-sm">
