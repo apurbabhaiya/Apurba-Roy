@@ -1,5 +1,4 @@
 import { DrivePhoto, FaceMatchScore } from '../types';
-import { GoogleGenAI } from '@google/genai';
 
 /**
  * AI Face Search Service for [রম্যছবি - RamyaChobi]
@@ -109,69 +108,9 @@ export async function searchFaceInAlbum(
 
   onProgress?.(10, 'মুখের বৈশিষ্ট্য বিশ্লেষণ করা হচ্ছে (Analyzing facial landmarks)...');
 
-  // Try Gemini Vision first if GEMINI_API_KEY is available
-  const apiKey =
-    (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) ||
-    (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_GEMINI_API_KEY) ||
-    '';
-
-  let geminiMatchedIds: Set<string> | null = null;
-
-  if (apiKey && apiKey !== 'MY_GEMINI_API_KEY') {
-    try {
-      onProgress?.(30, 'Gemini AI Vision দিয়ে অ্যালবাম ফটোগুলো স্ক্যান করা হচ্ছে...');
-      const ai = new GoogleGenAI({ apiKey });
-
-      // Clean base64 reference
-      const cleanRefBase64 = referenceFaceDataUrl.replace(/^data:image\/[a-z]+;base64,/, '');
-
-      // Send prompt with photo IDs and prompt to identify photos containing this person
-      const photoCatalogList = albumPhotos
-        .map((p, idx) => `Photo ${idx + 1}: ID="${p.id}", Name="${p.name}"`)
-        .join('\n');
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: [
-          {
-            role: 'user',
-            parts: [
-              {
-                inlineData: {
-                  mimeType: 'image/jpeg',
-                  data: cleanRefBase64,
-                },
-              },
-              {
-                text: `You are an AI face recognition assistant for a photography studio.
-The user provided a reference face image above.
-Here is the list of photo items in their private wedding album:
-${photoCatalogList}
-
-Identify which photos in this wedding album feature the person/couple in the reference face photo (portraits, couple shots, ceremony, reception).
-Respond ONLY in valid JSON format:
-{"matchingPhotoIds": ["id1", "id2"], "confidenceScores": {"id1": 95, "id2": 88}}`,
-              },
-            ],
-          },
-        ],
-      });
-
-      const responseText = response.text || '';
-      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        if (Array.isArray(parsed.matchingPhotoIds) && parsed.matchingPhotoIds.length > 0) {
-          geminiMatchedIds = new Set(parsed.matchingPhotoIds);
-        }
-      }
-    } catch (geminiErr) {
-      console.warn('Gemini vision matching fallback to client visual analysis:', geminiErr);
-    }
-  }
-
-  // Fast Client-Side Face & Visual Feature Analysis
-  onProgress?.(50, 'ফটো তুলনামূলক বিশ্লেষণ চলছে (Comparing facial features)...');
+  // Search only the image bytes from the current album. Filename, date and
+  // metadata are deliberately never used to create or boost a match.
+  onProgress?.(20, 'এই album-এর ছবির মুখ বিশ্লেষণ করা হচ্ছে...');
 
   let refFeatures: number[] = [];
   try {
@@ -190,28 +129,19 @@ Respond ONLY in valid JSON format:
 
     let similarity = 0;
 
-    // If Gemini matched this ID directly, grant a high confidence score
-    if (geminiMatchedIds && geminiMatchedIds.has(photo.id)) {
-      similarity = Math.floor(88 + Math.random() * 10); // 88% - 98%
-    } else if (refFeatures.length > 0 && imgUrl) {
+    if (refFeatures.length > 0 && imgUrl) {
       try {
         const photoImg = await loadImage(imgUrl);
         const photoFeatures = await extractVisualFeatures(photoImg);
         const rawSim = computeSimilarity(refFeatures, photoFeatures);
-        // Scale to realistic face match percentage (70 - 99%)
-        similarity = Math.min(99, Math.max(0, Math.round(rawSim * 100)));
+        similarity = Math.min(100, Math.max(0, Math.round(rawSim * 100)));
       } catch {
-        // Fallback score based on filename heuristics (e.g. portraits, couple, first look)
-        const isPortrait = /portrait|firstlook|vows|embrace|kiss|look/i.test(photo.name);
-        similarity = isPortrait ? 86 : 64;
+        similarity = 0;
       }
-    } else {
-      const isPortrait = /portrait|firstlook|vows|embrace|kiss|look/i.test(photo.name);
-      similarity = isPortrait ? 88 : 65;
     }
 
-    // Filter to confident matches (> 72%)
-    if (similarity >= 72) {
+    const threshold = Number((import.meta as any).env?.VITE_FACE_MATCH_THRESHOLD || 84);
+    if (similarity >= threshold) {
       results.push({
         photoId: photo.id,
         photo,
@@ -223,17 +153,6 @@ Respond ONLY in valid JSON format:
       const progress = Math.min(95, 50 + Math.floor((i / total) * 45));
       onProgress?.(progress, `স্ক্যান সম্পন্ন: ${i + 1}/${total} ফটোর মধ্যে...`);
     }
-  }
-
-  // If no high score matches found, provide top portrait photos from the album so user is not empty
-  if (results.length === 0 && albumPhotos.length > 0) {
-    albumPhotos.slice(0, 4).forEach((photo, idx) => {
-      results.push({
-        photoId: photo.id,
-        photo,
-        similarity: 85 - idx * 3,
-      });
-    });
   }
 
   // Sort descending by similarity
