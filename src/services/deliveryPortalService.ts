@@ -434,3 +434,44 @@ export async function restoreDeliveryAccess(input: { token: string; portalId: st
   if (error) throw error;
   return data;
 }
+
+
+export async function validateAndSaveDeliveryFile(input: {
+  adminToken: string;
+  portalId: string;
+  sourceUrl: string;
+  fileType: 'PHOTO' | 'VIDEO' | 'FOLDER';
+  fileId?: string | null;
+  fileName?: string | null;
+  title?: string | null;
+  sortOrder?: number;
+  isVisible?: boolean;
+  persist?: boolean;
+}) {
+  const response = await fetch('/api/delivery-validate', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      adminToken: input.adminToken,
+      portalId: input.portalId,
+      sourceUrl: input.sourceUrl,
+      fileType: input.fileType,
+      fileId: input.fileId || null,
+      fileName: input.fileName || null,
+      title: input.title || null,
+      sortOrder: input.sortOrder || 0,
+      isVisible: input.isVisible ?? true,
+      persist: input.persist !== false,
+    }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data?.error || 'Google Drive link validation failed.');
+  return data as {
+    verified: boolean;
+    saved?: boolean;
+    fileType: 'PHOTO' | 'VIDEO' | 'FOLDER';
+    driveId: string;
+    metadata: { id: string; name: string; mimeType: string; size?: string | null; modifiedTime?: string | null };
+    file?: DeliveryAdminFile | null;
+  };
+}
