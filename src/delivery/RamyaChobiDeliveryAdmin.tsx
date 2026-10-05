@@ -42,6 +42,7 @@ import {
   updateDeliveryPayment,
   deleteDeliveryPayment,
   restoreDeliveryAccess,
+  setDeliveryPermissions,
   DeliveryPaymentLedger,
 } from '../services/deliveryPortalService';
 import PortfolioManager from '../components/PortfolioManager';
@@ -213,6 +214,10 @@ export default function RamyaChobiDeliveryAdmin() {
       clientMessage: portal.client_message || '',
       clientNote: portal.client_note || '',
       internalAdminNote: portal.internal_admin_note || '',
+      previewEnabled: portal.preview_enabled !== false,
+      photoDownloadPermission: portal.photo_download_permission === true,
+      videoDownloadPermission: portal.video_download_permission === true,
+      driveLinkAccessEnabled: portal.drive_link_access_enabled === true,
     });
   }
 
@@ -243,7 +248,15 @@ export default function RamyaChobiDeliveryAdmin() {
         clientNote: portalEdit.clientNote || null,
         internalAdminNote: portalEdit.internalAdminNote || null,
       });
-      setNotice('Client portal details updated.');
+      await setDeliveryPermissions({
+        token,
+        portalId: selectedPortalId,
+        previewEnabled: Boolean(portalEdit.previewEnabled),
+        photoDownloadPermission: Boolean(portalEdit.photoDownloadPermission),
+        videoDownloadPermission: Boolean(portalEdit.videoDownloadPermission),
+        driveLinkAccessEnabled: Boolean(portalEdit.driveLinkAccessEnabled),
+      });
+      setNotice('Client portal details and permissions updated.');
       await load();
     } catch (error: any) { setNotice(error?.message || 'Could not update client portal.'); }
     finally { setLoading(false); }
@@ -408,6 +421,26 @@ export default function RamyaChobiDeliveryAdmin() {
       await load();
     } catch (error: any) {
       setNotice(error?.message || 'Could not update delivery settings.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function togglePortalPermission(portal: DeliveryAdminPortal, key: 'preview' | 'photo' | 'video' | 'drive') {
+    const next = {
+      previewEnabled: key === 'preview' ? portal.preview_enabled === false : portal.preview_enabled !== false,
+      photoDownloadPermission: key === 'photo' ? portal.photo_download_permission !== true : portal.photo_download_permission === true,
+      videoDownloadPermission: key === 'video' ? portal.video_download_permission !== true : portal.video_download_permission === true,
+      driveLinkAccessEnabled: key === 'drive' ? portal.drive_link_access_enabled !== true : portal.drive_link_access_enabled === true,
+    };
+    setLoading(true);
+    setNotice('');
+    try {
+      await setDeliveryPermissions({ token, portalId: portal.id, ...next });
+      setNotice('Delivery permissions updated.');
+      await load();
+    } catch (error: any) {
+      setNotice(error?.message || 'Could not update delivery permissions.');
     } finally {
       setLoading(false);
     }
@@ -828,6 +861,21 @@ export default function RamyaChobiDeliveryAdmin() {
                     </button>
                   </div>
 
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                    <button type="button" onClick={() => togglePortalPermission(portal, 'preview')} disabled={loading} className={`rounded-xl px-3 py-2 text-xs font-bold ${portal.preview_enabled === false ? 'bg-stone-200 text-stone-700' : 'bg-emerald-100 text-emerald-800'}`}>
+                      Preview: {portal.preview_enabled === false ? 'OFF' : 'ON'}
+                    </button>
+                    <button type="button" onClick={() => togglePortalPermission(portal, 'photo')} disabled={loading} className={`rounded-xl px-3 py-2 text-xs font-bold ${portal.photo_download_permission === true ? 'bg-emerald-100 text-emerald-800' : 'bg-stone-200 text-stone-700'}`}>
+                      Photo download: {portal.photo_download_permission === true ? 'ON' : 'OFF'}
+                    </button>
+                    <button type="button" onClick={() => togglePortalPermission(portal, 'video')} disabled={loading} className={`rounded-xl px-3 py-2 text-xs font-bold ${portal.video_download_permission === true ? 'bg-emerald-100 text-emerald-800' : 'bg-stone-200 text-stone-700'}`}>
+                      Video download: {portal.video_download_permission === true ? 'ON' : 'OFF'}
+                    </button>
+                    <button type="button" onClick={() => togglePortalPermission(portal, 'drive')} disabled={loading} className={`rounded-xl px-3 py-2 text-xs font-bold ${portal.drive_link_access_enabled === true ? 'bg-emerald-100 text-emerald-800' : 'bg-stone-200 text-stone-700'}`}>
+                      Drive link access: {portal.drive_link_access_enabled === true ? 'ON' : 'OFF'}
+                    </button>
+                  </div>
+
                   {selectedPortalId === portal.id && Object.keys(portalEdit).length > 0 && (
                     <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
                       <h3 className="font-semibold">Edit client details, message and access policy</h3>
@@ -843,6 +891,10 @@ export default function RamyaChobiDeliveryAdmin() {
                         <input value={portalEdit.lateFeeOverride || ''} onChange={(e) => updatePortalEdit({ lateFeeOverride: e.target.value })} type="number" placeholder="Fee override (optional)" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5" />
                         <label className="flex items-center gap-2 rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm"><input type="checkbox" checked={Boolean(portalEdit.lateFeeEnabled)} onChange={(e) => updatePortalEdit({ lateFeeEnabled: e.target.checked })} /> Late fee enabled</label>
                         <label className="flex items-center gap-2 rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm"><input type="checkbox" checked={Boolean(portalEdit.lateFeeWaived)} onChange={(e) => updatePortalEdit({ lateFeeWaived: e.target.checked })} /> Waive fee</label>
+                        <label className="flex items-center gap-2 rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm"><input type="checkbox" checked={Boolean(portalEdit.previewEnabled)} onChange={(e) => updatePortalEdit({ previewEnabled: e.target.checked })} /> Preview enabled</label>
+                        <label className="flex items-center gap-2 rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm"><input type="checkbox" checked={Boolean(portalEdit.photoDownloadPermission)} onChange={(e) => updatePortalEdit({ photoDownloadPermission: e.target.checked })} /> Photo download permission</label>
+                        <label className="flex items-center gap-2 rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm"><input type="checkbox" checked={Boolean(portalEdit.videoDownloadPermission)} onChange={(e) => updatePortalEdit({ videoDownloadPermission: e.target.checked })} /> Video download permission</label>
+                        <label className="flex items-center gap-2 rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm"><input type="checkbox" checked={Boolean(portalEdit.driveLinkAccessEnabled)} onChange={(e) => updatePortalEdit({ driveLinkAccessEnabled: e.target.checked })} /> Google Drive link access after payment</label>
                         <input value={portalEdit.finalDeliveryAt || ''} onChange={(e) => updatePortalEdit({ finalDeliveryAt: e.target.value })} type="datetime-local" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5" />
                         <input value={portalEdit.accessExpiryAt || ''} onChange={(e) => updatePortalEdit({ accessExpiryAt: e.target.value })} type="datetime-local" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5" />
                       </div>
