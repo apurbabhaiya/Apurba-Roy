@@ -542,8 +542,8 @@ export default function RamyaChobiDelivery({ token }: { token: string }) {
               'From the Final Delivery date, clients receive 30 days of complimentary viewing and download access.',
               'Clients should download and securely back up their files during the complimentary period.',
               'After 30 days, Gallery and Download Access lock automatically.',
-              'If files are still retained, gallery access may be restored for ৳20 per day.',
-              'Each additional day of restored access requires an additional ৳20.',
+              `If files are still retained, gallery access may be restored for ${money(feePerDay)} per day.`,
+              `Each additional day of restored access requires an additional ${money(feePerDay)}.`,
               'The Access Restoration Fee is separate from the original photography or videography package fee.',
               'Files may be permanently deleted after the applicable RamyaChobi storage-retention period.',
             ].map((item) => (
