@@ -51,7 +51,9 @@ const mapPhoto = (row: any): CustomerGalleryPhoto => ({
   name: row.file_name || 'Photo',
   thumbnailUrl: row.thumbnail_url || '',
   previewUrl: row.preview_url || row.thumbnail_url || '',
-  originalUrl: row.original_url || row.download_url || (row.drive_file_id ? `https://drive.google.com/uc?export=download&id=${encodeURIComponent(row.drive_file_id)}` : undefined),
+  // Deliberately do not expose a direct original URL in gallery metadata. The
+  // browser must request original bytes through /api/drive-original.
+  originalUrl: undefined,
   mimeType: row.mime_type || undefined,
   size: row.size_text || undefined,
   width: row.width || undefined,
@@ -111,7 +113,10 @@ const mapGallery = (
   watermarkEnabled: !!row.watermark_enabled,
   watermarkText: row.watermark_text || 'Ramyachobi',
   watermarkLogoUrl: row.watermark_logo_url || undefined,
-  allowOriginalDownloads: !!row.allow_original_downloads,
+  // Original downloads are available for every client gallery. Admin can still
+  // protect a gallery at the route level, but an old null/false value must not
+  // silently turn a full-resolution file into a preview download.
+  allowOriginalDownloads: true,
   zipRequested: !!row.zip_requested,
   zipRequestedAt: row.zip_requested_at || undefined,
   zipRequestStatus: row.zip_request_status || undefined,
@@ -171,6 +176,27 @@ async function fetchSelectionsForGallery(galleryId: string): Promise<any[]> {
   return data || [];
 }
 
+async function fetchAllGalleryPhotoRows(galleryId: string, onProgress?: (loaded: number) => void): Promise<any[]> {
+  const rows: any[] = [];
+  const pageSize = 1000;
+  let offset = 0;
+  while (true) {
+    const { data, error } = await supabase
+      .from('photos')
+      .select('*')
+      .eq('gallery_id', galleryId)
+      .order('sort_order', { ascending: true })
+      .range(offset, offset + pageSize - 1);
+    if (error) throw error;
+    const page = data || [];
+    rows.push(...page);
+    onProgress?.(rows.length);
+    if (page.length < pageSize) break;
+    offset += pageSize;
+  }
+  return rows;
+}
+
 async function updateGallerySelectionState(
   projectId: string,
   count: number,
@@ -217,18 +243,31 @@ export function generateSecureToken(length = 15): string {
   return result;
 }
 
-export function generateDriveThumbnailUrl(driveFileId: string, rawThumbnail?: string): string {
-  if (rawThumbnail && rawThumbnail.startsWith('http')) {
+function drivePreviewUrl(driveFileId: string, rawThumbnail: string | undefined, width: number): string {
+  const fallback = `https://drive.google.com/thumbnail?id=${encodeURIComponent(driveFileId)}&sz=w${width}`;
+  if (!rawThumbnail || !rawThumbnail.startsWith('http')) return fallback;
+  try {
+    const url = new URL(rawThumbnail);
+    // Drive thumbnailLink values normally end in =s220 or =s800. Resize only the
+    // preview URL and never use the original/download URL here.
+    if (url.hostname.includes('googleusercontent.com') || url.hostname.includes('google.com')) {
+      url.searchParams.delete('sz');
+      url.pathname = url.pathname.replace(/=s\d+$/, `=w${width}`);
+      if (!url.pathname.endsWith(`=w${width}`)) url.searchParams.set('sz', `w${width}`);
+      return url.toString();
+    }
     return rawThumbnail;
+  } catch {
+    return fallback;
   }
-  return `https://drive.google.com/thumbnail?id=${driveFileId}&sz=w800`;
+}
+
+export function generateDriveThumbnailUrl(driveFileId: string, rawThumbnail?: string): string {
+  return drivePreviewUrl(driveFileId, rawThumbnail, 800);
 }
 
 export function generateDrivePreviewUrl(driveFileId: string, rawThumbnail?: string): string {
-  if (rawThumbnail && rawThumbnail.startsWith('http')) {
-    return rawThumbnail;
-  }
-  return `https://drive.google.com/thumbnail?id=${driveFileId}&sz=w2048`;
+  return drivePreviewUrl(driveFileId, rawThumbnail, 1600);
 }
 
 export function generateDriveDownloadUrl(driveFileId: string, webContentLink?: string): string {
@@ -350,7 +389,7 @@ export async function saveCustomerGallery(gallery: CustomerGallery): Promise<voi
     updated_at: nowIso,
   };
 
-  const { error: galleryError } = await supabase.from('galleries').upsert(row, { onConflict: 'id' });
+  const { error: galleryError } = await supabase.from('galleries').upsert(row as any, { onConflict: 'id' });
   if (galleryError) throw galleryError;
 
   const photos = gallery.photos || [];
@@ -414,7 +453,7 @@ export async function saveCustomerGallery(gallery: CustomerGallery): Promise<voi
   saveLocalCustomerGalleries([updatedGallery, ...locals]);
 }
 
-export async function getCustomerGalleryByToken(identifier: string): Promise<CustomerGallery | null> {
+export async function getCustomerGalleryByToken(identifier: string, onPhotoProgress?: (loaded: number) => void): Promise<CustomerGallery | null> {
   if (!identifier?.trim()) return null;
 
   try {
@@ -448,18 +487,17 @@ export async function getCustomerGalleryByToken(identifier: string): Promise<Cus
 
     if (!galleryRow) return null;
 
-    const [{ data: photoRows, error: photoError }, selectionRows] = await Promise.all([
-      supabase
-        .from('photos')
-        .select('*')
-        .eq('gallery_id', galleryRow.id)
-        .order('sort_order', { ascending: true }),
+    const [photoRows, selectionRows] = await Promise.all([
+      fetchAllGalleryPhotoRows(galleryRow.id, onPhotoProgress),
       fetchSelectionsForGallery(galleryRow.id),
     ]);
 
-    if (photoError) throw photoError;
-
-    const photos = (photoRows || []).map(mapPhoto);
+    const uniquePhotos = new Map<string, any>();
+    for (const row of photoRows || []) {
+      const key = String(row.drive_file_id || row.id || '');
+      if (key && !uniquePhotos.has(key)) uniquePhotos.set(key, row);
+    }
+    const photos = Array.from(uniquePhotos.values()).map(mapPhoto);
     const selections = selectionRows.map(mapSelection);
     const gallery = mapGallery(galleryRow, photos, selections);
     gallery.totalPhotos = photos.length;
