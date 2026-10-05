@@ -376,17 +376,13 @@ async function fetchImagesInSingleFolder(
     const rawFiles: any[] = data.files || [];
 
     for (const file of rawFiles) {
-      let thumbnail = file.thumbnailLink;
-      if (thumbnail) {
-        // High resolution thumbnail replacement
-        thumbnail = thumbnail.replace(/=s\d+/, '=s1200');
-      }
-
       photos.push({
         id: file.id,
         name: file.name,
         mimeType: file.mimeType,
-        thumbnailLink: thumbnail,
+        // Keep Drive's thumbnailLink as preview metadata only. Original bytes
+        // are fetched later through files.get(..., { alt: 'media' }).
+        thumbnailLink: file.thumbnailLink,
         webContentLink: file.webContentLink,
         webViewLink: file.webViewLink,
         iconLink: file.iconLink,
@@ -400,9 +396,11 @@ async function fetchImagesInSingleFolder(
     }
 
     pageToken = data.nextPageToken;
-  } while (pageToken && (maxPerFolder === undefined || photos.length < maxPerFolder));
+  } while (pageToken);
 
-  return photos;
+  const unique = new Map<string, DrivePhoto>();
+  for (const photo of photos) if (!unique.has(photo.id)) unique.set(photo.id, photo);
+  return Array.from(unique.values());
 }
 
 /**
@@ -462,7 +460,9 @@ export async function listPhotosInFolder(
     }
   }
 
-  return allPhotos;
+  const unique = new Map<string, DrivePhoto>();
+  for (const photo of allPhotos) if (!unique.has(photo.id)) unique.set(photo.id, photo);
+  return Array.from(unique.values());
 }
 
 /**
