@@ -8,6 +8,7 @@ import RamyaChobiPackages from "./home/RamyaChobiPackages";
 import RamyaChobiAbout from "./home/RamyaChobiAbout";
 import ClientAccessPage from "./home/ClientAccessPage";
 import PortfolioPage from "./home/PortfolioPage";
+import AlbumGalleryPage from "./home/AlbumGalleryPage";
 
 export default function RouterApp() {
   const path = window.location.pathname;
@@ -55,6 +56,8 @@ export default function RouterApp() {
   if (path === "/stories" || path === "/blog") return <PortfolioPage featuredOnly={false} />;
   if (path === "/face-search") return <ClientAccessPage mode="face" />;
   if (path === "/client-gallery") return <ClientAccessPage mode="gallery" />;
+  if (path === "/albums") return <AlbumGalleryPage />;
+  if (path.startsWith("/album/")) return <AlbumGalleryPage token={decodeURIComponent(path.replace(/^\/album\//, "").split("/")[0] || "")} />;
 
   if (path.startsWith("/booking")) return <BookingPortal />;
 
