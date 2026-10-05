@@ -31,6 +31,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const portalId = String(body.portalId || '').trim();
     const folderUrl = String(body.folderUrl || '').trim();
     if (!adminToken || !portalId || !folderUrl) return json(res, 400, { error: 'Admin token, portal ID and folder link are required.' });
+    await rpc('delivery_admin_list_files', { p_token: adminToken, p_portal_id: portalId });
     const folderId = folderUrl.match(/\/folders\/([A-Za-z0-9_-]+)/)?.[1] || folderUrl.match(/[?&]id=([A-Za-z0-9_-]+)/)?.[1];
     if (!folderId) return json(res, 400, { error: 'Could not extract the Google Drive folder ID.' });
 
