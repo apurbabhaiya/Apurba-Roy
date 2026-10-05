@@ -111,7 +111,7 @@ export default function RamyaChobiDeliveryAdmin() {
   const [settingsBkash, setSettingsBkash] = useState('');
   const [settingsRetention, setSettingsRetention] = useState('');
   const [filesByPortal, setFilesByPortal] = useState<Record<string, DeliveryAdminFile[]>>({});
-  const [fileDrafts, setFileDrafts] = useState<Record<string, { url: string; title: string; type: 'PHOTO' | 'VIDEO' | 'FOLDER' }>>({});
+  const [fileDrafts, setFileDrafts] = useState<Record<string, { url: string; title: string; type: 'PHOTO' | 'VIDEO' | 'FOLDER'; sortOrder: string }>>({});
 
   async function load(useToken?: string) {
     const activeToken = useToken || token;
@@ -283,15 +283,15 @@ export default function RamyaChobiDeliveryAdmin() {
     navigator.clipboard?.writeText(link);
     setNotice('Private client link copied.');
   }
-  function updateFileDraft(portalId: string, patch: Partial<{ url: string; title: string; type: 'PHOTO' | 'VIDEO' | 'FOLDER' }>) {
+  function updateFileDraft(portalId: string, patch: Partial<{ url: string; title: string; type: 'PHOTO' | 'VIDEO' | 'FOLDER'; sortOrder: string }>) {
     setFileDrafts((current) => ({
       ...current,
-      [portalId]: { url: current[portalId]?.url || '', title: current[portalId]?.title || '', type: current[portalId]?.type || 'PHOTO', ...patch },
+      [portalId]: { url: current[portalId]?.url || '', title: current[portalId]?.title || '', type: current[portalId]?.type || 'PHOTO', sortOrder: current[portalId]?.sortOrder || '', ...patch },
     }));
   }
 
   async function addFinalDeliveryFile(portalId: string) {
-    const draft = fileDrafts[portalId] || { url: '', title: '', type: 'PHOTO' as const };
+    const draft = fileDrafts[portalId] || { url: '', title: '', type: 'PHOTO' as const, sortOrder: '' };
     if (!draft.url.trim()) { setNotice('Paste a Google Drive file or folder link first.'); return; }
     setLoading(true); setNotice('');
     try {
@@ -299,12 +299,12 @@ export default function RamyaChobiDeliveryAdmin() {
         const result = await syncDeliveryFolder({ adminToken: token, portalId, folderUrl: draft.url.trim() });
         setNotice(`${result.imported} file(s) imported from Google Drive folder.`);
       } else {
-        await upsertDeliveryFile({ token, portalId, sourceUrl: draft.url.trim(), fileType: draft.type, title: draft.title.trim() || null });
+        await upsertDeliveryFile({ token, portalId, sourceUrl: draft.url.trim(), fileType: draft.type, title: draft.title.trim() || null, sortOrder: Number(draft.sortOrder || 0) });
         setNotice('Final Delivery file added.');
       }
       const files = await listDeliveryFiles({ token, portalId });
       setFilesByPortal((current) => ({ ...current, [portalId]: files }));
-      setFileDrafts((current) => ({ ...current, [portalId]: { url: '', title: '', type: draft.type } }));
+      setFileDrafts((current) => ({ ...current, [portalId]: { url: '', title: '', type: draft.type, sortOrder: '' } }));
     } catch (error: any) { setNotice(error?.message || 'Could not add Final Delivery file.'); }
     finally { setLoading(false); }
   }
@@ -319,6 +319,39 @@ export default function RamyaChobiDeliveryAdmin() {
     finally { setLoading(false); }
   }
 
+
+  async function editFinalDeliveryFile(portalId: string, file: DeliveryAdminFile) {
+    const nextUrl = window.prompt('Google Drive file or folder link', file.source_url);
+    if (!nextUrl?.trim()) return;
+    const nextTitle = window.prompt('Display title (optional)', file.title || '') ?? (file.title || '');
+    setLoading(true); setNotice('');
+    try {
+      await upsertDeliveryFile({
+        token, portalId, fileId: file.id, sourceUrl: nextUrl.trim(), fileType: file.file_type,
+        title: nextTitle.trim() || null, fileName: file.file_name || null, mimeType: file.mime_type || null,
+        sortOrder: file.sort_order || 0, isVisible: file.is_visible,
+      });
+      const files = await listDeliveryFiles({ token, portalId });
+      setFilesByPortal((current) => ({ ...current, [portalId]: files }));
+      setNotice('Final Delivery file updated.');
+    } catch (error: any) { setNotice(error?.message || 'Could not update Final Delivery file.'); }
+    finally { setLoading(false); }
+  }
+
+  async function toggleFinalDeliveryFile(portalId: string, file: DeliveryAdminFile) {
+    setLoading(true); setNotice('');
+    try {
+      await upsertDeliveryFile({
+        token, portalId, fileId: file.id, sourceUrl: file.source_url, fileType: file.file_type,
+        title: file.title || null, fileName: file.file_name || null, mimeType: file.mime_type || null,
+        sortOrder: file.sort_order || 0, isVisible: !file.is_visible,
+      });
+      const files = await listDeliveryFiles({ token, portalId });
+      setFilesByPortal((current) => ({ ...current, [portalId]: files }));
+      setNotice(file.is_visible ? 'File hidden from client.' : 'File shown to client.');
+    } catch (error: any) { setNotice(error?.message || 'Could not change file visibility.'); }
+    finally { setLoading(false); }
+  }
 
   if (!ready) {
     return (
@@ -547,19 +580,20 @@ export default function RamyaChobiDeliveryAdmin() {
                       </div>
                       <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-stone-600">{(filesByPortal[portal.id] || []).length} file(s)</span>
                     </div>
-                    <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_130px_1fr_auto]">
+                    <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_130px_1fr_90px_auto]">
                       <input value={fileDrafts[portal.id]?.url || ''} onChange={(e) => updateFileDraft(portal.id, { url: e.target.value })} placeholder="Google Drive file or folder link" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm" />
                       <select value={fileDrafts[portal.id]?.type || 'PHOTO'} onChange={(e) => updateFileDraft(portal.id, { type: e.target.value as 'PHOTO' | 'VIDEO' | 'FOLDER' })} className="rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm">
                         <option value="PHOTO">Photo</option><option value="VIDEO">Video</option><option value="FOLDER">Folder</option>
                       </select>
                       <input value={fileDrafts[portal.id]?.title || ''} onChange={(e) => updateFileDraft(portal.id, { title: e.target.value })} placeholder="Display title (optional)" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm" />
+                      <input value={fileDrafts[portal.id]?.sortOrder || ''} onChange={(e) => updateFileDraft(portal.id, { sortOrder: e.target.value })} type="number" placeholder="Order" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm" />
                       <button onClick={() => addFinalDeliveryFile(portal.id)} disabled={loading} className="rounded-xl bg-amber-300 px-3.5 py-2 text-sm font-bold text-stone-950 disabled:opacity-50">Add Link</button>
                     </div>
                     <div className="mt-3 space-y-2">
                       {(filesByPortal[portal.id] || []).map((file) => (
                         <div key={file.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-white px-3 py-2 text-sm">
                           <div className="min-w-0"><span className="font-semibold">{file.title || file.file_name || 'Untitled delivery file'}</span><span className="ml-2 text-xs text-stone-500">{file.file_type}</span></div>
-                          <button onClick={() => removeFinalDeliveryFile(portal.id, file.id)} disabled={loading} className="rounded-lg bg-red-50 px-2.5 py-1.5 text-xs font-bold text-red-700 disabled:opacity-50">Remove</button>
+                          <div className="flex gap-1.5"><button onClick={() => editFinalDeliveryFile(portal.id, file)} disabled={loading} className="rounded-lg bg-stone-100 px-2.5 py-1.5 text-xs font-bold text-stone-700 disabled:opacity-50">Edit</button><button onClick={() => toggleFinalDeliveryFile(portal.id, file)} disabled={loading} className="rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs font-bold text-amber-800 disabled:opacity-50">{file.is_visible ? 'Hide' : 'Show'}</button><button onClick={() => removeFinalDeliveryFile(portal.id, file.id)} disabled={loading} className="rounded-lg bg-red-50 px-2.5 py-1.5 text-xs font-bold text-red-700 disabled:opacity-50">Remove</button></div>
                         </div>
                       ))}
                     </div>
