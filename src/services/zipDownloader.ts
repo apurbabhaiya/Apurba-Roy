@@ -1,47 +1,5 @@
-import JSZip from 'jszip';
 import { Album, ClientSelectionSubmission, DrivePhoto } from '../types';
-import { downloadDriveFileBlob } from './drive';
 import { downloadOriginalPhoto, downloadOriginalZip } from './originalDownloadService';
-
-/**
- * Robustly fetches an image URL as a Blob, falling back to an in-memory Canvas
- * if CORS or standard fetch experiences issues.
- */
-async function fetchImageBlobWithFallback(url: string): Promise<Blob | null> {
-  try {
-    const res = await fetch(url, { mode: 'cors' });
-    if (res.ok) {
-      return await res.blob();
-    }
-  } catch (err) {
-    // Continue to canvas fallback
-  }
-
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      try {
-        const canvas = document.createElement('canvas');
-        canvas.width = img.naturalWidth || img.width || 800;
-        canvas.height = img.naturalHeight || img.height || 600;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0);
-          canvas.toBlob((blob) => {
-            resolve(blob);
-          }, 'image/jpeg', 0.95);
-          return;
-        }
-      } catch (e) {
-        // Tainted canvas or draw failure
-      }
-      resolve(null);
-    };
-    img.onerror = () => resolve(null);
-    img.src = url;
-  });
-}
 
 /**
  * Downloads selected photos from Google Drive or image URLs and bundles them into a zip file.
