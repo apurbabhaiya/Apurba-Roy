@@ -219,7 +219,6 @@ export function generateSecureToken(length = 15): string {
 
 export function generateDriveThumbnailUrl(driveFileId: string, rawThumbnail?: string): string {
   if (rawThumbnail && rawThumbnail.startsWith('http')) {
-    if (rawThumbnail.includes('=s')) return rawThumbnail.replace(/=s\d+.*$/, '=w800');
     return rawThumbnail;
   }
   return `https://drive.google.com/thumbnail?id=${driveFileId}&sz=w800`;
@@ -227,8 +226,6 @@ export function generateDriveThumbnailUrl(driveFileId: string, rawThumbnail?: st
 
 export function generateDrivePreviewUrl(driveFileId: string, rawThumbnail?: string): string {
   if (rawThumbnail && rawThumbnail.startsWith('http')) {
-    if (rawThumbnail.includes('=s')) return rawThumbnail.replace(/=s\d+.*$/, '=w2048');
-    if (rawThumbnail.includes('unsplash.com')) return rawThumbnail.replace('&w=800', '&w=1800');
     return rawThumbnail;
   }
   return `https://drive.google.com/thumbnail?id=${driveFileId}&sz=w2048`;
