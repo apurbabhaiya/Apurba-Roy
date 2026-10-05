@@ -127,7 +127,6 @@ export async function searchFaceInAlbum(
 
       // Send prompt with photo IDs and prompt to identify photos containing this person
       const photoCatalogList = albumPhotos
-        .slice(0, 20)
         .map((p, idx) => `Photo ${idx + 1}: ID="${p.id}", Name="${p.name}"`)
         .join('\n');
 
