@@ -54,7 +54,7 @@ export default function RouterApp() {
   if (path === "/packages") return <RamyaChobiPackages />;
   if (path === "/portfolio") return <PortfolioPage />;
   if (path === "/stories" || path === "/blog") return <PortfolioPage featuredOnly={false} />;
-  if (path === "/face-search") return <AlbumGalleryPage />;
+  if (path === "/face-search") return <ClientAccessPage mode="face" />;
   if (path === "/client-gallery") return <ClientAccessPage mode="gallery" />;
   if (path === "/albums") return <AlbumGalleryPage />;
   if (path.startsWith("/album/")) return <AlbumGalleryPage token={decodeURIComponent(path.replace(/^\/album\//, "").split("/")[0] || "")} />;
