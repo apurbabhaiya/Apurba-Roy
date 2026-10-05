@@ -29,8 +29,8 @@ async function getFile(token: string, id: string) {
 
 async function fetchOriginal(fileId: string): Promise<Response> {
   const auth = process.env.GOOGLE_DRIVE_ACCESS_TOKEN || '';
-  if (auth) return fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`, { headers: { Authorization: `Bearer ${auth}` } });
-  return fetch(`https://drive.google.com/uc?export=download&id=${encodeURIComponent(fileId)}`, { redirect: 'follow' });
+  if (!auth) throw new Error('Protected Google Drive server configuration is missing.');
+  return fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`, { headers: { Authorization: `Bearer ${auth}` } });
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
