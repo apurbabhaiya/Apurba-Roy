@@ -340,7 +340,7 @@ export default function RamyaChobiDelivery({ token }: { token: string }) {
               </div>
             </div>
             <div className="mt-6 rounded-2xl bg-white/5 p-4 text-sm text-white/65">
-              Original downloads remain locked until package payment is fully verified and Final Delivery is activated.
+              Original downloads require full payment, active access, and the corresponding Admin download permission.
             </div>
           </div>
         </section>
