@@ -18,6 +18,16 @@ function driveConfig() {
   return accessToken;
 }
 
+async function assertAdmin(adminToken: string, portalId: string) {
+  const { url, key } = supabaseConfig();
+  const response = await fetch(`${url}/rest/v1/rpc/delivery_admin_list_files`, {
+    method: 'POST',
+    headers: { apikey: key, Authorization: `Bearer ${key}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ p_token: adminToken, p_portal_id: portalId }),
+  });
+  if (!response.ok) throw new Error('Admin session expired or delivery portal is unavailable.');
+}
+
 async function adminUpsert(body: Record<string, unknown>) {
   const { url, key } = supabaseConfig();
   const response = await fetch(\`\${url}/rest/v1/rpc/delivery_admin_upsert_file\`, {
@@ -75,6 +85,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!/^[0-9a-f-]{36}$/i.test(portalId)) return json(res, 400, { error: 'Invalid delivery portal.' });
     if (existingFileId && !/^[0-9a-f-]{36}$/i.test(existingFileId)) return json(res, 400, { error: 'Invalid delivery file.' });
     if (!['PHOTO', 'VIDEO', 'FOLDER'].includes(fileType)) return json(res, 400, { error: 'File type must be Photo, Video or Folder.' });
+
+    await assertAdmin(adminToken, portalId);
 
     const kind = fileType === 'FOLDER' ? 'folder' : 'file';
     const driveId = extractDriveId(sourceUrl, kind);
