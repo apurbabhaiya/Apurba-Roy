@@ -17,7 +17,7 @@ const mapPhoto = (row: PhotoRow): CustomerGalleryPhoto => ({
   name: row.file_name || 'Photo',
   thumbnailUrl: row.thumbnail_url || '',
   previewUrl: row.preview_url || row.thumbnail_url || '',
-  originalUrl: row.original_url || row.download_url || (row.drive_file_id ? `https://drive.google.com/uc?export=download&id=${encodeURIComponent(row.drive_file_id)}` : undefined),
+  originalUrl: undefined,
   mimeType: row.mime_type || undefined,
   size: row.size_text || undefined,
   width: row.width || undefined,
@@ -76,7 +76,7 @@ const mapGallery = (
   watermarkEnabled: row.watermark_enabled ?? false,
   watermarkText: row.watermark_text || 'Ramyachobi',
   watermarkLogoUrl: row.watermark_logo_url || undefined,
-  allowOriginalDownloads: row.allow_original_downloads ?? false,
+  allowOriginalDownloads: true,
   zipRequested: row.zip_requested ?? false,
   zipRequestedAt: row.zip_requested_at || undefined,
   zipRequestStatus: row.zip_request_status || undefined,
@@ -98,24 +98,32 @@ export async function getSupabaseGalleryByToken(
   const { data: claimedId, error: claimError } = await supabase.rpc(
     'claim_gallery_access',
     { p_identifier: secureToken }
-  );
+);
+
+async function fetchAllPhotoRows(galleryId: string): Promise<PhotoRow[]> {
+  const rows: PhotoRow[] = [];
+  const pageSize = 1000;
+  let offset = 0;
+  while (true) {
+    const { data, error } = await supabase.from('photos').select('*').eq('gallery_id', galleryId).order('sort_order', { ascending: true }).range(offset, offset + pageSize - 1);
+    if (error) throw error;
+    const page = (data || []) as PhotoRow[];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+    offset += pageSize;
+  }
+  return rows;
+}
   if (claimError) return null;
 
   const galleryId = claimedId as string;
 
-  const [{ data: gallery, error: galleryError }, { data: photos, error: photoError }] =
-    await Promise.all([
-      supabase.from('galleries').select('*').eq('id', galleryId).single(),
-      supabase
-        .from('photos')
-        .select('*')
-        .eq('gallery_id', galleryId)
-        .order('sort_order', { ascending: true }),
-    ]);
+  const [{ data: gallery, error: galleryError }, photos] = await Promise.all([
+    supabase.from('galleries').select('*').eq('id', galleryId).single(),
+    fetchAllPhotoRows(galleryId),
+  ]);
 
   if (galleryError) throw galleryError;
-  if (photoError) throw photoError;
-
   const { data: selectionRows, error: selectionError } = await supabase
     .from('selections')
     .select('*')
