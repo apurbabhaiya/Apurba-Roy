@@ -268,6 +268,19 @@ export default function RamyaChobiDelivery({ token }: { token: string }) {
       </section>
 
       <main className="mx-auto max-w-7xl space-y-8 px-5 py-8 sm:px-8 lg:px-10 lg:py-12">
+        {(data.client_message || data.client_note) && (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-stone-700">
+            <div className="font-semibold text-stone-900">RamyaChobi message</div>
+            {data.client_message && <p className="mt-2 whitespace-pre-line leading-6">{data.client_message}</p>}
+            {data.client_note && <p className="mt-2 whitespace-pre-line border-t border-amber-200 pt-2 leading-6">{data.client_note}</p>}
+          </div>
+        )}
+        <div className="rounded-2xl border border-stone-200 bg-white p-4 text-sm text-stone-600">
+          {lateDays > 0
+            ? 'আপনার free access period শেষ হয়েছে। Access পুনরায় চালু করতে প্রযোজ্য late access fee পরিশোধ করতে হবে। Admin verification-এর পর download access চালু হবে।'
+            : 'আপনার ফাইল ৩০ দিন পর্যন্ত বিনামূল্যে দেখা ও ডাউনলোড করা যাবে। অনুগ্রহ করে এই সময়ের মধ্যে সব original photo ও video download করে সংরক্ষণ করুন।'}
+        </div>
+
         <section className="grid gap-6 lg:grid-cols-[1.15fr_.85fr]">
           <div className="rounded-3xl border border-stone-200 bg-white p-6 shadow-sm sm:p-8">
             <div className="flex flex-wrap items-start justify-between gap-4">
