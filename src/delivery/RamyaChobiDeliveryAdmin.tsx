@@ -471,17 +471,26 @@ export default function RamyaChobiDeliveryAdmin() {
     const nextUrl = window.prompt('Google Drive file or folder link', file.source_url);
     if (!nextUrl?.trim()) return;
     const nextTitle = window.prompt('Display title (optional)', file.title || '') ?? (file.title || '');
-    setLoading(true); setNotice('');
+    setLoading(true); setNotice('Validating replacement link...');
     try {
-      await upsertDeliveryFile({
-        token, portalId, fileId: file.id, sourceUrl: nextUrl.trim(), fileType: file.file_type,
-        title: nextTitle.trim() || null, fileName: file.file_name || null, mimeType: file.mime_type || null,
-        sortOrder: file.sort_order || 0, isVisible: file.is_visible,
-      });
+      if (file.file_type === 'FOLDER') {
+        await validateAndSaveDeliveryFile({ adminToken: token, portalId, sourceUrl: nextUrl.trim(), fileType: 'FOLDER', persist: false });
+        await upsertDeliveryFile({
+          token, portalId, fileId: file.id, sourceUrl: nextUrl.trim(), fileType: file.file_type,
+          title: nextTitle.trim() || null, fileName: file.file_name || null, mimeType: file.mime_type || null,
+          sortOrder: file.sort_order || 0, isVisible: file.is_visible,
+        });
+      } else {
+        await validateAndSaveDeliveryFile({
+          adminToken: token, portalId, fileId: file.id, sourceUrl: nextUrl.trim(), fileType: file.file_type,
+          title: nextTitle.trim() || null, fileName: file.file_name || null, sortOrder: file.sort_order || 0,
+          isVisible: file.is_visible, persist: true,
+        });
+      }
       const files = await listDeliveryFiles({ token, portalId });
       setFilesByPortal((current) => ({ ...current, [portalId]: files }));
-      setNotice('Final Delivery file updated.');
-    } catch (error: any) { setNotice(error?.message || 'Could not update Final Delivery file.'); }
+      setNotice('Replacement link verified and saved.');
+    } catch (error: any) { setNotice(error?.message || 'Replacement Google Drive link failed validation.'); }
     finally { setLoading(false); }
   }
 
