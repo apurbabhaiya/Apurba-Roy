@@ -1,6 +1,7 @@
 import JSZip from 'jszip';
 import { Album, ClientSelectionSubmission, DrivePhoto } from '../types';
 import { downloadDriveFileBlob } from './drive';
+import { downloadOriginalPhoto, downloadOriginalZip } from './originalDownloadService';
 
 /**
  * Robustly fetches an image URL as a Blob, falling back to an in-memory Canvas
@@ -57,91 +58,12 @@ export async function downloadPhotosAsZip(
     onProgress?: (completed: number, total: number, currentFileName: string) => void;
   }
 ): Promise<void> {
-  const zip = new JSZip();
-  const safeAlbum = options.albumTitle.replace(/[^a-zA-Z0-9_-]/g, '_');
-  const safeClient = options.clientName ? `_${options.clientName.replace(/[^a-zA-Z0-9_-]/g, '_')}` : '';
-  const folderName = `${safeAlbum}${safeClient}_Selected`;
-  const folder = zip.folder(folderName) || zip;
-
-  const total = photos.length;
-  let completed = 0;
-
-  // Manifest text file
-  const manifestLines = [
-    `Wedding Photo Selection Manifest`,
-    `========================================`,
-    `Album: ${options.albumTitle}`,
-    `Client: ${options.clientName || 'General Selection'}`,
-    `Total Selected Photos: ${photos.length}`,
-    `Archive Created: ${new Date().toLocaleString()}`,
-  ];
-
-  if (options.notes) {
-    manifestLines.push(`Client Notes: ${options.notes}`);
-  }
-
-  manifestLines.push(
-    `========================================`,
-    `Files Included:`,
-    ``
-  );
-
-  for (const photo of photos) {
-    if (options.onProgress) {
-      options.onProgress(completed, total, photo.name);
-    }
-    manifestLines.push(`- ${photo.name} (Drive ID: ${photo.id})`);
-
-    try {
-      let blob: Blob | null = null;
-
-      // 1. Try Google Drive API direct download if accessToken is available and valid Drive ID
-      if (options.accessToken && photo.id) {
-        try {
-          blob = await downloadDriveFileBlob(options.accessToken, photo.id);
-        } catch (err) {
-          console.warn(`Drive direct download failed for ${photo.name}, trying thumbnail link fallback`, err);
-        }
-      }
-
-      // Never fall back to a thumbnail or webView URL: that can silently resize or recompress the file.
-      // Only an original Drive binary is valid for the archive.
-
-      if (blob) {
-        folder.file(photo.name, blob);
-      } else {
-        // Fallback placeholder note if neither succeeded
-        folder.file(`${photo.name}.txt`, `Drive ID: ${photo.id}\nFilename: ${photo.name}\nCould not retrieve file binary.`);
-      }
-    } catch (err) {
-      console.error(`Error archiving ${photo.name}:`, err);
-      folder.file(`${photo.name}_error.txt`, `Error: ${(err as Error).message}`);
-    }
-
-    completed++;
-    if (options.onProgress) {
-      options.onProgress(completed, total, photo.name);
-    }
-  }
-
-  manifestLines.push(``, `Generated via Wedding Proofing Admin Dashboard.`);
-  folder.file('selection-summary.txt', manifestLines.join('\n'));
-
-  // Generate zip file with optimal compression
-  const zipBlob = await zip.generateAsync({
-    type: 'blob',
-    compression: 'DEFLATE',
-    compressionOptions: { level: 6 },
+  // Server endpoint streams original bytes. No client-side thumbnail fallback,
+  // fake placeholder, or preview re-encoding is allowed in an original ZIP.
+  await downloadOriginalZip(photos, options.accessToken, (p) => {
+    const total = photos.length;
+    options.onProgress?.(p.percent ? Math.round((p.percent / 100) * total) : 0, total, p.status);
   });
-
-  const downloadUrl = URL.createObjectURL(zipBlob);
-  const a = document.createElement('a');
-  a.href = downloadUrl;
-  a.download = options.zipFilename || `${folderName}.zip`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(downloadUrl);
 }
 
 /**
@@ -331,49 +253,8 @@ export async function downloadSinglePhoto(
   accessToken?: string | null
 ): Promise<boolean> {
   try {
-    let blob: Blob | null = null;
-
-    // 1. Try Google Drive API direct download if accessToken is available and not a mock/sample id
-    if (accessToken && photo.id) {
-      try {
-        blob = await downloadDriveFileBlob(accessToken, photo.id);
-      } catch (err) {
-        console.warn(`Drive direct download failed for ${photo.name}, falling back to image URL`, err);
-      }
-    }
-
-    // Do not download webViewLink/thumbnailLink: those are previews and may be resized or recompressed.
-    const url = photo.webContentLink;
-    if (!blob && url) {
-      const res = await fetch(url, { credentials: 'include' });
-      if (res.ok) blob = await res.blob();
-    }
-
-    const filename = photo.name.includes('.') ? photo.name : `${photo.name}.jpg`;
-
-    if (blob) {
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 1500);
-      return true;
-    } else if (url) {
-      // Fallback: trigger direct link download
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      a.target = '_blank';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      return true;
-    }
-
-    return false;
+    await downloadOriginalPhoto(photo, accessToken);
+    return true;
   } catch (err) {
     console.error('Error downloading individual photo:', err);
     return false;
