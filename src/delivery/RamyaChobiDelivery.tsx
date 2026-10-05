@@ -415,9 +415,9 @@ export default function RamyaChobiDelivery({ token }: { token: string }) {
                         canDownload ? (
                           <video src={mediaUrl(token, file.id, 'ORIGINAL')} controls controlsList="nodownload" preload="metadata" className="h-full w-full object-cover" />
                         ) : (
-                          <div className="relative h-full w-full">
-                            <img src={preview} alt={label} className="h-full w-full object-cover" />
-                            <div className="absolute inset-0 flex items-center justify-center bg-black/25 text-xs font-semibold text-white">Protected video preview</div>
+                          <div className="relative h-full w-full bg-black">
+                            <video src={preview} controls controlsList="nodownload" preload="metadata" className="h-full w-full object-cover" />
+                            <div className="pointer-events-none absolute left-2 top-2 rounded bg-black/55 px-2 py-1 text-[11px] font-semibold text-white">Preview only</div>
                           </div>
                         )
                       ) : file.file_type === 'FOLDER' ? (
@@ -536,7 +536,7 @@ export default function RamyaChobiDelivery({ token }: { token: string }) {
           {[
             [ShieldCheck, 'Private Gallery', 'Private client link with protected access logic.'],
             [BadgeCheck, 'Payment Verification', 'Access changes only after payment verification.'],
-            [LockKeyhole, 'Protected Originals', 'Original Google Drive files are not exposed through the landing page.'],
+            [LockKeyhole, 'Protected Originals', 'Original files are available only through the verified delivery flow.'],
             [Clock3, 'Limited Retention', 'Gallery access and actual file retention are managed separately.'],
           ].map(([Icon, title, text]: any) => (
             <div key={title} className="rounded-2xl border border-stone-200 bg-white p-5">
