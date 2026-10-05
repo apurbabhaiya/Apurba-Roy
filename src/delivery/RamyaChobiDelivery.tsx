@@ -412,7 +412,14 @@ export default function RamyaChobiDelivery({ token }: { token: string }) {
                   <div key={file.id} className="group relative overflow-hidden rounded-2xl bg-stone-100">
                     <div className="aspect-[4/3]">
                       {file.file_type === 'VIDEO' ? (
-                        <video src={preview} controls controlsList="nodownload" preload="metadata" className="h-full w-full object-cover" />
+                        canDownload ? (
+                          <video src={mediaUrl(token, file.id, 'ORIGINAL')} controls controlsList="nodownload" preload="metadata" className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="relative h-full w-full">
+                            <img src={preview} alt={label} className="h-full w-full object-cover" />
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/25 text-xs font-semibold text-white">Protected video preview</div>
+                          </div>
+                        )
                       ) : file.file_type === 'FOLDER' ? (
                         <div className="flex h-full items-center justify-center p-4 text-center text-sm text-stone-500"><FileArchive className="mr-2 h-5 w-5" />Protected folder</div>
                       ) : (
