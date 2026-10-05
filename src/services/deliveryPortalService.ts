@@ -495,8 +495,16 @@ export async function validateAndSaveDeliveryFile(input: {
       persist: input.persist !== false,
     }),
   });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data?.error || 'Google Drive link validation failed.');
+  const rawResponse = await response.text();
+  let data: any = {};
+  try {
+    data = rawResponse ? JSON.parse(rawResponse) : {};
+  } catch {
+    data = { error: rawResponse.slice(0, 400) };
+  }
+  if (!response.ok) {
+    throw new Error(data?.error || `Google Drive link validation failed (HTTP ${response.status}).`);
+  }
   return data as {
     verified: boolean;
     saved?: boolean;
