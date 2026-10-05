@@ -118,6 +118,9 @@ export default function RamyaChobiDelivery({ token }: { token: string }) {
   const isUnavailable = galleryStatus === 'UNAVAILABLE';
   const temporaryActive = galleryStatus === 'TEMPORARILY_ACTIVE';
   const canDownload = data?.download_status === 'ENABLED' && !isUnavailable;
+  const previewEnabled = data?.preview_enabled !== false;
+  const canPhotoDownload = canDownload && data?.photo_download_permission === true;
+  const canVideoDownload = canDownload && data?.video_download_permission === true;
   const isFullyPaid = data?.payment_status === 'FULLY_PAID';
   const freeDays = daysRemaining(data?.free_access_expires_at);
   const temporaryDays = daysRemaining(data?.access_expires_at);
@@ -200,14 +203,15 @@ export default function RamyaChobiDelivery({ token }: { token: string }) {
 
   const previews = data.preview_items || [];
   const finalFiles = data.delivery_files || [];
+  const downloadableFiles = finalFiles.filter((file) => file.file_type === 'PHOTO' ? canPhotoDownload : file.file_type === 'VIDEO' ? canVideoDownload : false);
 
   async function downloadAll() {
-    if (!canDownload || finalFiles.length === 0) return;
+    if (!canDownload || downloadableFiles.length === 0) return;
     setDownloading(true); setDownloadError('');
     try {
       const response = await fetch('/api/delivery-zip', {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ token, files: finalFiles.filter((file) => file.file_type !== 'FOLDER').map((file) => file.id) }),
+        body: JSON.stringify({ token, files: downloadableFiles.map((file) => file.id) }),
       });
       if (!response.ok) throw new Error((await response.text()).slice(0, 200) || 'ZIP download failed.');
       const blob = await response.blob();
@@ -394,10 +398,10 @@ export default function RamyaChobiDelivery({ token }: { token: string }) {
               </div>
               <div className="flex gap-2">
                 <button
-                  disabled={!canDownload || finalFiles.filter((file) => file.file_type !== 'FOLDER').length === 0 || downloading}
+                  disabled={!canDownload || downloadableFiles.length === 0 || downloading}
                   onClick={downloadAll}
                   className="inline-flex items-center gap-2 rounded-xl bg-stone-950 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500"
-                  title={canDownload ? 'Download protected original files' : 'Locked until Final Delivery'}
+                  title={canDownload ? 'Download permitted original files' : 'Locked until Final Delivery'}
                 >
                   <Download className="h-4 w-4" /> {downloading ? 'Preparing ZIP...' : 'Download All'}
                 </button>
@@ -412,7 +416,9 @@ export default function RamyaChobiDelivery({ token }: { token: string }) {
                   <div key={file.id} className="group relative overflow-hidden rounded-2xl bg-stone-100">
                     <div className="aspect-[4/3]">
                       {file.file_type === 'VIDEO' ? (
-                        canDownload ? (
+                        !previewEnabled && !canVideoDownload ? (
+                          <div className="flex h-full items-center justify-center bg-stone-200 p-4 text-center text-sm text-stone-600"><LockKeyhole className="mr-2 h-5 w-5" />Video preview disabled</div>
+                        ) : canVideoDownload ? (
                           <video src={mediaUrl(token, file.id, 'ORIGINAL')} controls controlsList="nodownload" preload="metadata" className="h-full w-full object-cover" />
                         ) : (
                           <div className="relative h-full w-full bg-black">
@@ -422,11 +428,13 @@ export default function RamyaChobiDelivery({ token }: { token: string }) {
                         )
                       ) : file.file_type === 'FOLDER' ? (
                         <div className="flex h-full items-center justify-center p-4 text-center text-sm text-stone-500"><FileArchive className="mr-2 h-5 w-5" />Protected folder</div>
+                      ) : !previewEnabled && !canPhotoDownload ? (
+                        <div className="flex h-full items-center justify-center bg-stone-200 p-4 text-center text-sm text-stone-600"><LockKeyhole className="mr-2 h-5 w-5" />Photo preview disabled</div>
                       ) : (
                         <img src={preview} alt={label} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
                       )}
                     </div>
-                    {!canDownload && file.file_type !== 'FOLDER' && (
+                    {!canDownload && previewEnabled && file.file_type !== 'FOLDER' && (
                       <div className="absolute inset-0 flex items-center justify-center bg-black/10 pointer-events-none">
                         <span className="-rotate-12 rounded bg-black/45 px-2 py-1 text-xs font-semibold tracking-[0.18em] text-white">RAMYACHOBI PREVIEW</span>
                       </div>
@@ -434,10 +442,10 @@ export default function RamyaChobiDelivery({ token }: { token: string }) {
                     <div className="flex items-center justify-between gap-2 p-2">
                       <span className="truncate text-xs font-medium">{label}</span>
                       <div className="flex shrink-0 items-center gap-1">
-                        {canDownload && file.file_type !== 'FOLDER' && (
+                        {((file.file_type === 'PHOTO' && canPhotoDownload) || (file.file_type === 'VIDEO' && canVideoDownload)) && (
                           <a href={mediaUrl(token, file.id, 'ORIGINAL')} className="rounded-lg bg-stone-950 px-2 py-1 text-[11px] font-semibold text-white">Download</a>
                         )}
-                        {canDownload && file.google_drive_link && (
+                        {data.drive_link_access_enabled && file.google_drive_link && (
                           <a href={file.google_drive_link} target="_blank" rel="noreferrer" className="rounded-lg bg-emerald-700 px-2 py-1 text-[11px] font-semibold text-white">Drive</a>
                         )}
                       </div>
@@ -451,6 +459,12 @@ export default function RamyaChobiDelivery({ token }: { token: string }) {
                   <div className="absolute bottom-2 left-2 flex items-center gap-1 rounded-full bg-black/55 px-2 py-1 text-[11px] font-medium text-white backdrop-blur">{item.type === 'video' ? <PlayCircle className="h-3 w-3" /> : <ImageIcon className="h-3 w-3" />}{item.type === 'video' ? 'Video' : 'Photo'}</div>
                 </div>
               ))}
+            </div>
+            <div className="mt-5 grid gap-2 sm:grid-cols-4">
+              <div className="rounded-xl bg-stone-50 p-3 text-xs"><span className="block text-stone-500">Preview</span><strong>{previewEnabled ? 'ON' : 'OFF'}</strong></div>
+              <div className="rounded-xl bg-stone-50 p-3 text-xs"><span className="block text-stone-500">Photo download</span><strong>{canPhotoDownload ? 'ON' : 'OFF'}</strong></div>
+              <div className="rounded-xl bg-stone-50 p-3 text-xs"><span className="block text-stone-500">Video download</span><strong>{canVideoDownload ? 'ON' : 'OFF'}</strong></div>
+              <div className="rounded-xl bg-stone-50 p-3 text-xs"><span className="block text-stone-500">Drive link</span><strong>{data.drive_link_access_enabled ? 'ON' : 'OFF'}</strong></div>
             </div>
             {downloadError && <div className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{downloadError}</div>}
 
