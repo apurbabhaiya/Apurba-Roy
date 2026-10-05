@@ -15,6 +15,7 @@ export type DeliveryFinalFile = {
   mime_type?: string | null;
   title?: string | null;
   sort_order?: number;
+  google_drive_link?: string | null;
 };
 
 export type DeliveryAdminFile = DeliveryFinalFile & {
@@ -64,6 +65,7 @@ export type DeliveryPortalData = {
   late_fee_status?: string | null;
   client_message?: string | null;
   client_note?: string | null;
+  google_drive_access_enabled?: boolean;
 };
 
 export type DeliveryAdminPortal = DeliveryPortalData & {
