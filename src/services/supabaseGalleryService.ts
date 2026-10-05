@@ -52,7 +52,7 @@ const mapGallery = (
   secureToken: row.secure_token,
   pinEnabled: Boolean(row.pin_enabled),
   pinHash: row.pin_hash || undefined,
-  maxSelections: row.selection_limit ?? 100,
+  maxSelections: 0,
   selectionDeadline: row.selection_deadline || '',
   allowDownloads: row.allow_downloads ?? true,
   allowEditing: row.allow_editing ?? true,
