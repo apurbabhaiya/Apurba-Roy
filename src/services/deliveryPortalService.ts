@@ -257,3 +257,15 @@ export async function deleteDeliveryFile(input: { token: string; fileId: string 
   if (error) throw error;
   return data;
 }
+
+
+export async function syncDeliveryFolder(input: { adminToken: string; portalId: string; folderUrl: string }) {
+  const response = await fetch('/api/delivery-folder-sync', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data?.error || 'Folder import failed.');
+  return data as { success: boolean; imported: number };
+}
