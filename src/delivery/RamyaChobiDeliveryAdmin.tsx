@@ -788,7 +788,7 @@ export default function RamyaChobiDeliveryAdmin() {
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
                         <h3 className="font-semibold">Final Delivery Files</h3>
-                        <p className="mt-1 text-xs text-stone-600">Paste private Google Drive photo, video or folder links. Raw links stay hidden from the client.</p>
+                        <p className="mt-1 text-xs text-stone-600">Paste private Google Drive photo, video or folder links. Raw links stay hidden until full payment and Drive Link Access is ON.</p>
                       </div>
                       <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-stone-600">{(filesByPortal[portal.id] || []).length} file(s)</span>
                     </div>
