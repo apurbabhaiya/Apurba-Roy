@@ -122,38 +122,30 @@ export async function searchFaceInAlbum(
 
   const results: FaceMatchScore[] = [];
   const total = albumPhotos.length;
-
-  for (let i = 0; i < total; i++) {
-    const photo = albumPhotos[i];
-    const imgUrl = photo.thumbnailLink || photo.webViewLink;
-
-    let similarity = 0;
-
-    if (refFeatures.length > 0 && imgUrl) {
-      try {
-        const photoImg = await loadImage(imgUrl);
-        const photoFeatures = await extractVisualFeatures(photoImg);
-        const rawSim = computeSimilarity(refFeatures, photoFeatures);
-        similarity = Math.min(100, Math.max(0, Math.round(rawSim * 100)));
-      } catch {
-        similarity = 0;
+  let cursor = 0;
+  let completed = 0;
+  const threshold = Number((import.meta as any).env?.VITE_FACE_MATCH_THRESHOLD || 84);
+  const worker = async () => {
+    while (true) {
+      const index = cursor++;
+      if (index >= total) return;
+      const photo = albumPhotos[index];
+      const imgUrl = photo.thumbnailLink || photo.webViewLink;
+      let similarity = 0;
+      if (refFeatures.length > 0 && imgUrl) {
+        try {
+          const photoImg = await loadImage(imgUrl);
+          const photoFeatures = await extractVisualFeatures(photoImg);
+          const rawSim = computeSimilarity(refFeatures, photoFeatures);
+          similarity = Math.min(100, Math.max(0, Math.round(rawSim * 100)));
+        } catch { similarity = 0; }
       }
+      if (similarity >= threshold) results.push({ photoId: photo.id, photo, similarity });
+      completed++;
+      if (completed % 10 === 0 || completed === total) onProgress?.(20 + Math.floor((completed / total) * 75), `স্ক্যান সম্পন্ন: ${completed}/${total} ফটোর মধ্যে...`);
     }
-
-    const threshold = Number((import.meta as any).env?.VITE_FACE_MATCH_THRESHOLD || 84);
-    if (similarity >= threshold) {
-      results.push({
-        photoId: photo.id,
-        photo,
-        similarity,
-      });
-    }
-
-    if (i % 2 === 0) {
-      const progress = Math.min(95, 50 + Math.floor((i / total) * 45));
-      onProgress?.(progress, `স্ক্যান সম্পন্ন: ${i + 1}/${total} ফটোর মধ্যে...`);
-    }
-  }
+  };
+  await Promise.all(Array.from({ length: Math.min(8, total) }, () => worker()));
 
   // Sort descending by similarity
   results.sort((a, b) => b.similarity - a.similarity);
