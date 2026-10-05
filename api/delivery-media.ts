@@ -7,8 +7,8 @@ function json(res: VercelResponse, status: number, message: string) {
 
 function supabaseConfig() {
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
-  if (!url || !key) throw new Error('Supabase server configuration is missing.');
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+  if (!url || !key) throw new Error('Protected delivery server configuration is missing.');
   return { url, key };
 }
 
