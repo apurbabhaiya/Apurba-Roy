@@ -67,13 +67,13 @@ import {
   restoreSelectionSnapshot,
   generateDrivePreviewUrl,
   generateDriveThumbnailUrl,
-  generateDriveDownloadUrl,
 } from '../services/customerGalleryService';
 import {
   archiveSelectedPhotos,
   ArchiveProgress,
   ArchiveResult,
 } from '../services/archiveService';
+import { downloadOriginalPhoto, downloadPreviewPhoto } from '../services/originalDownloadService';
 import { ensureAnonymousAuth } from '../services/auth';
 import { LoadingOverlay } from './LoadingOverlay';
 import {
@@ -1598,13 +1598,19 @@ export const CustomerGalleryView: React.FC<CustomerGalleryViewProps> = ({
   // Download individual photo
   const handleDownloadPhoto = async (photo: CustomerGalleryPhoto) => {
     if (!gallery?.allowDownloads) return;
-    const source = (gallery.allowOriginalDownloads && (photo.originalUrl || ('https://drive.google.com/uc?export=download&id=' + encodeURIComponent(photo.driveFileId)))) || photo.previewUrl || photo.thumbnailUrl;
     if (!gallery.watermarkEnabled || gallery.allowOriginalDownloads) {
-      const link = document.createElement('a'); link.href = source; link.download = photo.name || 'photo.jpg'; link.target = '_blank'; link.click(); return;
+      try {
+        await downloadOriginalPhoto(photo);
+      } catch (error: any) {
+        setSelectionNotice(error?.message || 'Original download failed. The preview was not downloaded.');
+      }
+      return;
     }
     try {
+      // Watermarked downloads intentionally use a preview-sized source. They
+      // never overwrite the original file or masquerade as an original.
       const image = new Image(); image.crossOrigin = 'anonymous';
-      await new Promise<void>((resolve, reject) => { image.onload = () => resolve(); image.onerror = reject; image.src = source; });
+      await new Promise<void>((resolve, reject) => { image.onload = () => resolve(); image.onerror = reject; image.src = photo.previewUrl || photo.thumbnailUrl; });
       const canvas = document.createElement('canvas'); canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
       const ctx = canvas.getContext('2d'); if (!ctx) throw new Error('canvas unavailable'); ctx.drawImage(image, 0, 0);
       ctx.font = `bold ${Math.max(24, Math.round(canvas.width / 35))}px sans-serif`; ctx.fillStyle = 'rgba(255,255,255,.72)'; ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 3;
