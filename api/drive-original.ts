@@ -1,6 +1,8 @@
 type VercelRequest = any;
 type VercelResponse = any;
 
+export const config = { maxDuration: 300 };
+
 function safeName(value: string): string {
   return (value || 'photo.jpg').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').slice(0, 240) || 'photo.jpg';
 }
