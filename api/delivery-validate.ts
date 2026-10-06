@@ -12,9 +12,35 @@ function supabaseConfig() {
   return { url, key };
 }
 
-function driveConfig() {
+async function driveConfig() {
+  const refreshToken = process.env.GOOGLE_DRIVE_REFRESH_TOKEN || '';
+  const clientId = process.env.GOOGLE_DRIVE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || '';
+  const clientSecret = process.env.GOOGLE_DRIVE_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET || '';
+
+  if (refreshToken && clientId && clientSecret) {
+    const response = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        refresh_token: refreshToken,
+        grant_type: 'refresh_token',
+      }).toString(),
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      const reason = String(body?.error || '');
+      if (reason === 'invalid_grant') throw new Error('Google Drive connection expired. Reconnect the Google account and try again.');
+      throw new Error('Google Drive could not refresh its private connection. Check the Drive OAuth settings in Vercel.');
+    }
+    const refreshed = await response.json();
+    if (refreshed?.access_token) return String(refreshed.access_token);
+    throw new Error('Google Drive did not return an access token. Check the Drive OAuth settings in Vercel.');
+  }
+
   const accessToken = process.env.GOOGLE_DRIVE_ACCESS_TOKEN || '';
-  if (!accessToken) throw new Error('GOOGLE_DRIVE_ACCESS_TOKEN is not configured in Vercel.');
+  if (!accessToken) throw new Error('Google Drive server connection is not configured in Vercel.');
   return accessToken;
 }
 
@@ -41,6 +67,9 @@ async function adminUpsert(body: Record<string, unknown>) {
 
 function extractDriveId(sourceUrl: string, kind: 'file' | 'folder') {
   const value = sourceUrl.trim();
+  let parsed: URL;
+  try { parsed = new URL(value); } catch { return null; }
+  if (parsed.protocol !== 'https:' || parsed.hostname !== 'drive.google.com') return null;
   const pattern = kind === 'folder'
     ? /\/folders\/([A-Za-z0-9_-]+)/i
     : /\/file\/d\/([A-Za-z0-9_-]+)/i;
@@ -50,7 +79,7 @@ function extractDriveId(sourceUrl: string, kind: 'file' | 'folder') {
 }
 
 async function driveMetadata(id: string) {
-  const accessToken = driveConfig();
+  const accessToken = await driveConfig();
   const fields = 'id,name,mimeType,size,fileExtension,thumbnailLink,modifiedTime,trashed,parents';
   const response = await fetch(\`https://www.googleapis.com/drive/v3/files/\${encodeURIComponent(id)}?fields=\${encodeURIComponent(fields)}&supportsAllDrives=true\`, {
     headers: { Authorization: \`Bearer \${accessToken}\` },
@@ -142,6 +171,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       file: saved ? { id: saved.id, file_name: saved.file_name, file_type: saved.file_type, mime_type: saved.mime_type, title: saved.title, sort_order: saved.sort_order, is_visible: saved.is_visible } : null,
     });
   } catch (error: any) {
+    const requestId = String(req.headers?.['x-vercel-id'] || '').slice(0, 100);
+    console.error('[delivery-validate] failed', {
+      requestId,
+      name: String(error?.name || 'Error').slice(0, 80),
+      code: String(error?.code || '').slice(0, 80),
+    });
     return json(res, 502, { error: error?.message || 'Google Drive link validation failed.' });
   }
 }

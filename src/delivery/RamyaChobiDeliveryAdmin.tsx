@@ -49,6 +49,15 @@ import PortfolioManager from '../components/PortfolioManager';
 
 const ADMIN_TOKEN_KEY = 'ramya_booking_admin_token_v1';
 
+function isGoogleDriveFolderLink(value: string) {
+  try {
+    const url = new URL(value.trim());
+    return url.protocol === 'https:' && url.hostname === 'drive.google.com' && /\/folders\/[A-Za-z0-9_-]+/i.test(url.pathname);
+  } catch {
+    return false;
+  }
+}
+
 function money(value: number | string | null | undefined) {
   return new Intl.NumberFormat('en-BD', {
     style: 'currency',
@@ -799,9 +808,9 @@ export default function RamyaChobiDeliveryAdmin() {
                       <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-stone-600">{(filesByPortal[portal.id] || []).length} file(s)</span>
                     </div>
                     <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-[1.6fr_120px_1fr_1fr_90px_auto]">
-                      <input value={fileDrafts[portal.id]?.url || ''} onChange={(e) => updateFileDraft(portal.id, { url: e.target.value })} placeholder="Private Google Drive file or folder link" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm" />
+                      <input value={fileDrafts[portal.id]?.url || ''} onChange={(e) => { const url = e.target.value; updateFileDraft(portal.id, { url, ...(isGoogleDriveFolderLink(url) ? { type: 'FOLDER' as const } : {}) }); }} placeholder="Private Google Drive photo, video, or folder link" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm" />
                       <select value={fileDrafts[portal.id]?.type || 'PHOTO'} onChange={(e) => updateFileDraft(portal.id, { type: e.target.value as 'PHOTO' | 'VIDEO' | 'FOLDER' })} className="rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm">
-                        <option value="PHOTO">Photo</option><option value="VIDEO">Video</option><option value="FOLDER">Folder</option>
+                        <option value="PHOTO">Photo</option><option value="VIDEO">Video</option><option value="FOLDER">Google Drive Folder</option>
                       </select>
                       <input value={fileDrafts[portal.id]?.fileName || ''} onChange={(e) => updateFileDraft(portal.id, { fileName: e.target.value })} placeholder="File name (optional)" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm" />
                       <input value={fileDrafts[portal.id]?.title || ''} onChange={(e) => updateFileDraft(portal.id, { title: e.target.value })} placeholder="Display title (optional)" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm" />
