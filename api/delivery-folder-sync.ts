@@ -97,6 +97,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const adminToken = String(body.adminToken || '').trim();
     const portalId = String(body.portalId || '').trim();
     const folderUrl = String(body.folderUrl || '').trim();
+    const pageToken = String(body.pageToken || '').trim();
 
     if (!adminToken || !portalId || !folderUrl) return json(res, 400, { error: 'Admin token, portal ID and folder link are required.' });
     if (!/^[0-9a-f-]{36}$/i.test(portalId)) return json(res, 400, { error: 'Invalid delivery portal.' });
@@ -112,27 +113,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const accessToken = await driveAccessToken();
-    const fields = 'id,name,mimeType,size,fileExtension,modifiedTime,thumbnailLink,parents';
-    const metadataUrl = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(folderId)}?fields=${encodeURIComponent('id,name,mimeType,trashed')}&supportsAllDrives=true`;
-    const folderMetadata = await driveJson(metadataUrl, accessToken);
+    const folderUrlApi = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(folderId)}?fields=${encodeURIComponent('id,name,mimeType,trashed')}&supportsAllDrives=true`;
+    const folderMetadata = await driveJson(folderUrlApi, accessToken);
     if (folderMetadata.mimeType !== 'application/vnd.google-apps.folder') {
       return json(res, 400, { error: 'The supplied Drive link points to a file, not a folder.' });
     }
     if (folderMetadata.trashed) return json(res, 400, { error: 'This Google Drive folder is in the trash.' });
 
     const query = encodeURIComponent(`'${folderId}' in parents and trashed = false`);
-    const files: any[] = [];
-    let pageToken = '';
-    do {
-      const next = pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : '';
-      const url = `https://www.googleapis.com/drive/v3/files?q=${query}&fields=${encodeURIComponent(`nextPageToken,files(${fields})`)}&pageSize=1000&supportsAllDrives=true&includeItemsFromAllDrives=true${next}`;
-      const page = await driveJson(url, accessToken);
-      files.push(...(Array.isArray(page.files) ? page.files : []));
-      pageToken = page.nextPageToken || '';
-    } while (pageToken);
-
-    const supported = files
-      .map((file, sourceIndex) => ({ file, sourceIndex, type: classifyFile(file) }))
+    const fields = 'id,name,mimeType,size,fileExtension,modifiedTime,thumbnailLink,parents';
+    const next = pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : '';
+    const listUrl = `https://www.googleapis.com/drive/v3/files?q=${query}&fields=${encodeURIComponent(`nextPageToken,files(${fields})`)}&pageSize=100&supportsAllDrives=true&includeItemsFromAllDrives=true${next}`;
+    const page = await driveJson(listUrl, accessToken);
+    const files: any[] = Array.isArray(page.files) ? page.files : [];
+    const supported = files.map((file, sourceIndex) => ({ file, sourceIndex, type: classifyFile(file) }))
       .filter((item): item is { file: any; sourceIndex: number; type: 'PHOTO' | 'VIDEO' } => Boolean(item.type));
 
     let imported = 0;
@@ -158,6 +152,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       folderName: String(folderMetadata.name || ''),
       imported,
       skipped: files.length - supported.length,
+      nextPageToken: page.nextPageToken || null,
     });
   } catch (error: any) {
     const requestId = String(req.headers?.['x-vercel-id'] || '').slice(0, 100);

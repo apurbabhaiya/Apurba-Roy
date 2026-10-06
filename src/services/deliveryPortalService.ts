@@ -313,14 +313,31 @@ export async function deleteDeliveryFile(input: { token: string; fileId: string 
 
 
 export async function syncDeliveryFolder(input: { adminToken: string; portalId: string; folderUrl: string }) {
-  const response = await fetch('/api/delivery-folder-sync', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(input),
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data?.error || 'Folder import failed.');
-  return data as { success: boolean; imported: number };
+  let pageToken = '';
+  let imported = 0;
+  let skipped = 0;
+  let folderName = '';
+
+  for (let page = 0; page < 1000; page += 1) {
+    const response = await fetch('/api/delivery-folder-sync', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ...input, pageToken: pageToken || null }),
+    });
+    const rawResponse = await response.text();
+    let data: any = {};
+    try { data = rawResponse ? JSON.parse(rawResponse) : {}; }
+    catch { data = { error: rawResponse.slice(0, 400) }; }
+    if (!response.ok) throw new Error(data?.error || `Folder import failed (HTTP ${response.status}).`);
+
+    imported += Number(data.imported || 0);
+    skipped += Number(data.skipped || 0);
+    folderName ||= String(data.folderName || '');
+    pageToken = String(data.nextPageToken || '');
+    if (!pageToken) return { success: true, imported, skipped, folderName };
+  }
+
+  throw new Error('Folder contains too many pages to import safely. Split the folder into smaller folders and retry.');
 }
 
 
