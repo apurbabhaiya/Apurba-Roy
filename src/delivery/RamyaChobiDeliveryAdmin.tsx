@@ -194,6 +194,14 @@ export default function RamyaChobiDeliveryAdmin() {
     }
   }, []);
 
+  useEffect(() => {
+    if (!token) return;
+    const timer = window.setInterval(() => {
+      if (!document.hidden) void load(token);
+    }, 30000);
+    return () => window.clearInterval(timer);
+  }, [token]);
+
   const portals = dashboard?.portals || [];
   const submissions = dashboard?.submissions || [];
   const bookings = dashboard?.bookings || [];
