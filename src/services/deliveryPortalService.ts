@@ -48,6 +48,8 @@ export type DeliveryPortalData = {
   storage_retention_until?: string | null;
   access_fee_per_day: number | string;
   bkash_number?: string | null;
+  nagad_number?: string | null;
+  dbbl_number?: string | null;
   hero_image_url?: string | null;
   preview_items?: DeliveryPreviewItem[];
   delivery_files?: DeliveryFinalFile[];
@@ -103,6 +105,8 @@ export type DeliveryPaymentSubmission = {
   id: string;
   portal_id: string;
   payment_type: 'PACKAGE' | 'ACCESS';
+  payment_method: 'BKASH' | 'NAGAD' | 'DBBL';
+  proof_storage_path?: string | null;
   payer_phone: string;
   transaction_id: string;
   amount: number | string;
@@ -163,26 +167,34 @@ export type DeliveryAdminDashboard = {
 export async function getDeliveryPortal(token: string): Promise<DeliveryPortalData | null> {
   const { data, error } = await db.rpc('get_delivery_portal_by_token', { p_token: token });
   if (error) throw error;
-  return (data || null) as DeliveryPortalData | null;
+  if (!data) return null;
+  const { data: methods, error: methodsError } = await db.rpc('get_delivery_payment_methods', { p_token: token });
+  if (methodsError) throw methodsError;
+  return { ...data, ...(methods || {}) } as DeliveryPortalData;
 }
 
 export async function submitDeliveryPayment(input: {
   token: string;
   paymentType: 'PACKAGE' | 'ACCESS';
+  paymentMethod: 'BKASH' | 'NAGAD' | 'DBBL';
   payerPhone: string;
   transactionId: string;
   amount: number;
   selectedDays?: number | null;
+  screenshot: File;
 }) {
-  const { data, error } = await db.rpc('submit_delivery_payment', {
-    p_token: input.token,
-    p_payment_type: input.paymentType,
-    p_payer_phone: input.payerPhone,
-    p_transaction_id: input.transactionId,
-    p_amount: input.amount,
-    p_selected_days: input.selectedDays ?? null,
-  });
+  const form = new FormData();
+  form.append('token', input.token);
+  form.append('payment_type', input.paymentType);
+  form.append('payment_method', input.paymentMethod);
+  form.append('payer_phone', input.payerPhone);
+  form.append('transaction_id', input.transactionId);
+  form.append('amount', String(input.amount));
+  form.append('selected_days', input.selectedDays == null ? '' : String(input.selectedDays));
+  form.append('screenshot', input.screenshot);
+  const { data, error } = await supabase.functions.invoke('delivery-payment-submit', { body: form });
   if (error) throw error;
+  if (data?.error) throw new Error(data.error);
   return data;
 }
 
@@ -262,6 +274,50 @@ export async function updateDeliverySettings(input: {
   });
   if (error) throw error;
   return data;
+}
+
+export async function updateDeliveryPaymentMethods(input: {
+  token: string;
+  portalId: string;
+  bkashNumber: string;
+  nagadNumber: string;
+  dbblNumber: string;
+}) {
+  const { data, error } = await db.rpc('delivery_admin_update_payment_methods', {
+    p_token: input.token,
+    p_portal_id: input.portalId,
+    p_bkash_number: input.bkashNumber,
+    p_nagad_number: input.nagadNumber,
+    p_dbbl_number: input.dbblNumber,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function setDeliveryAdvancePaid(input: { token: string; portalId: string; advancePaid: number }) {
+  const { data, error } = await db.rpc('delivery_admin_set_advance_paid', {
+    p_token: input.token,
+    p_portal_id: input.portalId,
+    p_advance_paid: input.advancePaid,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function listDeliveryPaymentSubmissions(token: string): Promise<DeliveryPaymentSubmission[]> {
+  const { data, error } = await db.rpc('delivery_admin_list_payment_submissions', { p_token: token });
+  if (error) throw error;
+  return (data || []) as DeliveryPaymentSubmission[];
+}
+
+export async function getDeliveryPaymentProofUrl(token: string, submissionId: string): Promise<string> {
+  const { data, error } = await supabase.functions.invoke('delivery-payment-proof', {
+    body: { submissionId },
+    headers: { 'x-admin-token': token },
+  });
+  if (error) throw error;
+  if (data?.error || !data?.url) throw new Error(data?.error || 'Could not open payment screenshot.');
+  return String(data.url);
 }
 
 
