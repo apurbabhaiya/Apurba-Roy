@@ -85,6 +85,8 @@ export default function RamyaChobiDelivery({ token }: { token: string }) {
   const [submitting, setSubmitting] = useState(false);
   const [payerPhone, setPayerPhone] = useState('');
   const [transactionId, setTransactionId] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'BKASH' | 'NAGAD' | 'DBBL'>('BKASH');
+  const [paymentScreenshot, setPaymentScreenshot] = useState<File | null>(null);
   const [selectedDays, setSelectedDays] = useState(1);
   const [amount, setAmount] = useState('');
   const [openFaq, setOpenFaq] = useState<number | null>(0);
@@ -131,6 +133,12 @@ export default function RamyaChobiDelivery({ token }: { token: string }) {
   const lateFeeBalance = Number(data?.late_fee_balance || 0);
   const totalPayable = Number(data?.total_payable || remainingDue + lateFeeBalance);
   const isAccessPayment = isLocked && isFullyPaid && lateFeeBalance > 0 && !isUnavailable;
+  const paymentOptions = [
+    { id: 'BKASH' as const, label: 'bKash', account: data?.bkash_number || '01776044951', mark: 'b', color: 'bg-[#e2136e]' },
+    { id: 'NAGAD' as const, label: 'Nagad', account: data?.nagad_number || '', mark: 'N', color: 'bg-[#f58220]' },
+    { id: 'DBBL' as const, label: 'Dutch-Bangla Bank', account: data?.dbbl_number || '', mark: 'DB', color: 'bg-[#006a4e]' },
+  ].filter((option) => Boolean(option.account));
+  const selectedPaymentOption = paymentOptions.find((option) => option.id === paymentMethod) || paymentOptions[0];
 
   useEffect(() => {
     if (!data) return;
@@ -152,8 +160,8 @@ export default function RamyaChobiDelivery({ token }: { token: string }) {
 
   async function submitPayment(e: React.FormEvent) {
     e.preventDefault();
-    if (!data || !payerPhone.trim() || !transactionId.trim() || !amount) {
-      setPaymentMessage('Please complete mobile number, transaction ID and amount.');
+    if (!data || !payerPhone.trim() || !transactionId.trim() || !amount || !paymentScreenshot) {
+      setPaymentMessage('Complete the payer number, transaction ID, amount, and upload your payment screenshot.');
       return;
     }
 
@@ -163,6 +171,8 @@ export default function RamyaChobiDelivery({ token }: { token: string }) {
       await submitDeliveryPayment({
         token,
         paymentType: isAccessPayment ? 'ACCESS' : 'PACKAGE',
+        paymentMethod,
+        screenshot: paymentScreenshot,
         payerPhone: payerPhone.trim(),
         transactionId: transactionId.trim(),
         amount: Number(amount),
@@ -170,6 +180,7 @@ export default function RamyaChobiDelivery({ token }: { token: string }) {
       });
       setPaymentMessage('Payment submitted successfully. RamyaChobi will verify it before access changes.');
       setTransactionId('');
+      setPaymentScreenshot(null);
       await load();
     } catch (error: any) {
       setPaymentMessage(error?.message || 'Payment submission failed.');
@@ -486,27 +497,34 @@ export default function RamyaChobiDelivery({ token }: { token: string }) {
 
         {!isUnavailable && (!isFullyPaid || isLocked) && (
           <section id="payment" className="grid gap-6 lg:grid-cols-[.85fr_1.15fr]">
-            <div className="rounded-3xl bg-[#c9002b] p-6 text-white sm:p-8">
-              <WalletCards className="h-9 w-9" />
+            <div className="rounded-3xl bg-stone-950 p-6 text-white sm:p-8">
+              <WalletCards className="h-9 w-9 text-amber-300" />
               <h2 className="mt-4 text-2xl font-semibold">{isAccessPayment ? 'Restore Gallery Access' : 'Complete Your Payment'}</h2>
-              <p className="mt-2 text-white/75">
-                Send Money to bKash, then submit the payer mobile number and transaction ID for verification.
-              </p>
-              <div className="mt-6 rounded-2xl bg-white/10 p-4">
-                <div className="text-xs uppercase tracking-[0.18em] text-white/60">bKash Send Money</div>
-                <div className="mt-2 flex items-center justify-between gap-4">
-                  <div className="text-2xl font-semibold">{data.bkash_number || '01776044951'}</div>
-                  <button
-                    type="button"
-                    onClick={() => navigator.clipboard?.writeText(data.bkash_number || '')}
-                    className="rounded-xl bg-white px-3 py-2 text-sm font-semibold text-[#c9002b]"
-                  >
-                    <Copy className="mr-1 inline h-4 w-4" /> Copy
+              <p className="mt-2 text-white/75">Choose a payment channel, copy the number, then Send Money or transfer the amount shown.</p>
+              <div className="mt-5 grid gap-2">
+                {paymentOptions.map((option) => (
+                  <button key={option.id} type="button" onClick={() => setPaymentMethod(option.id)}
+                    className={`flex items-center gap-3 rounded-2xl border p-3 text-left transition ${paymentMethod === option.id ? 'border-amber-300 bg-white/10' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}>
+                    <span className={`flex h-9 w-9 items-center justify-center rounded-xl text-sm font-black text-white ${option.color}`}>{option.mark}</span>
+                    <span className="font-semibold">{option.label}</span>
+                    {paymentMethod === option.id && <CheckCircle2 className="ml-auto h-5 w-5 text-amber-300" />}
                   </button>
-                </div>
+                ))}
               </div>
+              {selectedPaymentOption && (
+                <div className="mt-4 rounded-2xl bg-white/10 p-4">
+                  <div className="text-xs uppercase tracking-[0.18em] text-white/60">{selectedPaymentOption.label} payment account</div>
+                  <div className="mt-2 flex items-center justify-between gap-4">
+                    <div className="break-all text-xl font-semibold">{selectedPaymentOption.account}</div>
+                    <button type="button" onClick={() => navigator.clipboard?.writeText(selectedPaymentOption.account)}
+                      className="shrink-0 rounded-xl bg-white px-3 py-2 text-sm font-semibold text-stone-950">
+                      <Copy className="mr-1 inline h-4 w-4" /> Copy
+                    </button>
+                  </div>
+                </div>
+              )}
               <div className="mt-5 text-sm leading-6 text-white/70">
-                Submission does not unlock access automatically. RamyaChobi verifies each transaction first.
+                After sending the exact amount, upload the transaction screenshot. Your downloads unlock after the payment is verified.
               </div>
             </div>
 
@@ -529,8 +547,19 @@ export default function RamyaChobiDelivery({ token }: { token: string }) {
                   </label>
                 )}
                 <label className="block">
-                  <span className="mb-1.5 block text-sm font-semibold">Paid Amount</span>
-                  <input value={amount} onChange={(e) => setAmount(e.target.value)} readOnly={isAccessPayment} type="number" min="1" className="w-full rounded-xl border border-stone-300 px-3.5 py-3 outline-none focus:border-stone-950 read-only:bg-stone-50" />
+                  <span className="mb-1.5 block text-sm font-semibold">Paid Amount (BDT)</span>
+                  <input value={amount} onChange={(e) => setAmount(e.target.value)} readOnly={isAccessPayment} type="number" min="1" max={isAccessPayment ? undefined : remainingDue} className="w-full rounded-xl border border-stone-300 px-3.5 py-3 outline-none focus:border-stone-950 read-only:bg-stone-50" />
+                  {!isAccessPayment && <span className="mt-1 block text-xs text-stone-500">Package balance: {money(remainingDue)}</span>}
+                </label>
+                <label className="block sm:col-span-2">
+                  <span className="mb-1.5 block text-sm font-semibold">Payment Screenshot</span>
+                  <input type="file" accept="image/jpeg,image/png,image/webp" required
+                    onChange={(e) => setPaymentScreenshot(e.target.files?.[0] || null)}
+                    className="w-full rounded-xl border border-dashed border-stone-300 bg-stone-50 px-3.5 py-3 text-sm" />
+                  <span className="mt-1 block text-xs text-stone-500">
+                    JPEG, PNG or WebP · up to 5 MB. The screenshot is stored privately for admin review.
+                  </span>
+                  {paymentScreenshot && <span className="mt-1 block text-xs font-semibold text-emerald-700">{paymentScreenshot.name}</span>}
                 </label>
               </div>
 
