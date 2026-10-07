@@ -15,7 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import { DrivePhoto } from '../types';
-import DriveFolderPickerModal, { DriveFolderSelectionResult } from './DriveFolderPickerModal';
+import { DriveFolderPickerModal, DriveFolderSelectionResult } from './DriveFolderPickerModal';
 import { getGoogleDriveAccessToken } from '../services/supabaseAuth';
 import { downloadDriveFileBlob } from '../services/drive';
 import {
