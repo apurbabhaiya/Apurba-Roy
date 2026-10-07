@@ -212,9 +212,10 @@ export async function deliveryAdminLogout(token: string) {
 export async function getDeliveryAdminDashboard(token: string): Promise<DeliveryAdminDashboard> {
   const { data, error } = await db.rpc('delivery_admin_dashboard', { p_token: token });
   if (error) throw error;
+  const submissions = await listDeliveryPaymentSubmissions(token);
   return {
     portals: data?.portals || [],
-    submissions: data?.submissions || [],
+    submissions: submissions || [],
     bookings: data?.bookings || [],
     audit_logs: data?.audit_logs || [],
     payment_ledger: data?.payment_ledger || {},
