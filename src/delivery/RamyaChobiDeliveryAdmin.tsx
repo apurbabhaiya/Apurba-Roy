@@ -46,6 +46,8 @@ import {
   DeliveryPaymentLedger,
 } from '../services/deliveryPortalService';
 import PortfolioManager from '../components/PortfolioManager';
+import { DriveFolderPickerModal } from '../components/DriveFolderPickerModal';
+import { getGoogleDriveAccessToken, googleSupabaseSignIn } from '../services/supabaseAuth';
 
 const ADMIN_TOKEN_KEY = 'ramya_booking_admin_token_v1';
 
@@ -132,6 +134,8 @@ export default function RamyaChobiDeliveryAdmin() {
   const [fileDrafts, setFileDrafts] = useState<Record<string, { url: string; fileName: string; title: string; type: 'PHOTO' | 'VIDEO' | 'FOLDER'; sortOrder: string }>>({});
   const [fileMetaByPortal, setFileMetaByPortal] = useState<Record<string, { name?: string; mimeType?: string; size?: string | null }>>({});
   const [fileErrorByPortal, setFileErrorByPortal] = useState<Record<string, string>>({});
+  const [drivePickerToken, setDrivePickerToken] = useState<string | null>(null);
+  const [drivePickerPortalId, setDrivePickerPortalId] = useState('');
   const [ledgerByPortal, setLedgerByPortal] = useState<Record<string, DeliveryPaymentLedger[]>>({});
   const [portalSearch, setPortalSearch] = useState('');
   const [selectedPortalId, setSelectedPortalId] = useState('');
@@ -461,6 +465,21 @@ export default function RamyaChobiDeliveryAdmin() {
     navigator.clipboard?.writeText(link);
     setNotice('Private client link copied.');
   }
+  async function openDeliveryDrivePicker(portalId: string) {
+    const accessToken = getGoogleDriveAccessToken();
+    if (!accessToken) {
+      setNotice('Google Drive is not connected. Connect your Google account, then click Browse Drive again.');
+      try {
+        await googleSupabaseSignIn();
+      } catch (error: any) {
+        setNotice(error?.message || 'Could not connect Google Drive.');
+      }
+      return;
+    }
+    setDrivePickerToken(accessToken);
+    setDrivePickerPortalId(portalId);
+  }
+
   function updateFileDraft(portalId: string, patch: Partial<{ url: string; fileName: string; title: string; type: 'PHOTO' | 'VIDEO' | 'FOLDER'; sortOrder: string }>) {
     setFileDrafts((current) => ({
       ...current,
@@ -468,9 +487,10 @@ export default function RamyaChobiDeliveryAdmin() {
     }));
   }
 
-  async function addFinalDeliveryFile(portalId: string) {
-    const draft = fileDrafts[portalId] || { url: '', fileName: '', title: '', type: 'PHOTO' as const, sortOrder: '' };
-    if (!draft.url.trim()) { setNotice('Paste a Google Drive file or folder link first.'); return; }
+  async function addFinalDeliveryFile(portalId: string, pickedFolder?: { url: string; name: string }) {
+    const currentDraft = fileDrafts[portalId] || { url: '', fileName: '', title: '', type: 'PHOTO' as const, sortOrder: '' };
+    const draft = pickedFolder ? { ...currentDraft, url: pickedFolder.url, title: pickedFolder.name, type: 'FOLDER' as const } : currentDraft;
+    if (!draft.url.trim()) { setNotice('Paste a Google Drive link or choose a folder with Browse Drive.'); return; }
     setLoading(true); setNotice('Validating private Google Drive link...');
     setFileErrorByPortal((current) => ({ ...current, [portalId]: '' }));
     try {
@@ -803,12 +823,13 @@ export default function RamyaChobiDeliveryAdmin() {
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
                         <h3 className="font-semibold">Final Delivery Files</h3>
-                        <p className="mt-1 text-xs text-stone-600">Paste private Google Drive photo, video or folder links. Raw links stay hidden until full payment and Drive Link Access is ON.</p>
+                        <p className="mt-1 text-xs text-stone-600">Browse your Google Drive or paste a private photo, video, or folder link. Customer access still follows payment and Drive Link Access settings.</p>
                       </div>
                       <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-stone-600">{(filesByPortal[portal.id] || []).length} file(s)</span>
                     </div>
-                    <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-[1.6fr_120px_1fr_1fr_90px_auto]">
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.6fr)_auto_120px_minmax(0,1fr)_minmax(0,1fr)_90px_auto]">
                       <input value={fileDrafts[portal.id]?.url || ''} onChange={(e) => { const url = e.target.value; updateFileDraft(portal.id, { url, ...(isGoogleDriveFolderLink(url) ? { type: 'FOLDER' as const } : {}) }); }} placeholder="Private Google Drive photo, video, or folder link" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm" />
+                      <button type="button" onClick={() => void openDeliveryDrivePicker(portal.id)} disabled={loading} className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-300 bg-white px-3 py-2.5 text-sm font-bold text-amber-900 disabled:opacity-50"><Link2 className="h-4 w-4" /> Browse Drive</button>
                       <select value={fileDrafts[portal.id]?.type || 'PHOTO'} onChange={(e) => updateFileDraft(portal.id, { type: e.target.value as 'PHOTO' | 'VIDEO' | 'FOLDER' })} className="rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm">
                         <option value="PHOTO">Photo</option><option value="VIDEO">Video</option><option value="FOLDER">Google Drive Folder</option>
                       </select>
@@ -962,6 +983,25 @@ export default function RamyaChobiDeliveryAdmin() {
           </div>
         </section>
       </div>
+      {drivePickerPortalId && drivePickerToken && (
+        <DriveFolderPickerModal
+          accessToken={drivePickerToken}
+          isOpen={Boolean(drivePickerPortalId)}
+          onClose={() => {
+            setDrivePickerPortalId('');
+            setDrivePickerToken(null);
+          }}
+          onSelectFolder={(result) => {
+            const portalId = drivePickerPortalId;
+            const folderUrl = `https://drive.google.com/drive/folders/${result.folder.id}`;
+            setDrivePickerPortalId('');
+            setDrivePickerToken(null);
+            void addFinalDeliveryFile(portalId, { url: folderUrl, name: result.folder.name });
+          }}
+          modalTitle="Select Google Drive Folder for Final Delivery"
+          confirmButtonLabel="Import Photos and Videos"
+        />
+      )}
     </main>
   );
 }
