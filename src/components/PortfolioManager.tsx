@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   CheckCircle2,
   Edit3,
+  FolderOpen,
   Eye,
   EyeOff,
   ImagePlus,
@@ -13,6 +14,10 @@ import {
   Upload,
   X,
 } from 'lucide-react';
+import { DrivePhoto } from '../types';
+import DriveFolderPickerModal, { DriveFolderSelectionResult } from './DriveFolderPickerModal';
+import { getGoogleDriveAccessToken } from '../services/supabaseAuth';
+import { downloadDriveFileBlob } from '../services/drive';
 import {
   PortfolioPost,
   portfolioAdminRequest,
@@ -53,6 +58,10 @@ export default function PortfolioManager({ adminToken }: { adminToken: string })
   const [posts, setPosts] = useState<PortfolioPost[]>([]);
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [selectedDrivePhotos, setSelectedDrivePhotos] = useState<DrivePhoto[]>([]);
+  const [driveAccessToken, setDriveAccessToken] = useState('');
+  const [drivePickerOpen, setDrivePickerOpen] = useState(false);
+  const [drivePickerTargetPostId, setDrivePickerTargetPostId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [editorOpen, setEditorOpen] = useState(false);
@@ -80,6 +89,7 @@ export default function PortfolioManager({ adminToken }: { adminToken: string })
   function newPost() {
     setDraft(emptyDraft);
     setSelectedFiles([]);
+    setSelectedDrivePhotos([]);
     setEditorOpen(true);
     setMessage('');
   }
@@ -94,6 +104,7 @@ export default function PortfolioManager({ adminToken }: { adminToken: string })
       is_published: Boolean(post.is_published),
     });
     setSelectedFiles([]);
+    setSelectedDrivePhotos([]);
     setEditorOpen(true);
     setMessage('');
   }
@@ -121,6 +132,8 @@ export default function PortfolioManager({ adminToken }: { adminToken: string })
       const postId = draft.id || result.post?.id;
 
       if (!postId) throw new Error('Portfolio post could not be saved.');
+      // Keep the created ID in the editor so a failed media transfer can be retried safely.
+      setDraft((current) => ({ ...current, id: postId }));
 
       if (selectedFiles.length > 0) {
         await uploadPortfolioImages({
@@ -130,11 +143,15 @@ export default function PortfolioManager({ adminToken }: { adminToken: string })
           makeCover: true,
         });
       }
+      if (selectedDrivePhotos.length > 0 && driveAccessToken) {
+        await importDrivePhotos(selectedDrivePhotos, driveAccessToken, postId, true);
+      }
 
       setMessage(draft.id ? 'Portfolio post updated.' : 'Portfolio post created.');
       setEditorOpen(false);
       setDraft(emptyDraft);
       setSelectedFiles([]);
+      setSelectedDrivePhotos([]);
       await load();
     } catch (error: any) {
       setMessage(error?.message || 'Could not save portfolio post.');
@@ -210,6 +227,74 @@ export default function PortfolioManager({ adminToken }: { adminToken: string })
       setMessage(error?.message || 'Could not delete photo.');
     } finally {
       setLoading(false);
+    }
+  }
+
+  function openDrivePicker(postId: string | null = null) {
+    const token = getGoogleDriveAccessToken();
+    if (!token) {
+      setMessage('Google Drive is not connected. Reconnect Google Drive in the admin panel, then try again.');
+      return;
+    }
+    setDriveAccessToken(token);
+    setDrivePickerTargetPostId(postId);
+    setDrivePickerOpen(true);
+    setMessage('');
+  }
+
+  async function importDrivePhotos(photos: DrivePhoto[], token: string, postId: string, makeCover: boolean) {
+    const supported = photos.filter((photo) =>
+      ['image/jpeg', 'image/png', 'image/webp', 'image/avif'].includes(photo.mimeType)
+    );
+    if (!supported.length) {
+      setMessage('No supported photos were found in that Drive folder.');
+      return;
+    }
+
+    setLoading(true);
+    setMessage(`Importing 0 of ${supported.length} Drive photos…`);
+    try {
+      let uploadedCount = 0;
+      for (let start = 0; start < supported.length; start += 10) {
+        const batchPhotos = supported.slice(start, start + 10);
+        const files: File[] = [];
+        for (const photo of batchPhotos) {
+          if (photo.size && Number(photo.size) > 15 * 1024 * 1024) {
+            throw new Error(`${photo.name} is larger than 15 MB.`);
+          }
+          const blob = await downloadDriveFileBlob(token, photo.id);
+          if (blob.size > 15 * 1024 * 1024) {
+            throw new Error(`${photo.name} is larger than 15 MB.`);
+          }
+          files.push(new File([blob], photo.name, { type: photo.mimeType }));
+        }
+        await uploadPortfolioImages({
+          adminToken,
+          postId,
+          files,
+          makeCover: makeCover && uploadedCount === 0,
+        });
+        uploadedCount += files.length;
+        setMessage(`Imported ${uploadedCount} of ${supported.length} Drive photos…`);
+      }
+      setMessage(`${uploadedCount} Drive photo(s) imported.`);
+      await load();
+    } catch (error: any) {
+      setMessage(error?.message || 'Could not import photos from Google Drive.');
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleDriveFolderSelection(selection: DriveFolderSelectionResult) {
+    setDrivePickerOpen(false);
+    if (drivePickerTargetPostId) {
+      void importDrivePhotos(selection.previewPhotos, driveAccessToken, drivePickerTargetPostId, false)
+        .catch(() => undefined);
+    } else {
+      setSelectedDrivePhotos(selection.previewPhotos);
+      setMessage(`${selection.previewPhotos.length} Drive photo(s) selected. They will be copied when you save the post.`);
     }
   }
 
@@ -323,17 +408,34 @@ export default function PortfolioManager({ adminToken }: { adminToken: string })
               />
             </label>
 
-            <label className="block lg:col-span-2">
-              <span className="mb-1.5 block text-sm font-semibold">Upload Photos</span>
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp,image/avif"
-                multiple
-                onChange={(e) => setSelectedFiles(Array.from(e.target.files || []))}
-                className="w-full rounded-xl border border-dashed border-stone-300 bg-white px-3.5 py-4 text-sm"
-              />
-              <span className="mt-1 block text-xs text-stone-500">Up to 20 images at once, maximum 15 MB per image.</span>
-            </label>
+            <div className="lg:col-span-2">
+              <span className="mb-1.5 block text-sm font-semibold">Add Portfolio Photos</span>
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-stone-300 bg-white px-4 py-3 text-sm font-bold">
+                  <Upload className="h-4 w-4" /> Choose from device
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/avif"
+                    multiple
+                    onChange={(e) => setSelectedFiles(Array.from(e.target.files || []))}
+                    className="hidden"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={() => openDrivePicker()}
+                  className="inline-flex items-center gap-2 rounded-xl bg-stone-950 px-4 py-3 text-sm font-bold text-white"
+                >
+                  <FolderOpen className="h-4 w-4" /> Browse / Paste Drive link
+                </button>
+                <span className="text-xs text-stone-500">
+                  {selectedFiles.length} device photo(s) · {selectedDrivePhotos.length} Drive photo(s) selected
+                </span>
+              </div>
+              <p className="mt-2 text-xs text-stone-500">
+                Drive photos are copied into public portfolio storage when saved. Supported: JPEG, PNG, WebP and AVIF, up to 15 MB each.
+              </p>
+            </div>
           </div>
 
           <div className="mt-4 flex flex-wrap gap-5">
@@ -418,19 +520,24 @@ export default function PortfolioManager({ adminToken }: { adminToken: string })
 
             <div className="mt-4 flex items-center justify-between gap-3">
               <div className="text-sm font-semibold">Photos</div>
-              <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-stone-950 px-3 py-2 text-xs font-bold text-white">
-                <Upload className="h-4 w-4" /> Add Photos
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp,image/avif"
-                  multiple
-                  className="hidden"
-                  onChange={(e) => {
-                    void addImages(post.id, e.target.files);
-                    e.currentTarget.value = '';
-                  }}
-                />
-              </label>
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => openDrivePicker(post.id)} className="inline-flex items-center gap-2 rounded-xl border border-stone-300 px-3 py-2 text-xs font-bold">
+                  <FolderOpen className="h-4 w-4" /> Browse / Paste Drive link
+                </button>
+                <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-stone-950 px-3 py-2 text-xs font-bold text-white">
+                  <Upload className="h-4 w-4" /> Add Photos
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/avif"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => {
+                      void addImages(post.id, e.target.files);
+                      e.currentTarget.value = '';
+                    }}
+                  />
+                </label>
+              </div>
             </div>
 
             {(post.portfolio_media || []).length > 0 && (
@@ -456,6 +563,14 @@ export default function PortfolioManager({ adminToken }: { adminToken: string })
           </article>
         ))}
       </div>
+      <DriveFolderPickerModal
+        accessToken={driveAccessToken}
+        isOpen={drivePickerOpen}
+        onClose={() => setDrivePickerOpen(false)}
+        onSelectFolder={handleDriveFolderSelection}
+        modalTitle="Add Photos from Google Drive"
+        confirmButtonLabel="Use These Photos"
+      />
     </section>
   );
 }
