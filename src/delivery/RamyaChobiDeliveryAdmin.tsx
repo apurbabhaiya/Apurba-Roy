@@ -30,6 +30,9 @@ import {
   getDeliveryAdminDashboard,
   reviewDeliveryPayment,
   updateDeliverySettings,
+  updateDeliveryPaymentMethods,
+  setDeliveryAdvancePaid,
+  getDeliveryPaymentProofUrl,
   DeliveryAdminFile,
   listDeliveryFiles,
   upsertDeliveryFile,
@@ -129,7 +132,11 @@ export default function RamyaChobiDeliveryAdmin() {
   const [newRetention, setNewRetention] = useState('');
   const [editingPortal, setEditingPortal] = useState<DeliveryAdminPortal | null>(null);
   const [settingsBkash, setSettingsBkash] = useState('');
+  const [settingsNagad, setSettingsNagad] = useState('');
+  const [settingsDbbl, setSettingsDbbl] = useState('');
   const [settingsRetention, setSettingsRetention] = useState('');
+  const [paymentProofUrl, setPaymentProofUrl] = useState('');
+  const [proofLoadingId, setProofLoadingId] = useState('');
   const [filesByPortal, setFilesByPortal] = useState<Record<string, DeliveryAdminFile[]>>({});
   const [fileDrafts, setFileDrafts] = useState<Record<string, { url: string; fileName: string; title: string; type: 'PHOTO' | 'VIDEO' | 'FOLDER'; sortOrder: string }>>({});
   const [fileMetaByPortal, setFileMetaByPortal] = useState<Record<string, { name?: string; mimeType?: string; size?: string | null }>>({});
@@ -217,6 +224,7 @@ export default function RamyaChobiDeliveryAdmin() {
       whatsappNumber: portal.whatsapp_number || portal.client_phone || '',
       eventName: portal.event_name || '',
       packagePrice: String(portal.package_price || ''),
+      advancePaid: String(portal.advance_paid || 0),
       finalDeliveryAt: toDateTimeLocal(portal.final_delivery_at),
       accessExpiryAt: toDateTimeLocal(portal.free_access_expires_at || portal.access_expires_at),
       freeAccessDays: String(portal.free_access_days ?? 30),
@@ -261,6 +269,11 @@ export default function RamyaChobiDeliveryAdmin() {
         clientMessage: portalEdit.clientMessage || null,
         clientNote: portalEdit.clientNote || null,
         internalAdminNote: portalEdit.internalAdminNote || null,
+      });
+      await setDeliveryAdvancePaid({
+        token,
+        portalId: selectedPortalId,
+        advancePaid: Number(portalEdit.advancePaid || 0),
       });
       await setDeliveryPermissions({
         token,
@@ -385,6 +398,19 @@ export default function RamyaChobiDeliveryAdmin() {
     }
   }
 
+  async function viewPaymentProof(submissionId: string) {
+    setProofLoadingId(submissionId);
+    setNotice('');
+    try {
+      const url = await getDeliveryPaymentProofUrl(token, submissionId);
+      setPaymentProofUrl(url);
+    } catch (error: any) {
+      setNotice(error?.message || 'Could not open payment screenshot.');
+    } finally {
+      setProofLoadingId('');
+    }
+  }
+
   async function review(submissionId: string, decision: 'VERIFY' | 'REJECT') {
     setLoading(true);
     setNotice('');
@@ -416,6 +442,8 @@ export default function RamyaChobiDeliveryAdmin() {
   function startEdit(portal: DeliveryAdminPortal) {
     setEditingPortal(portal);
     setSettingsBkash(portal.bkash_number || '01776044951');
+    setSettingsNagad(portal.nagad_number || '');
+    setSettingsDbbl(portal.dbbl_number || '');
     setSettingsRetention(toDateTimeLocal(portal.storage_retention_until));
   }
 
@@ -430,7 +458,14 @@ export default function RamyaChobiDeliveryAdmin() {
         bkashNumber: settingsBkash.trim() || null,
         storageRetentionUntil: settingsRetention ? new Date(settingsRetention).toISOString() : null,
       });
-      setNotice('Delivery settings updated.');
+      await updateDeliveryPaymentMethods({
+        token,
+        portalId: editingPortal.id,
+        bkashNumber: settingsBkash.trim(),
+        nagadNumber: settingsNagad.trim(),
+        dbblNumber: settingsDbbl.trim(),
+      });
+      setNotice('Delivery settings and payment methods updated.');
       setEditingPortal(null);
       await load();
     } catch (error: any) {
@@ -746,14 +781,17 @@ export default function RamyaChobiDeliveryAdmin() {
                   <div className="mt-1 text-sm text-stone-500">{s.event_name || 'Delivery'} · {s.payment_type}</div>
                 </div>
                 <div className="text-sm">
-                  <div><span className="text-stone-500">bKash:</span> {s.payer_phone}</div>
+                  <div><span className="text-stone-500">{s.payment_method} payer:</span> {s.payer_phone}</div>
                   <div><span className="text-stone-500">TrxID:</span> {s.transaction_id}</div>
                 </div>
                 <div>
                   <div className="text-lg font-semibold">{money(s.amount)}</div>
                   {s.selected_days ? <div className="text-xs text-stone-500">{s.selected_days} access day(s)</div> : null}
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={() => viewPaymentProof(s.id)} disabled={Boolean(proofLoadingId)} className="inline-flex items-center gap-1 rounded-xl border border-stone-300 px-3 py-2 text-sm font-bold">
+                    <Images className="h-4 w-4" /> {proofLoadingId === s.id ? 'Opening…' : 'Screenshot'}
+                  </button>
                   <button onClick={() => review(s.id, 'VERIFY')} disabled={loading} className="inline-flex items-center gap-1 rounded-xl bg-emerald-600 px-3 py-2 text-sm font-bold text-white">
                     <BadgeCheck className="h-4 w-4" /> Verify
                   </button>
@@ -925,7 +963,8 @@ export default function RamyaChobiDeliveryAdmin() {
                         <input value={portalEdit.eventName || ''} onChange={(e) => updatePortalEdit({ eventName: e.target.value })} placeholder="Event name" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5" />
                         <input value={portalEdit.clientPhone || ''} onChange={(e) => updatePortalEdit({ clientPhone: e.target.value })} placeholder="Phone number" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5" />
                         <input value={portalEdit.whatsappNumber || ''} onChange={(e) => updatePortalEdit({ whatsappNumber: e.target.value })} placeholder="WhatsApp number" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5" />
-                        <input value={portalEdit.packagePrice || ''} onChange={(e) => updatePortalEdit({ packagePrice: e.target.value })} type="number" placeholder="Package price" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5" />
+                        <input value={portalEdit.packagePrice || ''} onChange={(e) => updatePortalEdit({ packagePrice: e.target.value })} type="number" min="0" placeholder="Package price" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5" />
+                        <input value={portalEdit.advancePaid || ''} onChange={(e) => updatePortalEdit({ advancePaid: e.target.value })} type="number" min="0" placeholder="Advance paid" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5" />
                         <input value={portalEdit.freeAccessDays || ''} onChange={(e) => updatePortalEdit({ freeAccessDays: e.target.value })} type="number" placeholder="Free access days" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5" />
                         <input value={portalEdit.dailyLateFee || ''} onChange={(e) => updatePortalEdit({ dailyLateFee: e.target.value })} type="number" placeholder="Daily late fee" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5" />
                         <input value={portalEdit.gracePeriodDays || ''} onChange={(e) => updatePortalEdit({ gracePeriodDays: e.target.value })} type="number" placeholder="Grace days" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5" />
@@ -949,6 +988,8 @@ export default function RamyaChobiDeliveryAdmin() {
                   {editingPortal?.id === portal.id && (
                     <div className="mt-4 grid gap-3 rounded-2xl bg-stone-50 p-4 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_auto]">
                       <input value={settingsBkash} onChange={(e) => setSettingsBkash(e.target.value)} placeholder="bKash number" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5" />
+                      <input value={settingsNagad} onChange={(e) => setSettingsNagad(e.target.value)} placeholder="Nagad number (optional)" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5" />
+                      <input value={settingsDbbl} onChange={(e) => setSettingsDbbl(e.target.value)} placeholder="Dutch-Bangla account / number (optional)" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5" />
                       <input type="datetime-local" value={settingsRetention} onChange={(e) => setSettingsRetention(e.target.value)} className="rounded-xl border border-stone-300 bg-white px-3 py-2.5" />
                       <div className="flex gap-2">
                         <button onClick={saveSettings} disabled={loading} className="rounded-xl bg-stone-950 px-4 py-2.5 text-sm font-bold text-white">Save</button>
@@ -983,6 +1024,18 @@ export default function RamyaChobiDeliveryAdmin() {
           </div>
         </section>
       </div>
+      {paymentProofUrl && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 p-4" onClick={() => setPaymentProofUrl('')}>
+          <div className="max-h-[92vh] w-full max-w-4xl overflow-auto rounded-2xl bg-white p-4" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <strong>Private payment screenshot</strong>
+              <button type="button" onClick={() => setPaymentProofUrl('')} className="rounded-lg border px-3 py-1.5 text-sm font-semibold">Close</button>
+            </div>
+            <img src={paymentProofUrl} alt="Client payment proof" className="mx-auto max-h-[78vh] max-w-full rounded-lg object-contain" />
+            <p className="mt-2 text-xs text-stone-500">This temporary private link expires in 5 minutes.</p>
+          </div>
+        </div>
+      )}
       {drivePickerPortalId && drivePickerToken && (
         <DriveFolderPickerModal
           accessToken={drivePickerToken}
