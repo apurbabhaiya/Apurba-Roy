@@ -56,9 +56,9 @@ async function assertAdmin(adminToken: string, portalId: string) {
 
 async function adminUpsert(body: Record<string, unknown>) {
   const { url, key } = supabaseConfig();
-  const response = await fetch(\`\${url}/rest/v1/rpc/delivery_admin_upsert_file\`, {
+  const response = await fetch(`${url}/rest/v1/rpc/delivery_admin_upsert_file`, {
     method: 'POST',
-    headers: { apikey: key, Authorization: \`Bearer \${key}\`, 'content-type': 'application/json' },
+    headers: { apikey: key, Authorization: `Bearer ${key}`, 'content-type': 'application/json' },
     body: JSON.stringify(body),
   });
   if (!response.ok) throw new Error((await response.text()).slice(0, 400) || 'Could not save the delivery file.');
@@ -78,11 +78,11 @@ function extractDriveId(sourceUrl: string, kind: 'file' | 'folder') {
   return value.match(/[?&]id=([A-Za-z0-9_-]+)/i)?.[1] || null;
 }
 
-async function driveMetadata(id: string) {
-  const accessToken = await driveConfig();
+async function driveMetadata(id: string, connectedToken?: string) {
+  const accessToken = connectedToken || await driveConfig();
   const fields = 'id,name,mimeType,size,fileExtension,thumbnailLink,modifiedTime,trashed,parents';
-  const response = await fetch(\`https://www.googleapis.com/drive/v3/files/\${encodeURIComponent(id)}?fields=\${encodeURIComponent(fields)}&supportsAllDrives=true\`, {
-    headers: { Authorization: \`Bearer \${accessToken}\` },
+  const response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?fields=${encodeURIComponent(fields)}&supportsAllDrives=true`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!response.ok) {
     const text = (await response.text()).slice(0, 300);
@@ -119,9 +119,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const kind = fileType === 'FOLDER' ? 'folder' : 'file';
     const driveId = extractDriveId(sourceUrl, kind);
-    if (!driveId) return json(res, 400, { error: \`Could not extract a Google Drive \${kind} ID from this link.\` });
+    if (!driveId) return json(res, 400, { error: `Could not extract a Google Drive ${kind} ID from this link.` });
 
-    const metadata = await driveMetadata(driveId);
+    const connectedToken = typeof body.driveAccessToken === 'string' ? body.driveAccessToken.trim() : '';
+    const metadata = await driveMetadata(driveId, connectedToken);
     if (fileType === 'FOLDER' && metadata.mimeType !== 'application/vnd.google-apps.folder') {
       return json(res, 400, { error: 'This link is not a Google Drive folder.' });
     }
@@ -134,10 +135,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const isPhoto = mimeType.startsWith('image/') || (mimeType === 'application/octet-stream' && hasPhotoExtension);
     const isVideo = mimeType.startsWith('video/') || mimeType === 'application/vnd.google-apps.video' || (mimeType === 'application/octet-stream' && hasVideoExtension);
     if (fileType === 'PHOTO' && !isPhoto) {
-      return json(res, 400, { error: \`The selected Drive item is \${metadata.mimeType || 'unknown type'}, not a photo. Choose a JPG/PNG/photo file.\` });
+      return json(res, 400, { error: `The selected Drive item is ${metadata.mimeType || 'unknown type'}, not a photo. Choose a JPG/PNG/photo file.` });
     }
     if (fileType === 'VIDEO' && !isVideo) {
-      return json(res, 400, { error: \`The selected Drive item is \${metadata.mimeType || 'unknown type'}, not a video. Choose an MP4/MOV/video file.\` });
+      return json(res, 400, { error: `The selected Drive item is ${metadata.mimeType || 'unknown type'}, not a video. Choose an MP4/MOV/video file.` });
     }
 
     if (fileType === 'FOLDER' || body.persist === false) {

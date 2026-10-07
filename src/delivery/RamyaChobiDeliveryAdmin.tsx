@@ -49,6 +49,7 @@ import {
   DeliveryPaymentLedger,
 } from '../services/deliveryPortalService';
 import PortfolioManager from '../components/PortfolioManager';
+import AdminGoogleConnection from '../components/AdminGoogleConnection';
 import { DriveFolderPickerModal } from '../components/DriveFolderPickerModal';
 import { getGoogleDriveAccessToken, googleSupabaseSignIn } from '../services/supabaseAuth';
 
@@ -638,6 +639,7 @@ export default function RamyaChobiDeliveryAdmin() {
           <div className="mt-5 text-sm font-semibold uppercase tracking-[0.2em] text-amber-300">RamyaChobi</div>
           <h1 className="mt-2 text-3xl font-semibold">Delivery Admin</h1>
           <p className="mt-2 text-sm leading-6 text-white/55">Use the same admin access code as the booking admin system.</p>
+          <div className="mt-4"><AdminGoogleConnection /></div>
           <input
             type="password"
             value={accessCode}
@@ -664,6 +666,7 @@ export default function RamyaChobiDeliveryAdmin() {
             <h1 className="mt-1 text-2xl font-semibold">RamyaChobi Admin Panel</h1>
           </div>
           <div className="flex flex-wrap gap-2">
+            <AdminGoogleConnection />
             <a
               href="/photo-selection"
               className="inline-flex items-center gap-2 rounded-xl bg-amber-300 px-3.5 py-2 text-sm font-bold text-stone-950"

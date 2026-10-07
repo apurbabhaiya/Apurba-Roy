@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { jsPDF } from "jspdf";
 import { supabase } from "../services/supabase";
+import AdminGoogleConnection from "../components/AdminGoogleConnection";
 
 const db = supabase as any;
 
@@ -1311,8 +1312,9 @@ function AdminPanel() {
             Admin Client Sheet
           </h1>
           <p className="mt-3 text-slate-600">
-            Enter the private admin access code. Google OAuth is not required.
+            Enter the private admin access code to manage bookings. Connect Google separately for Drive files.
           </p>
+          <div className="mt-4"><AdminGoogleConnection /></div>
           <Field label="Admin access code">
             <input
               autoFocus
@@ -1358,6 +1360,7 @@ function AdminPanel() {
             <h1 className="text-xl font-black">Client Sheet & Accounts</h1>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <AdminGoogleConnection />
             <button
               onClick={exportCsv}
               className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-sm font-bold"

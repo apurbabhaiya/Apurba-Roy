@@ -112,7 +112,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (item?.drive_file_id && item?.id) existingByDriveId.set(String(item.drive_file_id), String(item.id));
     }
 
-    const accessToken = await driveAccessToken();
+    const connectedToken = typeof body.driveAccessToken === 'string' ? body.driveAccessToken.trim() : '';
+    const accessToken = connectedToken || await driveAccessToken();
     const folderUrlApi = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(folderId)}?fields=${encodeURIComponent('id,name,mimeType,trashed')}&supportsAllDrives=true`;
     const folderMetadata = await driveJson(folderUrlApi, accessToken);
     if (folderMetadata.mimeType !== 'application/vnd.google-apps.folder') {
