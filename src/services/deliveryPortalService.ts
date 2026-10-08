@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { ensureAnonymousSupabaseAuth } from './supabaseAuth';
 
 const db = supabase as any;
 
@@ -202,6 +203,8 @@ export async function submitDeliveryPayment(input: {
   form.append('amount', String(input.amount));
   form.append('selected_days', input.selectedDays == null ? '' : String(input.selectedDays));
   form.append('screenshot', input.screenshot);
+  const user = await ensureAnonymousSupabaseAuth();
+  if (!user) throw new Error('Could not establish a secure session. Please reload and try again.');
   const { data, error } = await supabase.functions.invoke('delivery-payment-submit', { body: form });
   if (error) throw error;
   if (data?.error) throw new Error(data.error);
