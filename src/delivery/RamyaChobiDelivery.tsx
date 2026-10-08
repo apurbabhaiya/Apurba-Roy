@@ -1,649 +1,286 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import {
-  BadgeCheck,
-  CalendarDays,
-  CheckCircle2,
-  ChevronDown,
-  Clock3,
-  Copy,
-  Download,
-  Eye,
-  FileArchive,
-  Image as ImageIcon,
-  LockKeyhole,
-  PlayCircle,
-  ShieldCheck,
-  Smartphone,
-  WalletCards,
-  MessageCircle,
-} from 'lucide-react';
-import {
-  DeliveryPortalData,
-  getDeliveryPortal,
-  submitDeliveryPayment,
-} from '../services/deliveryPortalService';
+import { BadgeCheck, CalendarDays, Check, Copy, Download, FileText, LockKeyhole, MessageCircle, PlayCircle, ShieldCheck, Smartphone, WalletCards, X } from 'lucide-react';
+import { DeliveryFinalFile, DeliveryPortalData, getDeliveryPortal, getDeliveryPreviewPortal, submitDeliveryPayment, submitDeliveryReview } from '../services/deliveryPortalService';
 
-const fallbackHero =
-  'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1800&q=85';
-
-const faq = [
-  ['When will I receive Final Delivery?', 'Final Delivery is activated after your complete package payment has been verified.'],
-  ['How long is free gallery access?', 'You receive 30 days of complimentary viewing and download access from the Final Delivery date.'],
-  ['What happens after 30 days?', 'Gallery and download access lock automatically. If your files are still retained, access can be restored after the applicable late access fee is verified.'],
-  ['Does access expiry mean my files are deleted?', 'No. Gallery access expiry and file deletion are separate. Files follow RamyaChobi\'s storage retention policy.'],
-];
+const fallbackHero = 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1800&q=85';
+type Tab = 'PHOTOS' | 'VIDEOS' | 'DOCUMENTS';
 
 function money(value: number | string | undefined | null) {
-  const num = Number(value || 0);
-  return new Intl.NumberFormat('en-BD', {
-    style: 'currency',
-    currency: 'BDT',
-    maximumFractionDigits: 0,
-  }).format(num);
+  return new Intl.NumberFormat('en-BD', { style: 'currency', currency: 'BDT', maximumFractionDigits: 0 }).format(Number(value || 0));
 }
-
-function fmtDate(value?: string | null) {
+function date(value?: string | null) {
   if (!value) return 'Not set';
-  return new Intl.DateTimeFormat('en-GB', {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric',
-  }).format(new Date(value));
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? 'Not set' : new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }).format(parsed);
 }
-
-function daysRemaining(value?: string | null) {
-  if (!value) return null;
-  return Math.max(0, Math.ceil((new Date(value).getTime() - Date.now()) / 86400000));
+function fileSize(value?: number | null) {
+  const bytes = Number(value || 0);
+  if (!bytes) return '';
+  const units = ['B','KB','MB','GB']; const index = Math.min(3, Math.floor(Math.log(bytes) / Math.log(1024)));
+  return `${(bytes / 1024 ** index).toFixed(index ? 1 : 0)} ${units[index]}`;
 }
-
-function mediaUrl(token: string, fileId: string, mode: 'PREVIEW' | 'ORIGINAL') {
-  return `/api/delivery-media?token=${encodeURIComponent(token)}&fileId=${encodeURIComponent(fileId)}&mode=${mode}`;
-}
-
-function whatsappHref(phone?: string | null) {
-  const digits = String(phone || '').replace(/\D/g, '');
+function daysLeft(value?: string | null) { return value ? Math.max(0, Math.ceil((new Date(value).getTime() - Date.now()) / 86400000)) : null; }
+function mediaUrl(token: string, fileId: string, mode: 'PREVIEW' | 'ORIGINAL') { return `/api/delivery-media?token=${encodeURIComponent(token)}&fileId=${encodeURIComponent(fileId)}&mode=${mode}`; }
+function phoneHref(value?: string | null) {
+  const digits = String(value || '').replace(/\D/g, '');
   const normalized = digits.startsWith('880') ? digits : digits.startsWith('0') ? `88${digits}` : `880${digits}`;
-  const text = encodeURIComponent('আসসালামু আলাইকুম। আপনার RamyaChobi Final Delivery সম্পর্কে যোগাযোগ করছি। আপনার বাকি পেমেন্ট ও ফাইল ডাউনলোডের বিষয়ে বিস্তারিত জানাতে চাই।');
-  return `https://wa.me/${normalized}?text=${text}`;
+  return `https://wa.me/${normalized}?text=${encodeURIComponent('আসসালামু আলাইকুম। RamyaChobi Final Delivery সম্পর্কে সহায়তা চাই।')}`;
 }
-
-function StatCard(props: { label: string; value: React.ReactNode; note?: string }) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
-      <div className="text-xs uppercase tracking-[0.16em] text-white/60">{props.label}</div>
-      <div className="mt-1 text-lg font-semibold text-white">{props.value}</div>
-      {props.note && <div className="mt-1 text-xs text-white/55">{props.note}</div>}
-    </div>
-  );
+function deliveryLabel(status?: string) {
+  if (status === 'FINAL_DELIVERED') return 'Delivered';
+  if (status === 'READY') return 'Ready';
+  return 'Editing';
 }
 
 export default function RamyaChobiDelivery({ token }: { token: string }) {
   const [data, setData] = useState<DeliveryPortalData | null>(null);
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState('');
+  const [tab, setTab] = useState<Tab>('PHOTOS');
+  const [selected, setSelected] = useState<string[]>([]);
+  const [lightbox, setLightbox] = useState<{ src: string; title: string; isVideo?: boolean } | null>(null);
   const [paymentMessage, setPaymentMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [payerPhone, setPayerPhone] = useState('');
   const [transactionId, setTransactionId] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<'BKASH' | 'NAGAD' | 'DBBL'>('BKASH');
+  const [paymentMethod, setPaymentMethod] = useState<'BKASH' | 'NAGAD' | 'DBBL' | 'ROCKET'>('BKASH');
   const [paymentScreenshot, setPaymentScreenshot] = useState<File | null>(null);
-  const [selectedDays, setSelectedDays] = useState(1);
   const [amount, setAmount] = useState('');
-  const [openFaq, setOpenFaq] = useState<number | null>(0);
-  const [downloadError, setDownloadError] = useState('');
   const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState('');
+  const [review, setReview] = useState('');
+  const [rating, setRating] = useState(5);
+  const [reviewMessage, setReviewMessage] = useState('');
+  const [reviewBusy, setReviewBusy] = useState(false);
+  const [adminPreviewToken, setAdminPreviewToken] = useState('');
+  const [adminPreviewSources, setAdminPreviewSources] = useState<Record<string, string>>({});
+  const [selectedDays, setSelectedDays] = useState(1);
+
+  const previewMode = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('preview') === 'admin';
+  useEffect(() => {
+    let adminToken = '';
+    try { adminToken = previewMode ? localStorage.getItem('ramya_booking_admin_token_v1') || '' : ''; } catch {}
+    setAdminPreviewToken(adminToken);
+  }, [previewMode]);
 
   async function load() {
-    setLoading(true);
-    setPageError('');
+    setLoading(true); setPageError('');
     try {
-      const result = await getDeliveryPortal(token);
-      if (!result) {
-        setPageError('This private delivery link is invalid or no longer available.');
-        setData(null);
-      } else {
-        setData(result);
-      }
-    } catch (error: any) {
-      setPageError(error?.message || 'Unable to load this delivery page.');
-    } finally {
-      setLoading(false);
-    }
+      const result = previewMode && adminPreviewToken
+        ? await getDeliveryPreviewPortal(token, adminPreviewToken)
+        : await getDeliveryPortal(token);
+      if (!result) { setData(null); setPageError('This private delivery link is invalid, unpublished, or no longer available.'); }
+      else setData(result);
+    } catch (error: any) { setPageError(error?.message || 'Unable to load this delivery page.'); }
+    finally { setLoading(false); }
   }
-
-  useEffect(() => {
-    load();
-  }, [token]);
+  useEffect(() => { if (!previewMode || adminPreviewToken) void load(); }, [token, previewMode, adminPreviewToken]);
 
   const galleryStatus = data?.gallery_status || 'PREVIEW';
-  const isLocked = galleryStatus === 'LOCKED';
-  const isUnavailable = galleryStatus === 'UNAVAILABLE';
-  const temporaryActive = galleryStatus === 'TEMPORARILY_ACTIVE';
-  const canDownload = data?.download_status === 'ENABLED' && !isUnavailable;
-  const previewEnabled = data?.preview_enabled !== false;
-  const canPhotoDownload = canDownload && data?.photo_download_permission === true;
-  const canVideoDownload = canDownload && data?.video_download_permission === true;
-  const isFullyPaid = data?.payment_status === 'FULLY_PAID';
-  const freeDays = daysRemaining(data?.free_access_expires_at);
-  const temporaryDays = daysRemaining(data?.access_expires_at);
-  const feePerDay = Number(data?.daily_late_fee ?? data?.access_fee_per_day ?? 10);
-  const remainingDue = Number(data?.remaining_due || 0);
-  const lateDays = Number(data?.late_days || 0);
-  const lateFee = Number(data?.calculated_late_fee || 0);
-  const lateFeeBalance = Number(data?.late_fee_balance || 0);
-  const totalPayable = Number(data?.total_payable || remainingDue + lateFeeBalance);
-  const isAccessPayment = isLocked && isFullyPaid && lateFeeBalance > 0 && !isUnavailable;
+  const locked = galleryStatus === 'LOCKED';
+  const unavailable = galleryStatus === 'UNAVAILABLE';
+  const canDownload = data?.download_status === 'ENABLED' && !unavailable && data?.is_published !== false;
+  const canPhoto = canDownload && data?.photo_download_permission === true;
+  const canVideo = canDownload && data?.video_download_permission === true;
+  const canDocument = canDownload && data?.document_download_permission === true;
+  const fullyPaid = data?.payment_status === 'FULLY_PAID';
+  const remaining = Number(data?.remaining_due || 0);
+  const isAccessPayment = locked && fullyPaid && Number(data?.late_fee_balance || 0) > 0;
+  const dailyFee = Number(data?.daily_late_fee ?? data?.access_fee_per_day ?? 20);
+  const accessExpiry = data?.access_expires_at || data?.free_access_expires_at;
   const paymentOptions = [
-    { id: 'BKASH' as const, label: 'bKash', account: data?.bkash_number || '01776044951', mark: 'b', color: 'bg-[#e2136e]' },
+    { id: 'BKASH' as const, label: 'bKash', account: data?.bkash_number || '', mark: 'b', color: 'bg-[#e2136e]' },
     { id: 'NAGAD' as const, label: 'Nagad', account: data?.nagad_number || '', mark: 'N', color: 'bg-[#f58220]' },
-    { id: 'DBBL' as const, label: 'Dutch-Bangla Bank', account: data?.dbbl_number || '', mark: 'DB', color: 'bg-[#006a4e]' },
-  ].filter((option) => Boolean(option.account));
-  const selectedPaymentOption = paymentOptions.find((option) => option.id === paymentMethod) || paymentOptions[0];
+    { id: 'DBBL' as const, label: 'Dutch-Bangla', account: data?.dbbl_number || '', mark: 'DB', color: 'bg-[#126b54]' },
+    { id: 'ROCKET' as const, label: 'Rocket', account: data?.rocket_number || '', mark: 'R', color: 'bg-[#8f1b76]' },
+  ].filter((item) => Boolean(item.account));
+  const currentMethod = paymentOptions.find((item) => item.id === paymentMethod) || paymentOptions[0];
+  const finalFiles = data?.delivery_files || [];
+  const photos = finalFiles.filter((item) => item.file_type === 'PHOTO');
+  const videos = finalFiles.filter((item) => item.file_type === 'VIDEO');
+  const documents = finalFiles.filter((item) => item.file_type === 'DOCUMENT');
+  const previews = data?.preview_items || [];
+  const legacyPhotos = previews.filter((item) => item.type === 'image');
+  const legacyVideos = previews.filter((item) => item.type === 'video');
+  const activeItems = tab === 'PHOTOS' ? (photos.length ? photos : legacyPhotos) : tab === 'VIDEOS' ? (videos.length ? videos : legacyVideos) : documents;
 
   useEffect(() => {
     if (!data) return;
-    if (isAccessPayment) {
-      setAmount(String(selectedDays * feePerDay));
-    } else {
-      setAmount(remainingDue > 0 ? String(remainingDue) : '');
-    }
-  }, [data, isAccessPayment, selectedDays, feePerDay, remainingDue]);
+    setAmount(isAccessPayment ? String(selectedDays * dailyFee) : remaining > 0 ? String(remaining) : '');
+    if (!paymentOptions.some((item) => item.id === paymentMethod) && paymentOptions[0]) setPaymentMethod(paymentOptions[0].id);
+  }, [data, remaining, paymentOptions.length, isAccessPayment, selectedDays, dailyFee]);
 
-  const statusText = useMemo(() => {
-    if (isUnavailable) return 'Storage period ended';
-    if (temporaryActive) return 'Temporary access active';
-    if (isLocked) return 'Gallery access expired';
-    if (canDownload) return 'Final delivery active';
-    if (data?.payment_status === 'SUBMITTED') return 'Payment submitted';
-    return 'Payment pending';
-  }, [isUnavailable, temporaryActive, isLocked, canDownload, data?.payment_status]);
+  useEffect(() => {
+    if (!previewMode || !adminPreviewToken || !activeItems.length) { setAdminPreviewSources({}); return; }
+    let cancelled = false;
+    const urls: string[] = [];
+    const run = async () => {
+      const entries = await Promise.all(activeItems.slice(0, 80).map(async (item: any, index) => {
+        if (!item.id || item.file_type === 'DOCUMENT') return null;
+        try {
+          const response = await fetch(mediaUrl(token, item.id, 'PREVIEW'), { headers: { 'x-admin-token': adminPreviewToken } });
+          if (!response.ok) return null;
+          const url = URL.createObjectURL(await response.blob()); urls.push(url);
+          return [item.id, url] as const;
+        } catch { return null; }
+      }));
+      if (!cancelled) setAdminPreviewSources(Object.fromEntries(entries.filter(Boolean) as Array<readonly [string,string]>));
+    };
+    void run();
+    return () => { cancelled = true; urls.forEach(URL.revokeObjectURL); };
+  }, [previewMode, adminPreviewToken, token, tab, activeItems.length]);
 
-  async function submitPayment(e: React.FormEvent) {
-    e.preventDefault();
-    if (!data || !payerPhone.trim() || !transactionId.trim() || !amount || !paymentScreenshot) {
-      setPaymentMessage('Complete the payer number, transaction ID, amount, and upload your payment screenshot.');
-      return;
-    }
+  useEffect(() => {
+    if (!lightbox) return;
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') setLightbox(null); };
+    window.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden';
+    return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = ''; };
+  }, [lightbox]);
 
-    setSubmitting(true);
-    setPaymentMessage('');
-    try {
-      await submitDeliveryPayment({
-        token,
-        paymentType: isAccessPayment ? 'ACCESS' : 'PACKAGE',
-        paymentMethod,
-        screenshot: paymentScreenshot,
-        payerPhone: payerPhone.trim(),
-        transactionId: transactionId.trim(),
-        amount: Number(amount),
-        selectedDays: isAccessPayment ? selectedDays : null,
-      });
-      setPaymentMessage('Payment submitted successfully. RamyaChobi will verify it before access changes.');
-      setTransactionId('');
-      setPaymentScreenshot(null);
-      await load();
-    } catch (error: any) {
-      setPaymentMessage(error?.message || 'Payment submission failed.');
-    } finally {
-      setSubmitting(false);
-    }
+  function fileCanDownload(file: DeliveryFinalFile) {
+    return file.file_type === 'PHOTO' ? canPhoto : file.file_type === 'VIDEO' ? canVideo : file.file_type === 'DOCUMENT' ? canDocument : false;
   }
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-stone-950 text-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="mx-auto h-12 w-12 animate-spin rounded-full border-2 border-white/20 border-t-amber-300" />
-          <p className="mt-4 text-sm text-white/60">Loading your private RamyaChobi delivery...</p>
-        </div>
-      </div>
-    );
+  function openFile(file: DeliveryFinalFile) {
+    if (file.file_type === 'DOCUMENT') return;
+    const url = mediaUrl(token, file.id, fileCanDownload(file) ? 'ORIGINAL' : 'PREVIEW');
+    setLightbox({ src: previewMode ? (adminPreviewSources[file.id] || url) : url, title: file.title || file.file_name || 'RamyaChobi delivery', isVideo: file.file_type === 'VIDEO' });
   }
-
-  if (!data) {
-    return (
-      <div className="min-h-screen bg-stone-950 px-6 text-white flex items-center justify-center">
-        <div className="max-w-xl rounded-3xl border border-white/10 bg-white/5 p-8 text-center">
-          <LockKeyhole className="mx-auto h-10 w-10 text-amber-300" />
-          <h1 className="mt-4 text-2xl font-semibold">Private Gallery Unavailable</h1>
-          <p className="mt-3 text-white/60">{pageError}</p>
-        </div>
-      </div>
-    );
-  }
-
-  const previews = data.preview_items || [];
-  const finalFiles = data.delivery_files || [];
-  const downloadableFiles = finalFiles.filter((file) => file.file_type === 'PHOTO' ? canPhotoDownload : file.file_type === 'VIDEO' ? canVideoDownload : false);
-
-  async function downloadAll() {
-    if (!canDownload || downloadableFiles.length === 0) return;
+  async function downloadZip(files: DeliveryFinalFile[], fileName: string) {
+    if (!canDownload || !files.length || downloading) return;
     setDownloading(true); setDownloadError('');
     try {
-      const response = await fetch('/api/delivery-zip', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ token, files: downloadableFiles.map((file) => file.id) }),
-      });
-      if (!response.ok) throw new Error((await response.text()).slice(0, 200) || 'ZIP download failed.');
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a'); link.href = url; link.download = 'ramyachobi-originals.zip'; link.click();
+      const response = await fetch('/api/delivery-zip', { method: 'POST', headers: { 'content-type': 'application/json', ...(previewMode && adminPreviewToken ? { 'x-admin-token': adminPreviewToken } : {}) }, body: JSON.stringify({ token, files: files.map((file) => file.id) }) });
+      if (!response.ok) { const body = await response.json().catch(() => ({})); throw new Error(body?.error || 'ZIP download failed.'); }
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement('a'); link.href = url; link.download = fileName; document.body.appendChild(link); link.click(); link.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 3000);
     } catch (error: any) { setDownloadError(error?.message || 'Download failed.'); }
     finally { setDownloading(false); }
   }
+  function downloadOne(file: DeliveryFinalFile) {
+    if (!fileCanDownload(file)) return;
+    const link = document.createElement('a'); link.href = mediaUrl(token, file.id, 'ORIGINAL'); link.download = file.file_name || file.title || 'ramyachobi-file';
+    if (previewMode && adminPreviewToken) link.setAttribute('data-admin-preview', adminPreviewToken);
+    link.click();
+  }
+  async function submitPayment(event: React.FormEvent) {
+    event.preventDefault();
+    if (!data || !currentMethod || !payerPhone.trim() || !transactionId.trim() || !amount || !paymentScreenshot) {
+      setPaymentMessage('Enter the payer number, transaction ID, amount and payment screenshot.'); return;
+    }
+    setSubmitting(true); setPaymentMessage('');
+    try {
+      await submitDeliveryPayment({ token, paymentType: isAccessPayment ? 'ACCESS' : 'PACKAGE', paymentMethod, screenshot: paymentScreenshot, payerPhone: payerPhone.trim(), transactionId: transactionId.trim(), amount: Number(amount), selectedDays: isAccessPayment ? selectedDays : null });
+      setPaymentMessage('Payment submitted. Access changes only after an admin verifies it.');
+      setTransactionId(''); setPaymentScreenshot(null); await load();
+    } catch (error: any) { setPaymentMessage(error?.message || 'Payment submission failed.'); }
+    finally { setSubmitting(false); }
+  }
+  async function sendReview(event: React.FormEvent) {
+    event.preventDefault(); setReviewBusy(true); setReviewMessage('');
+    try { const result = await submitDeliveryReview({ token, rating, review }); setReview(''); setReviewMessage(`Review submitted for ${result.status} moderation.`); }
+    catch (error: any) { setReviewMessage(error?.message || 'Review could not be submitted.'); }
+    finally { setReviewBusy(false); }
+  }
+
+  if (loading) return <div className="grid min-h-screen place-items-center bg-[#f6f2ea] px-6 text-stone-600"><div className="text-center"><div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-stone-300 border-t-amber-600" /><p className="mt-4 text-sm">Opening your private delivery…</p></div></div>;
+  if (!data) return <div className="grid min-h-screen place-items-center bg-[#f6f2ea] p-6"><div className="max-w-md rounded-3xl border border-stone-200 bg-white p-8 text-center"><LockKeyhole className="mx-auto h-9 w-9 text-amber-700" /><h1 className="mt-4 text-2xl font-semibold">Delivery unavailable</h1><p className="mt-2 text-sm leading-6 text-stone-600">{pageError || 'This delivery could not be loaded.'}</p></div></div>;
+
+  const deliveryStatus = deliveryLabel(data.delivery_status);
+  const freeDays = daysLeft(accessExpiry);
+  const selectedFiles = finalFiles.filter((file) => selected.includes(file.id) && fileCanDownload(file));
+  const statusColor = unavailable || locked ? 'bg-stone-200 text-stone-700' : canDownload ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800';
+  const displayUrl = (item: any, index: number) => 'file_type' in item ? (previewMode ? adminPreviewSources[item.id] || '' : mediaUrl(token, item.id, 'PREVIEW')) : item.url;
 
   return (
-    <div className="min-h-screen bg-[#f6f2ea] text-stone-900">
-      <section className="relative isolate overflow-hidden bg-stone-950 text-white">
-        <img
-          src={data.hero_image_url || fallbackHero}
-          alt="RamyaChobi wedding photography"
-          className="absolute inset-0 h-full w-full object-cover opacity-45"
-        />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/45 via-black/60 to-stone-950" />
-        <div className="relative mx-auto max-w-7xl px-5 pb-12 pt-6 sm:px-8 lg:px-10 lg:pb-16">
-          <nav className="flex items-center justify-between">
-            <div>
-              <div className="text-xl font-semibold tracking-[0.18em]">RAMYACHOBI</div>
-              <div className="mt-1 text-xs uppercase tracking-[0.28em] text-white/55">Photography & Videography</div>
-            </div>
-            <div className="rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-medium backdrop-blur">
-              Private Delivery
-            </div>
-          </nav>
-
-          <div className="mt-20 max-w-3xl lg:mt-28">
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-amber-200/20 bg-amber-100/10 px-3 py-1.5 text-xs font-medium text-amber-100">
-              <ShieldCheck className="h-4 w-4" /> Secure client access
-            </div>
-            <h1 className="text-4xl font-semibold leading-tight sm:text-5xl lg:text-6xl">Your Memories Are Ready</h1>
-            <p className="mt-4 max-w-2xl text-base leading-7 text-white/70 sm:text-lg">
-              View your gallery, complete payment when required, and securely access your final photos and videos.
-            </p>
-
-            <div className="mt-8 grid gap-3 sm:grid-cols-3">
-              <StatCard label="Client" value={data.client_name} />
-              <StatCard label="Status" value={statusText} />
-              <StatCard
-                label="Access"
-                value={
-                  temporaryActive
-                    ? `${temporaryDays ?? 0} day${temporaryDays === 1 ? '' : 's'} left`
-                    : canDownload
-                      ? `${freeDays ?? 0} day${freeDays === 1 ? '' : 's'} left`
-                      : isLocked
-                        ? 'Locked'
-                        : 'Preview only'
-                }
-              />
+    <main className="min-h-screen bg-[#f6f2ea] text-[#292820]">
+      {previewMode && <div className="bg-amber-200 px-4 py-2 text-center text-xs font-bold text-amber-950">Admin preview · unpublished delivery</div>}
+      <header className="relative isolate overflow-hidden bg-[#292820] text-white">
+        <img src={data.hero_image_url || fallbackHero} alt="Event cover" className="absolute inset-0 h-full w-full object-cover opacity-40" />
+        <div className="absolute inset-0 bg-gradient-to-r from-black/75 via-black/45 to-black/30" />
+        <div className="relative mx-auto max-w-6xl px-5 py-6 sm:px-8 sm:py-8">
+          <div className="flex items-center justify-between gap-4"><div><div className="text-lg font-semibold tracking-[.18em]">RAMYACHOBI</div><div className="mt-1 text-[10px] uppercase tracking-[.24em] text-white/60">Photography · Cinematography</div></div><span className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs">Private delivery</span></div>
+          <div className="mt-12 max-w-2xl sm:mt-16">
+            <div className="inline-flex items-center gap-2 rounded-full border border-amber-200/30 bg-amber-100/10 px-3 py-1.5 text-xs text-amber-100"><ShieldCheck className="h-4 w-4" /> Private client gallery</div>
+            <h1 className="mt-4 text-3xl font-semibold leading-tight sm:text-5xl">{data.client_name || 'Your event memories'}</h1>
+            <p className="mt-2 text-sm text-white/75 sm:text-base">{data.event_name || 'Photography & Videography'}{data.event_date ? ` · ${date(data.event_date)}` : ''}</p>
+            <div className="mt-6 flex flex-wrap gap-2">
+              <span className={`rounded-full px-3 py-1.5 text-xs font-bold ${statusColor}`}>{deliveryStatus}</span>
+              <span className="rounded-full border border-white/20 bg-black/20 px-3 py-1.5 text-xs">{canDownload ? `${freeDays ?? 0} days access left` : unavailable ? 'Retention ended' : locked ? 'Download access expired' : fullyPaid ? 'Preparing delivery' : 'Payment pending'}</span>
             </div>
           </div>
         </div>
-      </section>
+      </header>
 
-      <main className="mx-auto max-w-7xl space-y-8 px-5 py-8 sm:px-8 lg:px-10 lg:py-12">
-        {(data.client_message || data.client_note) && (
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-stone-700">
-            <div className="font-semibold text-stone-900">RamyaChobi message</div>
-            {data.client_message && <p className="mt-2 whitespace-pre-line leading-6">{data.client_message}</p>}
-            {data.client_note && <p className="mt-2 whitespace-pre-line border-t border-amber-200 pt-2 leading-6">{data.client_note}</p>}
+      <div className="mx-auto max-w-6xl space-y-5 px-4 py-5 sm:px-8 sm:py-8">
+        {data.client_message && <div className="rounded-2xl border border-[#e8dfcf] bg-white p-4 text-sm leading-6"><strong>Message from RamyaChobi</strong><p className="mt-1 whitespace-pre-line text-stone-600">{data.client_message}</p></div>}
+        <section className="grid gap-4 lg:grid-cols-[1.15fr_.85fr]">
+          <div className="rounded-2xl border border-[#e5dfd3] bg-white p-5 shadow-sm sm:p-6">
+            <div className="flex items-start justify-between gap-3"><div><p className="text-[11px] font-bold uppercase tracking-[.18em] text-amber-700">Event delivery</p><h2 className="mt-1 text-xl font-semibold">{data.event_name || 'Final Delivery'}</h2><p className="mt-1 text-sm text-stone-500">{data.package_name || 'Photography package'}</p></div><span className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-bold ${statusColor}`}>{deliveryStatus}</span></div>
+            <div className="mt-5 grid grid-cols-2 gap-3 text-sm"><div className="rounded-xl bg-[#f8f6f1] p-3"><div className="flex items-center gap-2 text-xs text-stone-500"><CalendarDays className="h-4 w-4" /> Event date</div><strong className="mt-1 block">{date(data.event_date)}</strong></div><div className="rounded-xl bg-[#f8f6f1] p-3"><div className="flex items-center gap-2 text-xs text-stone-500"><BadgeCheck className="h-4 w-4" /> Payment status</div><strong className="mt-1 block">{data.payment_status.replaceAll('_',' ')}</strong></div></div>
+            <div className="mt-4 grid grid-cols-2 gap-3 text-sm"><div className="rounded-xl bg-[#f8f6f1] p-3"><span className="block text-xs text-stone-500">Access expiry</span><strong>{date(accessExpiry)}</strong></div><div className="rounded-xl bg-[#f8f6f1] p-3"><span className="block text-xs text-stone-500">Storage retention</span><strong>{date(data.storage_retention_until)}</strong></div></div>
           </div>
-        )}
-        <div className="rounded-2xl border border-stone-200 bg-white p-4 text-sm text-stone-600">
-          {lateDays > 0
-            ? 'আপনার free access period শেষ হয়েছে। Access পুনরায় চালু করতে প্রযোজ্য late access fee পরিশোধ করতে হবে। Admin verification-এর পর download access চালু হবে।'
-            : 'আপনার ফাইল ৩০ দিন পর্যন্ত বিনামূল্যে দেখা ও ডাউনলোড করা যাবে। অনুগ্রহ করে এই সময়ের মধ্যে সব original photo ও video download করে সংরক্ষণ করুন।'}
-        </div>
-
-        <section className="grid gap-6 lg:grid-cols-[1.15fr_.85fr]">
-          <div className="rounded-3xl border border-stone-200 bg-white p-6 shadow-sm sm:p-8">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-700">Client Delivery</p>
-                <h2 className="mt-2 text-2xl font-semibold">{data.client_name}</h2>
-                <p className="mt-1 text-stone-500">{data.event_name || 'Photography & Videography'}</p>
-              </div>
-              <div className="rounded-2xl bg-stone-950 px-4 py-3 text-right text-white">
-                <div className="text-xs uppercase tracking-[0.15em] text-white/50">Gallery</div>
-                <div className="mt-1 font-semibold">{galleryStatus.replaceAll('_', ' ')}</div>
-              </div>
-            </div>
-
-            <div className="mt-7 grid gap-4 sm:grid-cols-2">
-              <div className="rounded-2xl bg-stone-50 p-4">
-                <div className="flex items-center gap-2 text-sm font-semibold"><CalendarDays className="h-4 w-4" /> Event date</div>
-                <div className="mt-2 text-stone-600">{fmtDate(data.event_date)}</div>
-              </div>
-              <div className="rounded-2xl bg-stone-50 p-4">
-                <div className="flex items-center gap-2 text-sm font-semibold"><BadgeCheck className="h-4 w-4" /> Package</div>
-                <div className="mt-2 text-stone-600">{data.package_name || 'Custom Package'}</div>
-              </div>
-            </div>
-
-            {data.final_delivery_at && (
-              <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-                <div className="flex items-center gap-2 font-semibold text-emerald-900">
-                  <CheckCircle2 className="h-5 w-5" /> Final Delivery
-                </div>
-                <div className="mt-3 grid gap-3 text-sm sm:grid-cols-3">
-                  <div><span className="block text-emerald-700">Delivered</span><strong>{fmtDate(data.final_delivery_at)}</strong></div>
-                  <div><span className="block text-emerald-700">Free access expires</span><strong>{fmtDate(data.free_access_expires_at)}</strong></div>
-                  <div><span className="block text-emerald-700">Days remaining</span><strong>{freeDays ?? 0}</strong></div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="rounded-3xl bg-stone-950 p-6 text-white shadow-sm sm:p-8">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-300">Payment Summary</p>
-            <div className="mt-6 space-y-4">
-              <div className="flex items-center justify-between text-white/65"><span>Package price</span><strong className="text-white">{money(data.package_price)}</strong></div>
-              <div className="flex items-center justify-between text-white/65"><span>Advance paid</span><strong className="text-white">{money(data.advance_paid)}</strong></div>
-              <div className="flex items-center justify-between text-white/65"><span>Total paid</span><strong className="text-white">{money(data.total_paid ?? data.verified_total_paid)}</strong></div>
-              <div className="flex items-center justify-between text-white/65"><span>Late days</span><strong className="text-white">{lateDays}</strong></div>
-              <div className="flex items-center justify-between text-white/65"><span>Late fee ({money(feePerDay)}/day)</span><strong className="text-white">{money(lateFeeBalance || lateFee)}</strong></div>
-              <div className="border-t border-white/10 pt-4 flex items-center justify-between">
-                <span className="font-semibold">Remaining due</span>
-                <strong className="text-2xl text-amber-300">{money(data.remaining_due)}</strong>
-              </div>
-              <div className="flex items-center justify-between border-t border-white/10 pt-4"><span className="font-semibold">Total payable</span><strong className="text-2xl text-amber-300">{money(totalPayable)}</strong>
-              </div>
-            </div>
-            <div className="mt-6 rounded-2xl bg-white/5 p-4 text-sm text-white/65">
-              Original downloads require full payment, active access, and the corresponding Admin download permission.
-            </div>
+          <div className="rounded-2xl bg-[#292820] p-5 text-white shadow-sm sm:p-6">
+            <p className="text-[11px] font-bold uppercase tracking-[.18em] text-amber-300">Payment summary</p>
+            <div className="mt-4 space-y-3 text-sm"><div className="flex justify-between gap-3 text-white/70"><span>Total bill</span><strong className="text-white">{money(data.package_price)}</strong></div><div className="flex justify-between gap-3 text-white/70"><span>Verified payments</span><strong className="text-white">{money(data.total_paid ?? data.verified_total_paid)}</strong></div><div className="flex justify-between gap-3 border-t border-white/15 pt-3"><span className="font-semibold">Remaining balance</span><strong className="text-xl text-amber-300">{money(data.remaining_due)}</strong></div></div>
+            <p className="mt-4 rounded-xl bg-white/5 p-3 text-xs leading-5 text-white/65">Only verified payments are included. Download access is checked again on the server for every file.</p>
           </div>
         </section>
 
-        {isUnavailable ? (
-          <section className="rounded-3xl border border-red-200 bg-red-50 p-7 text-center">
-            <LockKeyhole className="mx-auto h-10 w-10 text-red-500" />
-            <h2 className="mt-3 text-2xl font-semibold text-red-950">This Gallery Is No Longer Available</h2>
-            <p className="mx-auto mt-2 max-w-2xl text-red-800/75">
-              The file-retention period has ended. Access restoration is no longer available.
-            </p>
-          </section>
-        ) : isLocked ? (
-          <section className="rounded-3xl border border-amber-200 bg-amber-50 p-7 sm:p-8">
-            <div className="grid gap-8 lg:grid-cols-[1fr_.9fr]">
-              <div>
-                <LockKeyhole className="h-10 w-10 text-amber-700" />
-                <h2 className="mt-4 text-3xl font-semibold">Your Gallery Access Has Expired</h2>
-                <p className="mt-3 max-w-xl leading-7 text-stone-600">
-                  Your complimentary {data.free_access_days || 30}-day Final Delivery period has ended. Late access is {money(feePerDay)} per day. The current late fee is {money(lateFeeBalance)} for {lateDays} day(s).
-                </p>
-                <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  {[1, 2, 3, 5, 7].map((day) => (
-                    <button
-                      type="button"
-                      key={day}
-                      onClick={() => setSelectedDays(day)}
-                      className={`rounded-2xl border px-4 py-3 text-left transition ${selectedDays === day ? 'border-stone-950 bg-stone-950 text-white' : 'border-amber-200 bg-white hover:border-stone-400'}`}
-                    >
-                      <div className="font-semibold">{day} Day{day > 1 ? 's' : ''}</div>
-                      <div className={`mt-1 text-sm ${selectedDays === day ? 'text-amber-300' : 'text-stone-500'}`}>{money(day * feePerDay)}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="rounded-2xl bg-white p-5 shadow-sm">
-                <div className="text-sm text-stone-500">Selected access</div>
-                <div className="mt-1 text-2xl font-semibold">{selectedDays} day{selectedDays > 1 ? 's' : ''}</div>
-                <div className="mt-4 flex items-center justify-between border-t border-stone-100 pt-4">
-                  <span>Total access fee</span>
-                  <strong className="text-2xl">{money(selectedDays * feePerDay)}</strong>
-                </div>
-              </div>
-            </div>
-          </section>
-        ) : (
-          <section className="rounded-3xl border border-stone-200 bg-white p-6 shadow-sm sm:p-8">
-            <div className="flex flex-wrap items-end justify-between gap-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-700">Private Gallery</p>
-                <h2 className="mt-2 text-2xl font-semibold">{canDownload ? 'Final Gallery' : 'Protected Preview Gallery'}</h2>
-                <p className="mt-1 text-stone-500">
-                  {canDownload ? 'Your verified final delivery is active.' : 'Preview media is protected. Original downloads unlock after full payment verification.'}
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  disabled={!canDownload || downloadableFiles.length === 0 || downloading}
-                  onClick={downloadAll}
-                  className="inline-flex items-center gap-2 rounded-xl bg-stone-950 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500"
-                  title={canDownload ? 'Download permitted original files' : 'Locked until Final Delivery'}
-                >
-                  <Download className="h-4 w-4" /> {downloading ? 'Preparing ZIP...' : 'Download All'}
-                </button>
-              </div>
-            </div>
+        {unavailable ? <section className="rounded-2xl border border-red-200 bg-white p-8 text-center"><LockKeyhole className="mx-auto h-8 w-8 text-red-600"/><h2 className="mt-3 text-xl font-semibold">Storage retention ended</h2><p className="mt-2 text-sm text-stone-600">The storage retention period has ended. Please contact RamyaChobi for help.</p></section> : locked ? <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5"><h2 className="font-semibold">Download access expired</h2><p className="mt-1 text-sm text-stone-600">Access has expired. Send a restoration payment only after confirming the amount with RamyaChobi.</p></section> : null}
 
-            <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-              {finalFiles.length > 0 ? finalFiles.map((file) => {
-                const preview = mediaUrl(token, file.id, 'PREVIEW');
-                const label = file.title || file.file_name || (file.file_type === 'VIDEO' ? 'Final video' : file.file_type === 'FOLDER' ? 'Final delivery folder' : 'Final photo');
-                return (
-                  <div key={file.id} className="group relative overflow-hidden rounded-2xl bg-stone-100">
-                    <div className="aspect-[4/3]">
-                      {file.file_type === 'VIDEO' ? (
-                        !previewEnabled && !canVideoDownload ? (
-                          <div className="flex h-full items-center justify-center bg-stone-200 p-4 text-center text-sm text-stone-600"><LockKeyhole className="mr-2 h-5 w-5" />Video preview disabled</div>
-                        ) : canVideoDownload ? (
-                          <video src={mediaUrl(token, file.id, 'ORIGINAL')} controls controlsList="nodownload" preload="metadata" className="h-full w-full object-cover" />
-                        ) : (
-                          <div className="relative h-full w-full bg-black">
-                            <video src={preview} controls controlsList="nodownload" preload="metadata" className="h-full w-full object-cover" />
-                            <div className="pointer-events-none absolute left-2 top-2 rounded bg-black/55 px-2 py-1 text-[11px] font-semibold text-white">Preview only</div>
-                          </div>
-                        )
-                      ) : file.file_type === 'FOLDER' ? (
-                        <div className="flex h-full items-center justify-center p-4 text-center text-sm text-stone-500"><FileArchive className="mr-2 h-5 w-5" />Protected folder</div>
-                      ) : !previewEnabled && !canPhotoDownload ? (
-                        <div className="flex h-full items-center justify-center bg-stone-200 p-4 text-center text-sm text-stone-600"><LockKeyhole className="mr-2 h-5 w-5" />Photo preview disabled</div>
-                      ) : (
-                        <img src={preview} alt={label} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
-                      )}
-                    </div>
-                    {!canDownload && previewEnabled && file.file_type !== 'FOLDER' && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/10 pointer-events-none">
-                        <span className="-rotate-12 rounded bg-black/45 px-2 py-1 text-xs font-semibold tracking-[0.18em] text-white">RAMYACHOBI PREVIEW</span>
-                      </div>
-                    )}
-                    <div className="flex items-center justify-between gap-2 p-2">
-                      <span className="truncate text-xs font-medium">{label}</span>
-                      <div className="flex shrink-0 items-center gap-1">
-                        {((file.file_type === 'PHOTO' && canPhotoDownload) || (file.file_type === 'VIDEO' && canVideoDownload)) && (
-                          <a href={mediaUrl(token, file.id, 'ORIGINAL')} className="rounded-lg bg-stone-950 px-2 py-1 text-[11px] font-semibold text-white">Download</a>
-                        )}
-                        {data.drive_link_access_enabled && file.google_drive_link && (
-                          <a href={file.google_drive_link} target="_blank" rel="noreferrer" className="rounded-lg bg-emerald-700 px-2 py-1 text-[11px] font-semibold text-white">Drive</a>
-                        )}
-                      </div>
-                    </div>
+        {!unavailable && <section className="overflow-hidden rounded-2xl border border-[#e5dfd3] bg-white shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-200 px-4 py-4 sm:px-5">
+            <div><p className="text-[11px] font-bold uppercase tracking-[.18em] text-amber-700">Your files</p><h2 className="mt-1 text-xl font-semibold">{canDownload ? 'Final delivery' : 'Preview gallery'}</h2></div>
+            <div className="flex flex-wrap gap-2">
+              {selectedFiles.length > 0 && <button onClick={() => void downloadZip(selectedFiles,'ramyachobi-selected.zip')} disabled={!canDownload || downloading} className="rounded-xl border border-stone-300 px-3 py-2 text-xs font-bold disabled:opacity-40">Download selected ({selectedFiles.length})</button>}
+              <button onClick={() => void downloadZip(photos.filter(fileCanDownload),'ramyachobi-photos.zip')} disabled={!canPhoto || !photos.length || downloading} className="inline-flex items-center gap-1.5 rounded-xl bg-[#292820] px-3 py-2 text-xs font-bold text-white disabled:opacity-40"><Download className="h-3.5 w-3.5" />All photos ZIP</button>
+            </div>
+          </div>
+          <div className="flex gap-1 overflow-x-auto border-b border-stone-200 px-3 pt-2 sm:px-5" role="tablist">
+            {([['PHOTOS',`Photos (${photos.length || legacyPhotos.length})`],['VIDEOS',`Videos (${videos.length || legacyVideos.length})`],['DOCUMENTS',`Documents (${documents.length})`]] as [Tab,string][]).map(([value,label]) => <button key={value} role="tab" aria-selected={tab===value} onClick={() => { setTab(value); setSelected([]); }} className={`shrink-0 border-b-2 px-3 py-3 text-sm font-semibold ${tab===value ? 'border-amber-600 text-stone-950' : 'border-transparent text-stone-500'}`}>{label}</button>)}
+          </div>
+          <div className="p-3 sm:p-5">
+            {activeItems.length === 0 ? <div className="grid min-h-40 place-items-center rounded-xl border border-dashed border-stone-300 bg-[#fbfaf7] p-5 text-center"><div><FileText className="mx-auto h-7 w-7 text-stone-400"/><p className="mt-2 text-sm font-semibold">No {tab.toLowerCase()} available yet</p><p className="mt-1 text-xs text-stone-500">Files will appear here when the delivery is ready.</p></div></div> : <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-4">
+              {activeItems.map((item: any, index: number) => {
+                const isFile = Boolean(item.id);
+                const label = item.title || item.file_name || `Photo ${index + 1}`;
+                const canItem = isFile && fileCanDownload(item);
+                const source = isFile ? displayUrl(item,index) : item.url;
+                return <article key={isFile ? item.id : `${tab}-${index}`} className="group overflow-hidden rounded-xl border border-stone-200 bg-white">
+                  <div className={`relative aspect-[4/3] bg-[#efede7] ${tab !== 'DOCUMENTS' ? 'cursor-zoom-in' : ''}`} onClick={() => { if (tab === 'DOCUMENTS') return; setLightbox({ src: source, title: label, isVideo: tab === 'VIDEOS' }); }}>
+                    {tab === 'PHOTOS' ? source ? <img src={source} loading="lazy" alt={label} className="h-full w-full object-cover transition group-hover:scale-[1.02]" /> : <div className="grid h-full place-items-center"><ImageIcon className="h-8 w-8 text-stone-400"/></div> : tab === 'VIDEOS' ? <div className="relative h-full"><video src={source} preload="metadata" className="h-full w-full object-cover"/><span className="absolute inset-0 grid place-items-center bg-black/10"><PlayCircle className="h-10 w-10 text-white drop-shadow"/></span></div> : <div className="grid h-full place-items-center"><FileText className="h-9 w-9 text-amber-700"/></div>}
+                    {!canDownload && tab !== 'DOCUMENTS' && <span className="absolute left-2 top-2 rounded-full bg-black/55 px-2 py-1 text-[10px] font-bold text-white">PREVIEW</span>}
+                    {isFile && canItem && <label onClick={(e) => e.stopPropagation()} className="absolute right-2 top-2 grid h-7 w-7 place-items-center rounded-lg bg-white/95 shadow"><input type="checkbox" checked={selected.includes(item.id)} onChange={(e) => setSelected((old) => e.target.checked ? [...old,item.id] : old.filter((id) => id !== item.id))} aria-label={`Select ${label}`} className="h-4 w-4 accent-stone-900" /></label>}
                   </div>
-                );
-              }) : previewEnabled ? previews.map((item, index) => (
-                <div key={index} className="group relative aspect-[4/3] overflow-hidden rounded-2xl bg-stone-100">
-                  <img src={item.url} alt={item.title || `Gallery item ${index + 1}`} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
-                  {!canDownload && <div className="absolute inset-0 flex items-center justify-center bg-black/10"><span className="-rotate-12 rounded bg-black/45 px-2 py-1 text-xs font-semibold tracking-[0.18em] text-white">RAMYACHOBI PREVIEW</span></div>}
-                  <div className="absolute bottom-2 left-2 flex items-center gap-1 rounded-full bg-black/55 px-2 py-1 text-[11px] font-medium text-white backdrop-blur">{item.type === 'video' ? <PlayCircle className="h-3 w-3" /> : <ImageIcon className="h-3 w-3" />}{item.type === 'video' ? 'Video' : 'Photo'}</div>
-                </div>
-              )) : <div className="col-span-full flex min-h-40 items-center justify-center rounded-2xl bg-stone-100 p-6 text-center text-sm text-stone-600"><LockKeyhole className="mr-2 h-5 w-5" />Preview access is disabled by the administrator.</div>}
-            </div>
-            <div className="mt-5 grid gap-2 sm:grid-cols-4">
-              <div className="rounded-xl bg-stone-50 p-3 text-xs"><span className="block text-stone-500">Preview</span><strong>{previewEnabled ? 'ON' : 'OFF'}</strong></div>
-              <div className="rounded-xl bg-stone-50 p-3 text-xs"><span className="block text-stone-500">Photo download</span><strong>{canPhotoDownload ? 'ON' : 'OFF'}</strong></div>
-              <div className="rounded-xl bg-stone-50 p-3 text-xs"><span className="block text-stone-500">Video download</span><strong>{canVideoDownload ? 'ON' : 'OFF'}</strong></div>
-              <div className="rounded-xl bg-stone-50 p-3 text-xs"><span className="block text-stone-500">Drive link</span><strong>{data.drive_link_access_enabled ? 'ON' : 'OFF'}</strong></div>
-            </div>
-            {downloadError && <div className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{downloadError}</div>}
-
-            {data.google_drive_access_enabled && (
-              <div className="mt-5 flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
-                <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" />
-                <div><strong>Payment verified.</strong> Original downloads and Google Drive access links are now available for your final files.</div>
-              </div>
-            )}
-
-            {!canDownload && (
-              <div className="mt-5 flex items-start gap-3 rounded-2xl bg-stone-50 p-4 text-sm text-stone-600">
-                <LockKeyhole className="mt-0.5 h-5 w-5 shrink-0 text-stone-800" />
-                <div><strong className="text-stone-900">Preview only.</strong> Original files remain protected until payment is verified and Final Delivery is activated.</div>
-              </div>
-            )}
-          </section>
-        )}
-
-        {!isUnavailable && (!isFullyPaid || isLocked) && (
-          <section id="payment" className="grid gap-6 lg:grid-cols-[.85fr_1.15fr]">
-            <div className="rounded-3xl bg-stone-950 p-6 text-white sm:p-8">
-              <WalletCards className="h-9 w-9 text-amber-300" />
-              <h2 className="mt-4 text-2xl font-semibold">{isAccessPayment ? 'Restore Gallery Access' : 'Complete Your Payment'}</h2>
-              <p className="mt-2 text-white/75">Choose a payment channel, copy the number, then Send Money or transfer the amount shown.</p>
-              <div className="mt-5 grid gap-2">
-                {paymentOptions.map((option) => (
-                  <button key={option.id} type="button" onClick={() => setPaymentMethod(option.id)}
-                    className={`flex items-center gap-3 rounded-2xl border p-3 text-left transition ${paymentMethod === option.id ? 'border-amber-300 bg-white/10' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}>
-                    <span className={`flex h-9 w-9 items-center justify-center rounded-xl text-sm font-black text-white ${option.color}`}>{option.mark}</span>
-                    <span className="font-semibold">{option.label}</span>
-                    {paymentMethod === option.id && <CheckCircle2 className="ml-auto h-5 w-5 text-amber-300" />}
-                  </button>
-                ))}
-              </div>
-              {selectedPaymentOption && (
-                <div className="mt-4 rounded-2xl bg-white/10 p-4">
-                  <div className="text-xs uppercase tracking-[0.18em] text-white/60">{selectedPaymentOption.label} payment account</div>
-                  <div className="mt-2 flex items-center justify-between gap-4">
-                    <div className="break-all text-xl font-semibold">{selectedPaymentOption.account}</div>
-                    <button type="button" onClick={() => navigator.clipboard?.writeText(selectedPaymentOption.account)}
-                      className="shrink-0 rounded-xl bg-white px-3 py-2 text-sm font-semibold text-stone-950">
-                      <Copy className="mr-1 inline h-4 w-4" /> Copy
-                    </button>
-                  </div>
-                </div>
-              )}
-              <div className="mt-5 text-sm leading-6 text-white/70">
-                After sending the exact amount, upload the transaction screenshot. Your downloads unlock after the payment is verified.
-              </div>
-            </div>
-
-            <form onSubmit={submitPayment} className="rounded-3xl border border-stone-200 bg-white p-6 shadow-sm sm:p-8">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="block">
-                  <span className="mb-1.5 block text-sm font-semibold">Payer Mobile Number</span>
-                  <input value={payerPhone} onChange={(e) => setPayerPhone(e.target.value)} className="w-full rounded-xl border border-stone-300 px-3.5 py-3 outline-none focus:border-stone-950" placeholder="01XXXXXXXXX" />
-                </label>
-                <label className="block">
-                  <span className="mb-1.5 block text-sm font-semibold">Transaction ID</span>
-                  <input value={transactionId} onChange={(e) => setTransactionId(e.target.value)} className="w-full rounded-xl border border-stone-300 px-3.5 py-3 outline-none focus:border-stone-950" placeholder="e.g. 9ABCD12EFG" />
-                </label>
-                {isAccessPayment && (
-                  <label className="block">
-                    <span className="mb-1.5 block text-sm font-semibold">Access Days</span>
-                    <select value={selectedDays} onChange={(e) => setSelectedDays(Number(e.target.value))} className="w-full rounded-xl border border-stone-300 px-3.5 py-3 outline-none focus:border-stone-950">
-                      {[1,2,3,5,7].map((d) => <option key={d} value={d}>{d} day{d > 1 ? 's' : ''} · {money(d * feePerDay)}</option>)}
-                    </select>
-                  </label>
-                )}
-                <label className="block">
-                  <span className="mb-1.5 block text-sm font-semibold">Paid Amount (BDT)</span>
-                  <input value={amount} onChange={(e) => setAmount(e.target.value)} readOnly={isAccessPayment} type="number" min="1" max={isAccessPayment ? undefined : remainingDue} className="w-full rounded-xl border border-stone-300 px-3.5 py-3 outline-none focus:border-stone-950 read-only:bg-stone-50" />
-                  {!isAccessPayment && <span className="mt-1 block text-xs text-stone-500">Package balance: {money(remainingDue)}</span>}
-                </label>
-                <label className="block sm:col-span-2">
-                  <span className="mb-1.5 block text-sm font-semibold">Payment Screenshot</span>
-                  <input type="file" accept="image/jpeg,image/png,image/webp" required
-                    onChange={(e) => setPaymentScreenshot(e.target.files?.[0] || null)}
-                    className="w-full rounded-xl border border-dashed border-stone-300 bg-stone-50 px-3.5 py-3 text-sm" />
-                  <span className="mt-1 block text-xs text-stone-500">
-                    JPEG, PNG or WebP · up to 5 MB. The screenshot is stored privately for admin review.
-                  </span>
-                  {paymentScreenshot && <span className="mt-1 block text-xs font-semibold text-emerald-700">{paymentScreenshot.name}</span>}
-                </label>
-              </div>
-
-              <button disabled={submitting} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-stone-950 px-4 py-3 font-semibold text-white disabled:opacity-50">
-                <Smartphone className="h-4 w-4" />
-                {submitting ? 'Submitting...' : isAccessPayment ? 'Submit Access Payment' : 'Submit Package Payment'}
-              </button>
-
-              {paymentMessage && (
-                <div className="mt-4 rounded-xl bg-stone-50 p-3 text-sm text-stone-700">{paymentMessage}</div>
-              )}
-            </form>
-          </section>
-        )}
-
-        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {[
-            [ShieldCheck, 'Private Gallery', 'Private client link with protected access logic.'],
-            [BadgeCheck, 'Payment Verification', 'Access changes only after payment verification.'],
-            [LockKeyhole, 'Protected Originals', 'Original files are available only through the verified delivery flow.'],
-            [Clock3, 'Limited Retention', 'Gallery access and actual file retention are managed separately.'],
-          ].map(([Icon, title, text]: any) => (
-            <div key={title} className="rounded-2xl border border-stone-200 bg-white p-5">
-              <Icon className="h-6 w-6 text-amber-700" />
-              <h3 className="mt-3 font-semibold">{title}</h3>
-              <p className="mt-1 text-sm leading-6 text-stone-500">{text}</p>
-            </div>
-          ))}
-        </section>
-
-        <section className="rounded-3xl border border-stone-200 bg-white p-6 sm:p-8">
-          <div className="flex items-center gap-3">
-            <FileArchive className="h-7 w-7 text-amber-700" />
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-700">Final Delivery Policy</p>
-              <h2 className="mt-1 text-2xl font-semibold">Client Access Policy</h2>
-            </div>
+                  <div className="flex items-center justify-between gap-2 p-2.5"><div className="min-w-0"><div className="truncate text-xs font-semibold" title={label}>{label}</div><div className="mt-0.5 text-[10px] text-stone-500">{isFile ? fileSize(item.file_size_bytes) || item.file_type.toLowerCase() : tab.toLowerCase()}</div></div>{isFile && canItem && <button onClick={() => downloadOne(item)} className="shrink-0 rounded-lg bg-[#292820] px-2.5 py-1.5 text-[10px] font-bold text-white">Download</button>}</div>
+                </article>;
+              })}
+            </div>}
+            {downloadError && <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{downloadError}</div>}
           </div>
-          <div className="mt-6 grid gap-3 text-sm leading-6 text-stone-600 md:grid-cols-2">
-            {[
-              'Final photos and videos are released after full package payment is completed and verified.',
-              'From the Final Delivery date, clients receive 30 days of complimentary viewing and download access.',
-              'Clients should download and securely back up their files during the complimentary period.',
-              'After 30 days, Gallery and Download Access lock automatically.',
-              `If files are still retained, gallery access may be restored for ${money(feePerDay)} per day.`,
-              `Each additional day of restored access requires an additional ${money(feePerDay)}.`,
-              'The Access Restoration Fee is separate from the original photography or videography package fee.',
-              'Files may be permanently deleted after the applicable RamyaChobi storage-retention period.',
-            ].map((item) => (
-              <div key={item} className="flex gap-2 rounded-xl bg-stone-50 p-3">
-                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-                <span>{item}</span>
-              </div>
-            ))}
+        </section>}
+
+        {!fullyPaid && !unavailable && <section className="grid gap-4 lg:grid-cols-[.8fr_1.2fr]">
+          <div className="rounded-2xl bg-[#292820] p-5 text-white"><WalletCards className="h-7 w-7 text-amber-300"/><h2 className="mt-3 text-xl font-semibold">Submit payment</h2><p className="mt-1 text-sm text-white/65">Select a configured account, copy the number, then send payment.</p><div className="mt-4 space-y-2">{paymentOptions.length ? paymentOptions.map((option) => <button key={option.id} onClick={() => setPaymentMethod(option.id)} className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left ${paymentMethod===option.id ? 'border-amber-300 bg-white/10' : 'border-white/10 bg-white/5'}`}><span className={`grid h-8 w-8 place-items-center rounded-lg text-sm font-black ${option.color}`}>{option.mark}</span><span className="text-sm font-semibold">{option.label}</span>{paymentMethod===option.id && <Check className="ml-auto h-4 w-4 text-amber-300"/>}</button>) : <p className="rounded-xl bg-white/5 p-3 text-sm text-white/70">Payment methods are not configured. Contact RamyaChobi.</p>}</div>
+            {currentMethod && <div className="mt-3 rounded-xl bg-white/10 p-3"><div className="text-[10px] uppercase tracking-[.16em] text-white/55">{currentMethod.label} number</div><div className="mt-1 flex items-center justify-between gap-3"><strong className="text-lg">{currentMethod.account}</strong><button onClick={() => { void navigator.clipboard?.writeText(currentMethod.account); setPaymentMessage('Payment number copied.'); }} className="rounded-lg bg-white px-2.5 py-2 text-xs font-bold text-stone-900"><Copy className="mr-1 inline h-3.5 w-3.5"/>Copy</button></div></div>}
           </div>
+          <form onSubmit={submitPayment} className="rounded-2xl border border-[#e5dfd3] bg-white p-5">
+            <div className="grid gap-3 sm:grid-cols-2"><label className="text-xs font-semibold">Payer mobile<input value={payerPhone} onChange={(e) => setPayerPhone(e.target.value)} placeholder="01XXXXXXXXX" className="mt-1.5 w-full rounded-xl border border-stone-300 px-3 py-2.5 text-sm"/></label><label className="text-xs font-semibold">Transaction ID<input value={transactionId} onChange={(e) => setTransactionId(e.target.value)} placeholder="Enter TrxID" className="mt-1.5 w-full rounded-xl border border-stone-300 px-3 py-2.5 text-sm"/></label>{isAccessPayment && <label className="text-xs font-semibold">Restore access<select value={selectedDays} onChange={(e) => setSelectedDays(Number(e.target.value))} className="mt-1.5 w-full rounded-xl border border-stone-300 px-3 py-2.5 text-sm">{[1,2,3,5,7].map((day) => <option key={day} value={day}>{day} day{day>1?'s':''} · {money(day*dailyFee)}</option>)}</select></label>}<label className="text-xs font-semibold">Amount (BDT)<input type="number" min="1" max={isAccessPayment ? undefined : remaining || undefined} readOnly={isAccessPayment} value={amount} onChange={(e) => setAmount(e.target.value)} className="mt-1.5 w-full rounded-xl border border-stone-300 px-3 py-2.5 text-sm read-only:bg-stone-50"/><span className="mt-1 block font-normal text-stone-500">{isAccessPayment ? 'Restoration fee' : `Balance due: ${money(remaining)}`}</span></label><label className="text-xs font-semibold">Payment screenshot<input type="file" accept="image/jpeg,image/png,image/webp" required onChange={(e) => setPaymentScreenshot(e.target.files?.[0] || null)} className="mt-1.5 w-full rounded-xl border border-dashed border-stone-300 bg-stone-50 px-2 py-2 text-xs"/><span className="mt-1 block font-normal text-stone-500">JPEG, PNG or WebP, up to 5 MB</span></label></div>
+            <button disabled={submitting || !currentMethod} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#292820] px-4 py-3 text-sm font-bold text-white disabled:opacity-40"><Smartphone className="h-4 w-4"/>{submitting ? 'Submitting…' : 'Submit for verification'}</button>{paymentMessage && <p className="mt-3 rounded-xl bg-stone-50 p-3 text-sm text-stone-700">{paymentMessage}</p>}
+            <p className="mt-3 text-xs leading-5 text-stone-500">Status: {data.payment_status === 'SUBMITTED' ? 'Pending admin verification' : data.payment_status === 'REJECTED' ? 'Rejected · contact support' : 'No submitted payment'}.</p>
+          </form>
+        </section>}
+
+        <section className="grid gap-4 lg:grid-cols-2">
+          <form onSubmit={sendReview} className="rounded-2xl border border-[#e5dfd3] bg-white p-5"><h2 className="text-lg font-semibold">Leave a review</h2><p className="mt-1 text-xs text-stone-500">Your review is sent to the team for approval before it appears publicly.</p><div className="mt-3 flex gap-1" aria-label="Rating">{[1,2,3,4,5].map((value) => <button type="button" key={value} onClick={() => setRating(value)} aria-label={`${value} stars`} className={`text-2xl ${rating >= value ? 'text-amber-500' : 'text-stone-300'}`}>★</button>)}</div><textarea value={review} onChange={(e) => setReview(e.target.value)} minLength={12} maxLength={2000} required placeholder="Tell us about your experience" className="mt-2 min-h-24 w-full resize-y rounded-xl border border-stone-300 px-3 py-2.5 text-sm"/><button disabled={reviewBusy} className="mt-2 rounded-xl border border-stone-300 px-4 py-2.5 text-sm font-bold disabled:opacity-40">{reviewBusy ? 'Submitting…' : 'Submit review'}</button>{reviewMessage && <p className="mt-2 text-xs text-stone-600">{reviewMessage}</p>}</form>
+          <div className="rounded-2xl bg-[#ebe4d7] p-5"><h2 className="text-lg font-semibold">Need help?</h2><p className="mt-1 text-sm leading-6 text-stone-600">Contact RamyaChobi about payments, delivery status, or access dates.</p>{(data.whatsapp_number || data.client_phone) && <a href={phoneHref(data.whatsapp_number || data.client_phone)} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-2 rounded-xl bg-[#292820] px-4 py-3 text-sm font-bold text-white"><MessageCircle className="h-4 w-4"/>WhatsApp support</a>}<div className="mt-5 flex items-start gap-2 border-t border-stone-300 pt-4 text-xs leading-5 text-stone-600"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-amber-700"/>Original files stay in private Drive storage. This page never receives a Google login or direct Drive credential.</div></div>
         </section>
+        <footer className="pb-4 text-center text-[11px] text-stone-500">RamyaChobi · Private client delivery</footer>
+      </div>
 
-        <section className="rounded-3xl bg-stone-950 p-6 text-white sm:p-8">
-          <h2 className="text-2xl font-semibold">Frequently Asked Questions</h2>
-          <div className="mt-5 divide-y divide-white/10">
-            {faq.map(([q, a], index) => (
-              <button key={q} type="button" onClick={() => setOpenFaq(openFaq === index ? null : index)} className="w-full py-4 text-left">
-                <div className="flex items-center justify-between gap-4">
-                  <span className="font-medium">{q}</span>
-                  <ChevronDown className={`h-5 w-5 transition ${openFaq === index ? 'rotate-180' : ''}`} />
-                </div>
-                {openFaq === index && <p className="mt-2 max-w-3xl text-sm leading-6 text-white/60">{a}</p>}
-              </button>
-            ))}
-          </div>
-        </section>
-      </main>
-
-      {data.client_phone && (
-        <a href={whatsappHref(data.whatsapp_number || data.client_phone)} target="_blank" rel="noreferrer" aria-label="WhatsApp contact" className="fixed bottom-5 right-5 z-30 inline-flex items-center gap-2 rounded-full bg-green-600 px-4 py-3 text-sm font-bold text-white shadow-xl">
-          <MessageCircle className="h-5 w-5" /> WhatsApp
-        </a>
-      )}
-
-      <footer className="border-t border-stone-200 bg-white px-5 py-8 text-center text-sm text-stone-500">
-        <div className="font-semibold tracking-[0.16em] text-stone-900">RAMYACHOBI</div>
-        <div className="mt-2">Photography & Videography · Private Client Delivery</div>
-        <div className="mt-2">© 2026 RamyaChobi. All Rights Reserved.</div>
-      </footer>
-    </div>
+      {lightbox && <div className="fixed inset-0 z-[150] grid place-items-center bg-black/90 p-3 sm:p-6" role="dialog" aria-modal="true" aria-label="Photo preview" onClick={() => setLightbox(null)}><button onClick={() => setLightbox(null)} aria-label="Close preview" className="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white"><X className="h-5 w-5"/></button><div className="max-h-full w-full max-w-6xl" onClick={(e) => e.stopPropagation()}>{lightbox.isVideo ? <video src={lightbox.src} controls autoPlay className="mx-auto max-h-[82vh] max-w-full"/> : <img src={lightbox.src} alt={lightbox.title} className="mx-auto max-h-[86vh] max-w-full object-contain"/>}<p className="mt-3 text-center text-sm text-white/80">{lightbox.title}</p></div></div>}
+    </main>
   );
 }

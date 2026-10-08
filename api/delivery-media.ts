@@ -1,5 +1,6 @@
 type VercelRequest = any;
 type VercelResponse = any;
+import { getDriveAccessToken } from './_lib/driveAuth';
 
 function json(res: VercelResponse, status: number, message: string) {
   res.status(status).setHeader('content-type', 'application/json; charset=utf-8').end(JSON.stringify({ error: message }));
@@ -12,12 +13,12 @@ function supabaseConfig() {
   return { url, key };
 }
 
-async function deliveryMedia(token: string, fileId: string, mode: 'PREVIEW' | 'ORIGINAL') {
+async function deliveryMedia(token: string, fileId: string, mode: 'PREVIEW' | 'ORIGINAL', adminToken?: string | null) {
   const { url, key } = supabaseConfig();
   const response = await fetch(`${url}/rest/v1/rpc/get_delivery_media_by_token`, {
     method: 'POST',
     headers: { apikey: key, Authorization: `Bearer ${key}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ p_token: token, p_file_id: fileId, p_mode: mode }),
+    body: JSON.stringify({ p_token: token, p_file_id: fileId, p_mode: mode, ...(adminToken ? { p_admin_token: adminToken } : {}) }),
   });
   if (!response.ok) throw new Error((await response.text()).slice(0, 300) || 'Delivery file is unavailable.');
   const data = await response.json();
@@ -26,8 +27,7 @@ async function deliveryMedia(token: string, fileId: string, mode: 'PREVIEW' | 'O
 }
 
 async function driveResponse(fileId: string, mode: 'PREVIEW' | 'ORIGINAL', range?: string, mimeType?: string | null, fileType?: string | null) {
-  const auth = process.env.GOOGLE_DRIVE_ACCESS_TOKEN || '';
-  if (!auth) throw new Error('Protected Google Drive server configuration is missing.');
+  const auth = await getDriveAccessToken();
   const headers: Record<string, string> = { Authorization: `Bearer ${auth}` };
   if (range) headers.Range = range;
 
@@ -58,7 +58,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!/^[0-9a-f-]{36}$/i.test(fileId)) return json(res, 400, 'Invalid delivery file ID.');
 
   try {
-    const file = await deliveryMedia(token, fileId, mode);
+    const adminToken = String(req.headers['x-admin-token'] || '').trim() || null;
+    const file = await deliveryMedia(token, fileId, mode, adminToken);
     if (!file.drive_file_id) return json(res, 400, 'This delivery item is a folder and cannot be streamed directly.');
     const upstream = await driveResponse(String(file.drive_file_id), mode, String(req.headers.range || ''), file.mime_type, file.file_type);
     if (!upstream.ok || !upstream.body) return json(res, upstream.status || 502, 'Google Drive file could not be read.');

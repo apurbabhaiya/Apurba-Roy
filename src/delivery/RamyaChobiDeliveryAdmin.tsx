@@ -46,11 +46,13 @@ import {
   deleteDeliveryPayment,
   restoreDeliveryAccess,
   setDeliveryPermissions,
+  setDeliveryPublished,
+  setDeliveryDocumentPermission,
   DeliveryPaymentLedger,
 } from '../services/deliveryPortalService';
 import PortfolioManager from '../components/PortfolioManager';
-import { DriveFolderPickerModal } from '../components/DriveFolderPickerModal';
-import { getGoogleDriveAccessToken, googleSupabaseSignIn } from '../services/supabaseAuth';
+import DriveDeliveryPickerModal from '../components/DriveDeliveryPickerModal';
+import DriveConnectionCard from '../components/DriveConnectionCard';
 
 const ADMIN_TOKEN_KEY = 'ramya_booking_admin_token_v1';
 
@@ -134,14 +136,14 @@ export default function RamyaChobiDeliveryAdmin() {
   const [settingsBkash, setSettingsBkash] = useState('');
   const [settingsNagad, setSettingsNagad] = useState('');
   const [settingsDbbl, setSettingsDbbl] = useState('');
+  const [settingsRocket, setSettingsRocket] = useState('');
   const [settingsRetention, setSettingsRetention] = useState('');
   const [paymentProofUrl, setPaymentProofUrl] = useState('');
   const [proofLoadingId, setProofLoadingId] = useState('');
   const [filesByPortal, setFilesByPortal] = useState<Record<string, DeliveryAdminFile[]>>({});
-  const [fileDrafts, setFileDrafts] = useState<Record<string, { url: string; fileName: string; title: string; type: 'PHOTO' | 'VIDEO' | 'FOLDER'; sortOrder: string }>>({});
+  const [fileDrafts, setFileDrafts] = useState<Record<string, { url: string; fileName: string; title: string; type: 'PHOTO' | 'VIDEO' | 'DOCUMENT' | 'FOLDER'; sortOrder: string }>>({});
   const [fileMetaByPortal, setFileMetaByPortal] = useState<Record<string, { name?: string; mimeType?: string; size?: string | null }>>({});
   const [fileErrorByPortal, setFileErrorByPortal] = useState<Record<string, string>>({});
-  const [drivePickerToken, setDrivePickerToken] = useState<string | null>(null);
   const [drivePickerPortalId, setDrivePickerPortalId] = useState('');
   const [ledgerByPortal, setLedgerByPortal] = useState<Record<string, DeliveryPaymentLedger[]>>({});
   const [portalSearch, setPortalSearch] = useState('');
@@ -248,6 +250,7 @@ export default function RamyaChobiDeliveryAdmin() {
       photoDownloadPermission: portal.photo_download_permission === true,
       videoDownloadPermission: portal.video_download_permission === true,
       driveLinkAccessEnabled: portal.drive_link_access_enabled === true,
+      documentDownloadPermission: portal.document_download_permission === true,
     });
   }
 
@@ -291,6 +294,7 @@ export default function RamyaChobiDeliveryAdmin() {
         videoDownloadPermission: Boolean(portalEdit.videoDownloadPermission),
         driveLinkAccessEnabled: Boolean(portalEdit.driveLinkAccessEnabled),
       });
+      await setDeliveryDocumentPermission({ token, portalId: selectedPortalId, allowed: Boolean(portalEdit.documentDownloadPermission) });
       setNotice('Client portal details and permissions updated.');
       await load();
     } catch (error: any) { setNotice(error?.message || 'Could not update client portal.'); }
@@ -452,6 +456,7 @@ export default function RamyaChobiDeliveryAdmin() {
     setSettingsBkash(portal.bkash_number || '01776044951');
     setSettingsNagad(portal.nagad_number || '');
     setSettingsDbbl(portal.dbbl_number || '');
+    setSettingsRocket(portal.rocket_number || '');
     setSettingsRetention(toDateTimeLocal(portal.storage_retention_until));
   }
 
@@ -472,6 +477,7 @@ export default function RamyaChobiDeliveryAdmin() {
         bkashNumber: settingsBkash.trim(),
         nagadNumber: settingsNagad.trim(),
         dbblNumber: settingsDbbl.trim(),
+        rocketNumber: settingsRocket.trim(),
       });
       setNotice('Delivery settings and payment methods updated.');
       setEditingPortal(null);
@@ -508,22 +514,32 @@ export default function RamyaChobiDeliveryAdmin() {
     navigator.clipboard?.writeText(link);
     setNotice('Private client link copied.');
   }
-  async function openDeliveryDrivePicker(portalId: string) {
-    const accessToken = getGoogleDriveAccessToken();
-    if (!accessToken) {
-      setNotice('Google Drive is not connected. Connect your Google account, then click Browse Drive again.');
-      try {
-        await googleSupabaseSignIn();
-      } catch (error: any) {
-        setNotice(error?.message || 'Could not connect Google Drive.');
-      }
-      return;
-    }
-    setDrivePickerToken(accessToken);
-    setDrivePickerPortalId(portalId);
+
+  async function setPublished(portal: DeliveryAdminPortal, published: boolean) {
+    setLoading(true); setNotice('');
+    try {
+      await setDeliveryPublished({ token, portalId: portal.id, published });
+      setNotice(published ? 'Delivery published. The client link is active.' : 'Delivery saved as a private draft. The client link is disabled.');
+      await load();
+    } catch (error: any) { setNotice(error?.message || 'Could not update publish status.'); }
+    finally { setLoading(false); }
   }
 
-  function updateFileDraft(portalId: string, patch: Partial<{ url: string; fileName: string; title: string; type: 'PHOTO' | 'VIDEO' | 'FOLDER'; sortOrder: string }>) {
+  function previewClientPage(portal: DeliveryAdminPortal) {
+    window.open(`/delivery/${portal.secure_token}?preview=admin`, '_blank', 'noopener,noreferrer');
+  }
+
+  function pickedDriveItem(portalId: string, item: { id: string; name: string; mimeType: string }) {
+    const folder = item.mimeType === 'application/vnd.google-apps.folder';
+    const type = folder ? 'FOLDER' : item.mimeType.startsWith('image/') ? 'PHOTO' : item.mimeType.startsWith('video/') ? 'VIDEO' : 'DOCUMENT';
+    const url = folder ? `https://drive.google.com/drive/folders/${item.id}` : `https://drive.google.com/file/d/${item.id}/view`;
+    setDrivePickerPortalId('');
+    updateFileDraft(portalId, { url, title: item.name, fileName: item.name, type });
+    void addFinalDeliveryFile(portalId, folder ? { url, name: item.name } : undefined);
+  }
+  function openDeliveryDrivePicker(portalId: string) { setDrivePickerPortalId(portalId); }
+
+  function updateFileDraft(portalId: string, patch: Partial<{ url: string; fileName: string; title: string; type: 'PHOTO' | 'VIDEO' | 'DOCUMENT' | 'FOLDER'; sortOrder: string }>) {
     setFileDrafts((current) => ({
       ...current,
       [portalId]: { url: current[portalId]?.url || '', fileName: current[portalId]?.fileName || '', title: current[portalId]?.title || '', type: current[portalId]?.type || 'PHOTO', sortOrder: current[portalId]?.sortOrder || '', ...patch },
@@ -699,6 +715,8 @@ export default function RamyaChobiDeliveryAdmin() {
           <div className="rounded-2xl border border-stone-200 bg-white p-4 text-sm font-medium shadow-sm">{notice}</div>
         )}
 
+        <DriveConnectionCard adminToken={token} />
+
         <section className="grid gap-4 md:grid-cols-3">
           <a href="/photo-selection" className="group rounded-3xl bg-stone-950 p-6 text-white shadow-sm transition hover:-translate-y-0.5">
             <Images className="h-8 w-8 text-amber-300" />
@@ -767,7 +785,7 @@ export default function RamyaChobiDeliveryAdmin() {
             <input type="datetime-local" value={newRetention} onChange={(e) => setNewRetention(e.target.value)} className="rounded-xl border border-stone-300 px-3.5 py-3" title="Storage retention end date" />
           </div>
           <button onClick={createPortal} disabled={loading || !selectedBooking} className="mt-4 rounded-xl bg-stone-950 px-5 py-3 text-sm font-bold text-white disabled:opacity-40">
-            Create Private Delivery Link
+            Save as Draft
           </button>
         </section>
 
@@ -848,6 +866,7 @@ export default function RamyaChobiDeliveryAdmin() {
                         <StatusPill value={portal.payment_status} />
                         <StatusPill value={portal.delivery_status} />
                         <StatusPill value={portal.gallery_status} />
+                        <StatusPill value={portal.is_published ? 'PUBLISHED' : 'DRAFT'} />
                       </div>
                     </div>
                     <div className="text-right">
@@ -876,8 +895,8 @@ export default function RamyaChobiDeliveryAdmin() {
                     <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.6fr)_auto_120px_minmax(0,1fr)_minmax(0,1fr)_90px_auto]">
                       <input value={fileDrafts[portal.id]?.url || ''} onChange={(e) => { const url = e.target.value; updateFileDraft(portal.id, { url, ...(isGoogleDriveFolderLink(url) ? { type: 'FOLDER' as const } : {}) }); }} placeholder="Private Google Drive photo, video, or folder link" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm" />
                       <button type="button" onClick={() => void openDeliveryDrivePicker(portal.id)} disabled={loading} className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-300 bg-white px-3 py-2.5 text-sm font-bold text-amber-900 disabled:opacity-50"><Link2 className="h-4 w-4" /> Browse Drive</button>
-                      <select value={fileDrafts[portal.id]?.type || 'PHOTO'} onChange={(e) => updateFileDraft(portal.id, { type: e.target.value as 'PHOTO' | 'VIDEO' | 'FOLDER' })} className="rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm">
-                        <option value="PHOTO">Photo</option><option value="VIDEO">Video</option><option value="FOLDER">Google Drive Folder</option>
+                      <select value={fileDrafts[portal.id]?.type || 'PHOTO'} onChange={(e) => updateFileDraft(portal.id, { type: e.target.value as 'PHOTO' | 'VIDEO' | 'DOCUMENT' | 'FOLDER' })} className="rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm">
+                        <option value="PHOTO">Photo</option><option value="VIDEO">Video</option><option value="DOCUMENT">Document</option><option value="FOLDER">Google Drive Folder</option>
                       </select>
                       <input value={fileDrafts[portal.id]?.fileName || ''} onChange={(e) => updateFileDraft(portal.id, { fileName: e.target.value })} placeholder="File name (optional)" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm" />
                       <input value={fileDrafts[portal.id]?.title || ''} onChange={(e) => updateFileDraft(portal.id, { title: e.target.value })} placeholder="Display title (optional)" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm" />
@@ -930,6 +949,10 @@ export default function RamyaChobiDeliveryAdmin() {
                   <div className="mt-4 flex flex-wrap gap-2">
                     {portal.client_phone && <a href={portalWhatsapp(portal.whatsapp_number || portal.client_phone)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-3.5 py-2 text-sm font-bold text-white">WhatsApp</a>}
                     <button onClick={() => startPortalEdit(portal)} className="inline-flex items-center gap-2 rounded-xl bg-amber-100 px-3.5 py-2 text-sm font-bold text-amber-900">Edit Client</button>
+                    <button onClick={() => previewClientPage(portal)} className="inline-flex items-center gap-2 rounded-xl border border-stone-300 px-3.5 py-2 text-sm font-bold"><ExternalLink className="h-4 w-4" /> Preview exact page</button>
+                    <button onClick={() => setPublished(portal, !portal.is_published)} disabled={loading} className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-bold text-white ${portal.is_published ? 'bg-stone-700' : 'bg-emerald-700'}`}>
+                      {portal.is_published ? 'Save as Draft' : 'Publish Delivery'}
+                    </button>
                     <button onClick={() => restorePortal(portal.id, false)} disabled={loading} className="inline-flex items-center gap-2 rounded-xl bg-indigo-50 px-3.5 py-2 text-sm font-bold text-indigo-800">Restore Access</button>
                     <button onClick={() => restorePortal(portal.id, true)} disabled={loading} className="inline-flex items-center gap-2 rounded-xl bg-violet-50 px-3.5 py-2 text-sm font-bold text-violet-800">Waive Fee</button>
                     <button onClick={() => copyLink(portal)} className="inline-flex items-center gap-2 rounded-xl bg-stone-950 px-3.5 py-2 text-sm font-bold text-white">
@@ -948,7 +971,7 @@ export default function RamyaChobiDeliveryAdmin() {
                     </button>
                   </div>
 
-                  <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
                     <button type="button" onClick={() => togglePortalPermission(portal, 'preview')} disabled={loading} className={`rounded-xl px-3 py-2 text-xs font-bold ${portal.preview_enabled === false ? 'bg-stone-200 text-stone-700' : 'bg-emerald-100 text-emerald-800'}`}>
                       Preview: {portal.preview_enabled === false ? 'OFF' : 'ON'}
                     </button>
@@ -960,6 +983,9 @@ export default function RamyaChobiDeliveryAdmin() {
                     </button>
                     <button type="button" onClick={() => togglePortalPermission(portal, 'drive')} disabled={loading} className={`rounded-xl px-3 py-2 text-xs font-bold ${portal.drive_link_access_enabled === true ? 'bg-emerald-100 text-emerald-800' : 'bg-stone-200 text-stone-700'}`}>
                       Drive link access: {portal.drive_link_access_enabled === true ? 'ON' : 'OFF'}
+                    </button>
+                    <button type="button" onClick={() => void setDeliveryDocumentPermission({ token, portalId: portal.id, allowed: portal.document_download_permission !== true }).then(() => load()).catch((error: any) => setNotice(error?.message || 'Could not update document permission.'))} disabled={loading} className={`rounded-xl px-3 py-2 text-xs font-bold ${portal.document_download_permission === true ? 'bg-emerald-100 text-emerald-800' : 'bg-stone-200 text-stone-700'}`}>
+                      Document download: {portal.document_download_permission === true ? 'ON' : 'OFF'}
                     </button>
                   </div>
 
@@ -982,6 +1008,7 @@ export default function RamyaChobiDeliveryAdmin() {
                         <label className="flex items-center gap-2 rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm"><input type="checkbox" checked={Boolean(portalEdit.previewEnabled)} onChange={(e) => updatePortalEdit({ previewEnabled: e.target.checked })} /> Preview enabled</label>
                         <label className="flex items-center gap-2 rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm"><input type="checkbox" checked={Boolean(portalEdit.photoDownloadPermission)} onChange={(e) => updatePortalEdit({ photoDownloadPermission: e.target.checked })} /> Photo download permission</label>
                         <label className="flex items-center gap-2 rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm"><input type="checkbox" checked={Boolean(portalEdit.videoDownloadPermission)} onChange={(e) => updatePortalEdit({ videoDownloadPermission: e.target.checked })} /> Video download permission</label>
+                        <label className="flex items-center gap-2 rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm"><input type="checkbox" checked={Boolean(portalEdit.documentDownloadPermission)} onChange={(e) => updatePortalEdit({ documentDownloadPermission: e.target.checked })} /> Document download permission</label>
                         <label className="flex items-center gap-2 rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm"><input type="checkbox" checked={Boolean(portalEdit.driveLinkAccessEnabled)} onChange={(e) => updatePortalEdit({ driveLinkAccessEnabled: e.target.checked })} /> Google Drive link access after payment</label>
                         <input value={portalEdit.finalDeliveryAt || ''} onChange={(e) => updatePortalEdit({ finalDeliveryAt: e.target.value })} type="datetime-local" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5" />
                         <input value={portalEdit.accessExpiryAt || ''} onChange={(e) => updatePortalEdit({ accessExpiryAt: e.target.value })} type="datetime-local" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5" />
@@ -998,6 +1025,7 @@ export default function RamyaChobiDeliveryAdmin() {
                       <input value={settingsBkash} onChange={(e) => setSettingsBkash(e.target.value)} placeholder="bKash number" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5" />
                       <input value={settingsNagad} onChange={(e) => setSettingsNagad(e.target.value)} placeholder="Nagad number (optional)" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5" />
                       <input value={settingsDbbl} onChange={(e) => setSettingsDbbl(e.target.value)} placeholder="Dutch-Bangla account / number (optional)" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5" />
+                      <input value={settingsRocket} onChange={(e) => setSettingsRocket(e.target.value)} placeholder="Rocket number (optional)" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5" />
                       <input type="datetime-local" value={settingsRetention} onChange={(e) => setSettingsRetention(e.target.value)} className="rounded-xl border border-stone-300 bg-white px-3 py-2.5" />
                       <div className="flex gap-2">
                         <button onClick={saveSettings} disabled={loading} className="rounded-xl bg-stone-950 px-4 py-2.5 text-sm font-bold text-white">Save</button>
@@ -1044,25 +1072,12 @@ export default function RamyaChobiDeliveryAdmin() {
           </div>
         </div>
       )}
-      {drivePickerPortalId && drivePickerToken && (
-        <DriveFolderPickerModal
-          accessToken={drivePickerToken}
-          isOpen={Boolean(drivePickerPortalId)}
-          onClose={() => {
-            setDrivePickerPortalId('');
-            setDrivePickerToken(null);
-          }}
-          onSelectFolder={(result) => {
-            const portalId = drivePickerPortalId;
-            const folderUrl = `https://drive.google.com/drive/folders/${result.folder.id}`;
-            setDrivePickerPortalId('');
-            setDrivePickerToken(null);
-            void addFinalDeliveryFile(portalId, { url: folderUrl, name: result.folder.name });
-          }}
-          modalTitle="Select Google Drive Folder for Final Delivery"
-          confirmButtonLabel="Import Photos and Videos"
-        />
-      )}
+      <DriveDeliveryPickerModal
+        adminToken={token}
+        isOpen={Boolean(drivePickerPortalId)}
+        onClose={() => setDrivePickerPortalId('')}
+        onSelect={(item) => pickedDriveItem(drivePickerPortalId, item)}
+      />
     </main>
   );
 }

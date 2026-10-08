@@ -1,4 +1,5 @@
 import JSZip from 'jszip';
+import { getDriveAccessToken } from './_lib/driveAuth';
 
 type VercelRequest = any;
 type VercelResponse = any;
@@ -28,8 +29,7 @@ async function getFile(token: string, id: string) {
 }
 
 async function fetchOriginal(fileId: string): Promise<Response> {
-  const auth = process.env.GOOGLE_DRIVE_ACCESS_TOKEN || '';
-  if (!auth) throw new Error('Protected Google Drive server configuration is missing.');
+  const auth = await getDriveAccessToken();
   return fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`, { headers: { Authorization: `Bearer ${auth}` } });
 }
 
