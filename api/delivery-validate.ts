@@ -1,182 +1,107 @@
+import { getDriveAccessToken, supabaseServiceRequest } from './_lib/driveAuth';
+
 type VercelRequest = any;
 type VercelResponse = any;
 
 function json(res: VercelResponse, status: number, body: unknown) {
-  res.status(status).setHeader('content-type', 'application/json; charset=utf-8').end(JSON.stringify(body));
+  return res.status(status).setHeader('content-type', 'application/json; charset=utf-8').setHeader('cache-control', 'no-store').end(JSON.stringify(body));
 }
 
 function supabaseConfig() {
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY || '';
   if (!url || !key) throw new Error('Protected delivery server configuration is missing.');
-  return { url, key };
+  return { url: url.replace(/\/$/, ''), key };
 }
 
-async function driveConfig() {
-  const refreshToken = process.env.GOOGLE_DRIVE_REFRESH_TOKEN || '';
-  const clientId = process.env.GOOGLE_DRIVE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || '';
-  const clientSecret = process.env.GOOGLE_DRIVE_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET || '';
-
-  if (refreshToken && clientId && clientSecret) {
-    const response = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: clientId,
-        client_secret: clientSecret,
-        refresh_token: refreshToken,
-        grant_type: 'refresh_token',
-      }).toString(),
-    });
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
-      const reason = String(body?.error || '');
-      if (reason === 'invalid_grant') throw new Error('Google Drive connection expired. Reconnect the Google account and try again.');
-      throw new Error('Google Drive could not refresh its private connection. Check the Drive OAuth settings in Vercel.');
-    }
-    const refreshed = await response.json();
-    if (refreshed?.access_token) return String(refreshed.access_token);
-    throw new Error('Google Drive did not return an access token. Check the Drive OAuth settings in Vercel.');
-  }
-
-  const accessToken = process.env.GOOGLE_DRIVE_ACCESS_TOKEN || '';
-  if (!accessToken) throw new Error('Google Drive server connection is not configured in Vercel.');
-  return accessToken;
-}
-
-async function assertAdmin(adminToken: string, portalId: string) {
+async function rpc(name: string, body: Record<string, unknown>) {
   const { url, key } = supabaseConfig();
-  const response = await fetch(`${url}/rest/v1/rpc/delivery_admin_list_files`, {
+  const response = await fetch(`${url}/rest/v1/rpc/${name}`, {
     method: 'POST',
     headers: { apikey: key, Authorization: `Bearer ${key}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ p_token: adminToken, p_portal_id: portalId }),
-  });
-  if (!response.ok) throw new Error('Admin session expired or delivery portal is unavailable.');
-}
-
-async function adminUpsert(body: Record<string, unknown>) {
-  const { url, key } = supabaseConfig();
-  const response = await fetch(\`\${url}/rest/v1/rpc/delivery_admin_upsert_file\`, {
-    method: 'POST',
-    headers: { apikey: key, Authorization: \`Bearer \${key}\`, 'content-type': 'application/json' },
     body: JSON.stringify(body),
   });
-  if (!response.ok) throw new Error((await response.text()).slice(0, 400) || 'Could not save the delivery file.');
+  if (!response.ok) throw new Error((await response.text()).slice(0, 400) || `Supabase RPC ${name} failed.`);
   return response.json();
 }
 
 function extractDriveId(sourceUrl: string, kind: 'file' | 'folder') {
-  const value = sourceUrl.trim();
   let parsed: URL;
-  try { parsed = new URL(value); } catch { return null; }
+  try { parsed = new URL(sourceUrl.trim()); } catch { return null; }
   if (parsed.protocol !== 'https:' || parsed.hostname !== 'drive.google.com') return null;
-  const pattern = kind === 'folder'
-    ? /\/folders\/([A-Za-z0-9_-]+)/i
-    : /\/file\/d\/([A-Za-z0-9_-]+)/i;
-  const direct = value.match(pattern)?.[1];
-  if (direct) return direct;
-  return value.match(/[?&]id=([A-Za-z0-9_-]+)/i)?.[1] || null;
+  const pattern = kind === 'folder' ? /\/folders\/([A-Za-z0-9_-]+)/i : /\/file\/d\/([A-Za-z0-9_-]+)/i;
+  return parsed.pathname.match(pattern)?.[1] || parsed.searchParams.get('id');
 }
 
 async function driveMetadata(id: string) {
-  const accessToken = await driveConfig();
+  const token = await getDriveAccessToken();
   const fields = 'id,name,mimeType,size,fileExtension,thumbnailLink,modifiedTime,trashed,parents';
-  const response = await fetch(\`https://www.googleapis.com/drive/v3/files/\${encodeURIComponent(id)}?fields=\${encodeURIComponent(fields)}&supportsAllDrives=true\`, {
-    headers: { Authorization: \`Bearer \${accessToken}\` },
+  const response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?fields=${encodeURIComponent(fields)}&supportsAllDrives=true`, {
+    headers: { Authorization: `Bearer ${token}` },
   });
   if (!response.ok) {
-    const text = (await response.text()).slice(0, 300);
     if (response.status === 404) throw new Error('Google Drive file was not found or is not shared with the connected account.');
-    if (response.status === 403) throw new Error('Google Drive permission denied. Keep the file private, but share it with the connected Google Drive connection.');
-    throw new Error(text || 'Google Drive metadata could not be read.');
+    if (response.status === 403) throw new Error('The connected account cannot access this private Drive item. Share it with that account; do not make it public.');
+    throw new Error(`Google Drive metadata request failed (HTTP ${response.status}).`);
   }
   const data = await response.json();
   if (data.trashed) throw new Error('This Google Drive item is in the trash.');
   return data;
 }
 
+function classifyFile(mime: string, fileName: string): 'PHOTO' | 'VIDEO' | 'DOCUMENT' {
+  const name = fileName.toLowerCase();
+  const imageExt = ['.jpg','.jpeg','.png','.webp','.gif','.heic','.heif','.tif','.tiff','.bmp','.raw','.arw','.cr2','.cr3','.nef','.dng','.raf','.orf','.rw2','.pef','.srw','.3fr','.iiq'];
+  const videoExt = ['.mp4','.mov','.m4v','.avi','.mkv','.webm','.wmv','.flv','.mpeg','.mpg','.3gp'];
+  if (mime.startsWith('image/') || (mime === 'application/octet-stream' && imageExt.some(x => name.endsWith(x)))) return 'PHOTO';
+  if (mime.startsWith('video/') || mime === 'application/vnd.google-apps.video' || (mime === 'application/octet-stream' && videoExt.some(x => name.endsWith(x)))) return 'VIDEO';
+  return 'DOCUMENT';
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return json(res, 405, { error: 'Only POST is supported.' });
-
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
     const adminToken = String(body.adminToken || '').trim();
     const portalId = String(body.portalId || '').trim();
     const sourceUrl = String(body.sourceUrl || '').trim();
-    const fileType = String(body.fileType || 'PHOTO').toUpperCase();
+    const requestedType = String(body.fileType || 'PHOTO').toUpperCase();
     const title = String(body.title || '').trim();
     const fileNameInput = String(body.fileName || '').trim();
     const sortOrder = Math.max(0, Number(body.sortOrder || 0));
-    const isVisible = body.isVisible !== false;
     const existingFileId = body.fileId ? String(body.fileId) : null;
-
-    if (!adminToken || !portalId || !sourceUrl) return json(res, 400, { error: 'Admin token, portal ID and Google Drive link are required.' });
-    if (!/^[0-9a-f-]{36}$/i.test(portalId)) return json(res, 400, { error: 'Invalid delivery portal.' });
-    if (existingFileId && !/^[0-9a-f-]{36}$/i.test(existingFileId)) return json(res, 400, { error: 'Invalid delivery file.' });
-    if (!['PHOTO', 'VIDEO', 'FOLDER'].includes(fileType)) return json(res, 400, { error: 'File type must be Photo, Video or Folder.' });
-
-    await assertAdmin(adminToken, portalId);
-
-    const kind = fileType === 'FOLDER' ? 'folder' : 'file';
-    const driveId = extractDriveId(sourceUrl, kind);
-    if (!driveId) return json(res, 400, { error: \`Could not extract a Google Drive \${kind} ID from this link.\` });
-
+    if (!adminToken || !portalId || !sourceUrl) return json(res, 400, { error: 'Admin token, delivery ID and private Drive link are required.' });
+    if (!/^[0-9a-f-]{36}$/i.test(portalId) || (existingFileId && !/^[0-9a-f-]{36}$/i.test(existingFileId))) return json(res, 400, { error: 'Invalid delivery or file ID.' });
+    if (!['PHOTO','VIDEO','DOCUMENT','FOLDER'].includes(requestedType)) return json(res, 400, { error: 'Choose a photo, video, document or folder.' });
+    await rpc('delivery_admin_list_files', { p_token: adminToken, p_portal_id: portalId });
+    const fileType = requestedType as 'PHOTO' | 'VIDEO' | 'DOCUMENT' | 'FOLDER';
+    const driveId = extractDriveId(sourceUrl, fileType === 'FOLDER' ? 'folder' : 'file');
+    if (!driveId) return json(res, 400, { error: 'This is not a valid private Google Drive file or folder link.' });
     const metadata = await driveMetadata(driveId);
-    if (fileType === 'FOLDER' && metadata.mimeType !== 'application/vnd.google-apps.folder') {
-      return json(res, 400, { error: 'This link is not a Google Drive folder.' });
+    if (fileType === 'FOLDER') {
+      if (metadata.mimeType !== 'application/vnd.google-apps.folder') return json(res, 400, { error: 'This Drive item is not a folder.' });
+      return json(res, 200, { verified: true, fileType, driveId, metadata: { id: metadata.id, name: metadata.name, mimeType: metadata.mimeType } });
     }
-    const mimeType = String(metadata.mimeType || '').toLowerCase();
-    const fileName = String(metadata.name || '').toLowerCase();
-    const photoExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.heic', '.heif', '.tif', '.tiff', '.bmp', '.raw', '.arw', '.cr2', '.cr3', '.nef', '.dng', '.raf', '.orf', '.rw2', '.pef', '.srw', '.3fr', '.iiq'];
-    const videoExtensions = ['.mp4', '.mov', '.m4v', '.avi', '.mkv', '.webm', '.wmv', '.flv', '.mpeg', '.mpg', '.3gp'];
-    const hasPhotoExtension = photoExtensions.some((extension) => fileName.endsWith(extension));
-    const hasVideoExtension = videoExtensions.some((extension) => fileName.endsWith(extension));
-    const isPhoto = mimeType.startsWith('image/') || (mimeType === 'application/octet-stream' && hasPhotoExtension);
-    const isVideo = mimeType.startsWith('video/') || mimeType === 'application/vnd.google-apps.video' || (mimeType === 'application/octet-stream' && hasVideoExtension);
-    if (fileType === 'PHOTO' && !isPhoto) {
-      return json(res, 400, { error: \`The selected Drive item is \${metadata.mimeType || 'unknown type'}, not a photo. Choose a JPG/PNG/photo file.\` });
-    }
-    if (fileType === 'VIDEO' && !isVideo) {
-      return json(res, 400, { error: \`The selected Drive item is \${metadata.mimeType || 'unknown type'}, not a video. Choose an MP4/MOV/video file.\` });
-    }
+    const detected = classifyFile(String(metadata.mimeType || ''), String(metadata.name || ''));
+    if (fileType !== detected) return json(res, 400, { error: `This Drive item is a ${detected.toLowerCase()}, not a ${fileType.toLowerCase()}.` });
+    if (body.persist === false) return json(res, 200, { verified: true, fileType, driveId, metadata: { id: metadata.id, name: metadata.name, mimeType: metadata.mimeType, size: metadata.size || null } });
 
-    if (fileType === 'FOLDER' || body.persist === false) {
-      return json(res, 200, {
-        verified: true,
-        fileType,
-        driveId,
-        metadata: { id: metadata.id, name: metadata.name, mimeType: metadata.mimeType, size: metadata.size || null, modifiedTime: metadata.modifiedTime || null },
+    const saved: any = await rpc('delivery_admin_upsert_file', {
+      p_token: adminToken, p_portal_id: portalId, p_file_id: existingFileId,
+      p_source_url: sourceUrl, p_file_type: fileType, p_title: title || metadata.name || null,
+      p_file_name: fileNameInput || metadata.name || null, p_mime_type: metadata.mimeType || null,
+      p_sort_order: sortOrder, p_is_visible: body.isVisible !== false,
+    });
+    if (saved?.id && metadata.size) {
+      const update = await supabaseServiceRequest(`delivery_files?id=eq.${encodeURIComponent(String(saved.id))}&portal_id=eq.${encodeURIComponent(portalId)}`, {
+        method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ file_size_bytes: Number(metadata.size) }),
       });
+      if (!update.ok) throw new Error('File was added but its file size could not be saved.');
     }
-
-    const saved = await adminUpsert({
-      p_token: adminToken,
-      p_portal_id: portalId,
-      p_file_id: existingFileId,
-      p_source_url: sourceUrl,
-      p_file_type: fileType,
-      p_title: title || metadata.name || null,
-      p_file_name: fileNameInput || metadata.name || null,
-      p_mime_type: metadata.mimeType || null,
-      p_sort_order: sortOrder,
-      p_is_visible: isVisible,
-    });
-
-    return json(res, 200, {
-      verified: true,
-      saved: true,
-      fileType,
-      driveId,
-      metadata: { id: metadata.id, name: metadata.name, mimeType: metadata.mimeType, size: metadata.size || null, modifiedTime: metadata.modifiedTime || null },
-      file: saved ? { id: saved.id, file_name: saved.file_name, file_type: saved.file_type, mime_type: saved.mime_type, title: saved.title, sort_order: saved.sort_order, is_visible: saved.is_visible } : null,
-    });
+    return json(res, 200, { verified: true, saved: true, fileType, driveId, metadata: { id: metadata.id, name: metadata.name, mimeType: metadata.mimeType, size: metadata.size || null }, file: saved });
   } catch (error: any) {
-    const requestId = String(req.headers?.['x-vercel-id'] || '').slice(0, 100);
-    console.error('[delivery-validate] failed', {
-      requestId,
-      name: String(error?.name || 'Error').slice(0, 80),
-      code: String(error?.code || '').slice(0, 80),
-    });
-    return json(res, 502, { error: error?.message || 'Google Drive link validation failed.' });
+    const status = /admin session/i.test(String(error?.message || '')) ? 401 : 502;
+    console.error('[delivery-validate]', String(error?.message || 'Drive validation failed').slice(0, 180));
+    return json(res, status, { error: error?.message || 'Google Drive link validation failed.' });
   }
 }

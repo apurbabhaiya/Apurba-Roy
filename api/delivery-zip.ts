@@ -1,4 +1,5 @@
 import JSZip from 'jszip';
+import { getDriveAccessToken } from './_lib/driveAuth';
 
 type VercelRequest = any;
 type VercelResponse = any;
@@ -9,7 +10,7 @@ function json(res: VercelResponse, status: number, message: string) {
 
 function supabaseConfig() {
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY || '';
   if (!url || !key) throw new Error('Protected delivery server configuration is missing.');
   return { url, key };
 }
@@ -28,8 +29,7 @@ async function getFile(token: string, id: string) {
 }
 
 async function fetchOriginal(fileId: string): Promise<Response> {
-  const auth = process.env.GOOGLE_DRIVE_ACCESS_TOKEN || '';
-  if (!auth) throw new Error('Protected Google Drive server configuration is missing.');
+  const auth = await getDriveAccessToken();
   return fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`, { headers: { Authorization: `Bearer ${auth}` } });
 }
 

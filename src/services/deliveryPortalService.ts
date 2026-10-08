@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { ensureAnonymousSupabaseAuth } from './supabaseAuth';
 
 const db = supabase as any;
 
@@ -11,11 +12,12 @@ export type DeliveryPreviewItem = {
 export type DeliveryFinalFile = {
   id: string;
   file_name?: string | null;
-  file_type: 'PHOTO' | 'VIDEO' | 'FOLDER';
+  file_type: 'PHOTO' | 'VIDEO' | 'DOCUMENT' | 'FOLDER';
   mime_type?: string | null;
   title?: string | null;
   sort_order?: number;
   google_drive_link?: string | null;
+  file_size_bytes?: number | null;
 };
 
 export type DeliveryAdminFile = DeliveryFinalFile & {
@@ -39,6 +41,7 @@ export type DeliveryPortalData = {
   verified_total_paid: number | string;
   remaining_due: number | string;
   payment_status: string;
+  is_published?: boolean;
   delivery_status: string;
   gallery_status: string;
   download_status: string;
@@ -50,6 +53,8 @@ export type DeliveryPortalData = {
   bkash_number?: string | null;
   nagad_number?: string | null;
   dbbl_number?: string | null;
+  rocket_number?: string | null;
+  document_download_permission?: boolean;
   hero_image_url?: string | null;
   preview_items?: DeliveryPreviewItem[];
   delivery_files?: DeliveryFinalFile[];
@@ -105,7 +110,7 @@ export type DeliveryPaymentSubmission = {
   id: string;
   portal_id: string;
   payment_type: 'PACKAGE' | 'ACCESS';
-  payment_method: 'BKASH' | 'NAGAD' | 'DBBL';
+  payment_method: 'BKASH' | 'NAGAD' | 'DBBL' | 'ROCKET';
   proof_storage_path?: string | null;
   payer_phone: string;
   transaction_id: string;
@@ -173,10 +178,16 @@ export async function getDeliveryPortal(token: string): Promise<DeliveryPortalDa
   return { ...data, ...(methods || {}) } as DeliveryPortalData;
 }
 
+export async function getDeliveryPreviewPortal(token: string, adminToken: string): Promise<DeliveryPortalData | null> {
+  const { data, error } = await db.rpc('delivery_admin_preview_portal', { p_token: token, p_admin_token: adminToken });
+  if (error) throw error;
+  return data as DeliveryPortalData | null;
+}
+
 export async function submitDeliveryPayment(input: {
   token: string;
   paymentType: 'PACKAGE' | 'ACCESS';
-  paymentMethod: 'BKASH' | 'NAGAD' | 'DBBL';
+  paymentMethod: 'BKASH' | 'NAGAD' | 'DBBL' | 'ROCKET';
   payerPhone: string;
   transactionId: string;
   amount: number;
@@ -192,6 +203,8 @@ export async function submitDeliveryPayment(input: {
   form.append('amount', String(input.amount));
   form.append('selected_days', input.selectedDays == null ? '' : String(input.selectedDays));
   form.append('screenshot', input.screenshot);
+  const user = await ensureAnonymousSupabaseAuth();
+  if (!user) throw new Error('Could not establish a secure session. Please reload and try again.');
   const { data, error } = await supabase.functions.invoke('delivery-payment-submit', { body: form });
   if (error) throw error;
   if (data?.error) throw new Error(data.error);
@@ -283,6 +296,7 @@ export async function updateDeliveryPaymentMethods(input: {
   bkashNumber: string;
   nagadNumber: string;
   dbblNumber: string;
+  rocketNumber: string;
 }) {
   const { data, error } = await db.rpc('delivery_admin_update_payment_methods', {
     p_token: input.token,
@@ -290,9 +304,35 @@ export async function updateDeliveryPaymentMethods(input: {
     p_bkash_number: input.bkashNumber,
     p_nagad_number: input.nagadNumber,
     p_dbbl_number: input.dbblNumber,
+    p_rocket_number: input.rocketNumber,
   });
   if (error) throw error;
   return data;
+}
+
+export async function setDeliveryPublished(input: { token: string; portalId: string; published: boolean }) {
+  const { data, error } = await db.rpc('delivery_admin_set_published', {
+    p_token: input.token, p_portal_id: input.portalId, p_published: input.published,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function setDeliveryDocumentPermission(input: { token: string; portalId: string; allowed: boolean }) {
+  const { data, error } = await db.rpc('delivery_admin_set_document_permission', {
+    p_token: input.token, p_portal_id: input.portalId, p_allowed: input.allowed,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function submitDeliveryReview(input: { token: string; rating: number; review: string }) {
+  const response = await fetch('/api/delivery-review', {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data?.error || 'Review submission failed.');
+  return data as { status: string };
 }
 
 export async function setDeliveryAdvancePaid(input: { token: string; portalId: string; advancePaid: number }) {
@@ -336,7 +376,7 @@ export async function upsertDeliveryFile(input: {
   portalId: string;
   fileId?: string | null;
   sourceUrl: string;
-  fileType: 'PHOTO' | 'VIDEO' | 'FOLDER';
+  fileType: 'PHOTO' | 'VIDEO' | 'DOCUMENT' | 'FOLDER';
   title?: string | null;
   fileName?: string | null;
   mimeType?: string | null;
@@ -545,7 +585,7 @@ export async function validateAndSaveDeliveryFile(input: {
   adminToken: string;
   portalId: string;
   sourceUrl: string;
-  fileType: 'PHOTO' | 'VIDEO' | 'FOLDER';
+  fileType: 'PHOTO' | 'VIDEO' | 'DOCUMENT' | 'FOLDER';
   fileId?: string | null;
   fileName?: string | null;
   title?: string | null;
@@ -582,7 +622,7 @@ export async function validateAndSaveDeliveryFile(input: {
   return data as {
     verified: boolean;
     saved?: boolean;
-    fileType: 'PHOTO' | 'VIDEO' | 'FOLDER';
+    fileType: 'PHOTO' | 'VIDEO' | 'DOCUMENT' | 'FOLDER';
     driveId: string;
     metadata: { id: string; name: string; mimeType: string; size?: string | null; modifiedTime?: string | null };
     file?: DeliveryAdminFile | null;
