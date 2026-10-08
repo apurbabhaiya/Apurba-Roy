@@ -74,7 +74,15 @@ export default function RamyaChobiDelivery({ token }: { token: string }) {
     } catch (error: any) { setPageError(error?.message || 'Unable to load this delivery page.'); }
     finally { setLoading(false); }
   }
-  useEffect(() => { if (!previewMode || adminPreviewToken) void load(); }, [token, previewMode, adminPreviewToken]);
+  useEffect(() => {
+    if (previewMode && !adminPreviewToken) {
+      setData(null);
+      setPageError('Sign in to Delivery Admin before opening a client preview.');
+      setLoading(false);
+      return;
+    }
+    void load();
+  }, [token, previewMode, adminPreviewToken]);
 
   const galleryStatus = data?.gallery_status || 'PREVIEW';
   const locked = galleryStatus === 'LOCKED';
