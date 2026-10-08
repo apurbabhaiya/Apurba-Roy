@@ -1,3 +1,4 @@
+import { getDeliveryDriveToken, driveReadError } from '../server/googleDrive';
 type VercelRequest = any;
 type VercelResponse = any;
 
@@ -26,8 +27,7 @@ async function deliveryMedia(token: string, fileId: string, mode: 'PREVIEW' | 'O
 }
 
 async function driveResponse(fileId: string, mode: 'PREVIEW' | 'ORIGINAL', range?: string, mimeType?: string | null, fileType?: string | null) {
-  const auth = process.env.GOOGLE_DRIVE_ACCESS_TOKEN || '';
-  if (!auth) throw new Error('Protected Google Drive server configuration is missing.');
+  const auth = await getDeliveryDriveToken();
   const headers: Record<string, string> = { Authorization: `Bearer ${auth}` };
   if (range) headers.Range = range;
 
@@ -61,7 +61,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const file = await deliveryMedia(token, fileId, mode);
     if (!file.drive_file_id) return json(res, 400, 'This delivery item is a folder and cannot be streamed directly.');
     const upstream = await driveResponse(String(file.drive_file_id), mode, String(req.headers.range || ''), file.mime_type, file.file_type);
-    if (!upstream.ok || !upstream.body) return json(res, upstream.status || 502, 'Google Drive file could not be read.');
+    if (!upstream.ok || !upstream.body) return json(res, upstream.status || 502, driveReadError(upstream.status));
     const contentType = upstream.headers.get('content-type') || file.mime_type || (mode === 'PREVIEW' ? 'image/jpeg' : 'application/octet-stream');
     res.status(upstream.status === 206 ? 206 : 200);
     res.setHeader('content-type', contentType);

@@ -97,7 +97,7 @@ export async function googleSupabaseSignIn(
     provider: 'google',
     options: {
       scopes: DRIVE_SCOPES.join(' '),
-      redirectTo: window.location.origin,
+      redirectTo: window.location.origin + window.location.pathname,
       queryParams: {
         access_type: 'offline',
         prompt,

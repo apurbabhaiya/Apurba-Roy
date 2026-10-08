@@ -1,3 +1,4 @@
+import { getDeliveryDriveToken, driveReadError } from '../server/googleDrive';
 type VercelRequest = any;
 type VercelResponse = any;
 
@@ -24,39 +25,6 @@ async function rpc(name: string, body: Record<string, unknown>) {
     throw new Error(detail.slice(0, 300) || `Supabase RPC ${name} failed.`);
   }
   return response.json();
-}
-
-async function driveAccessToken() {
-  const refreshToken = process.env.GOOGLE_DRIVE_REFRESH_TOKEN || '';
-  const clientId = process.env.GOOGLE_DRIVE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || '';
-  const clientSecret = process.env.GOOGLE_DRIVE_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET || '';
-
-  if (refreshToken && clientId && clientSecret) {
-    const response = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: clientId,
-        client_secret: clientSecret,
-        refresh_token: refreshToken,
-        grant_type: 'refresh_token',
-      }).toString(),
-    });
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
-      if (String(body?.error || '') === 'invalid_grant') {
-        throw new Error('Google Drive connection expired. Reconnect the Google account and try again.');
-      }
-      throw new Error('Google Drive could not refresh its private connection. Check the Drive OAuth settings in Vercel.');
-    }
-    const data = await response.json();
-    if (data?.access_token) return String(data.access_token);
-    throw new Error('Google Drive did not return an access token. Check the Drive OAuth settings in Vercel.');
-  }
-
-  const accessToken = process.env.GOOGLE_DRIVE_ACCESS_TOKEN || '';
-  if (!accessToken) throw new Error('Google Drive server connection is not configured in Vercel.');
-  return accessToken;
 }
 
 function extractFolderId(folderUrl: string) {
@@ -112,7 +80,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (item?.drive_file_id && item?.id) existingByDriveId.set(String(item.drive_file_id), String(item.id));
     }
 
-    const accessToken = await driveAccessToken();
+    const connectedToken = typeof body.driveAccessToken === 'string' ? body.driveAccessToken.trim() : '';
+    const accessToken = connectedToken || await getDeliveryDriveToken();
     const folderUrlApi = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(folderId)}?fields=${encodeURIComponent('id,name,mimeType,trashed')}&supportsAllDrives=true`;
     const folderMetadata = await driveJson(folderUrlApi, accessToken);
     if (folderMetadata.mimeType !== 'application/vnd.google-apps.folder') {

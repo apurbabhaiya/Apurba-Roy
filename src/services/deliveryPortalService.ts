@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { getGoogleDriveAccessToken } from './supabaseAuth';
 
 const db = supabase as any;
 
@@ -379,7 +380,7 @@ export async function syncDeliveryFolder(input: { adminToken: string; portalId: 
     const response = await fetch('/api/delivery-folder-sync', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ ...input, pageToken: pageToken || null }),
+      body: JSON.stringify({ ...input, pageToken: pageToken || null, driveAccessToken: getGoogleDriveAccessToken() }),
     });
     const rawResponse = await response.text();
     let data: any = {};
@@ -558,6 +559,7 @@ export async function validateAndSaveDeliveryFile(input: {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       adminToken: input.adminToken,
+      driveAccessToken: getGoogleDriveAccessToken(),
       portalId: input.portalId,
       sourceUrl: input.sourceUrl,
       fileType: input.fileType,

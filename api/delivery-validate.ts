@@ -1,3 +1,4 @@
+import { getDeliveryDriveToken, driveReadError } from '../server/googleDrive';
 type VercelRequest = any;
 type VercelResponse = any;
 
@@ -12,38 +13,6 @@ function supabaseConfig() {
   return { url, key };
 }
 
-async function driveConfig() {
-  const refreshToken = process.env.GOOGLE_DRIVE_REFRESH_TOKEN || '';
-  const clientId = process.env.GOOGLE_DRIVE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || '';
-  const clientSecret = process.env.GOOGLE_DRIVE_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET || '';
-
-  if (refreshToken && clientId && clientSecret) {
-    const response = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: clientId,
-        client_secret: clientSecret,
-        refresh_token: refreshToken,
-        grant_type: 'refresh_token',
-      }).toString(),
-    });
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
-      const reason = String(body?.error || '');
-      if (reason === 'invalid_grant') throw new Error('Google Drive connection expired. Reconnect the Google account and try again.');
-      throw new Error('Google Drive could not refresh its private connection. Check the Drive OAuth settings in Vercel.');
-    }
-    const refreshed = await response.json();
-    if (refreshed?.access_token) return String(refreshed.access_token);
-    throw new Error('Google Drive did not return an access token. Check the Drive OAuth settings in Vercel.');
-  }
-
-  const accessToken = process.env.GOOGLE_DRIVE_ACCESS_TOKEN || '';
-  if (!accessToken) throw new Error('Google Drive server connection is not configured in Vercel.');
-  return accessToken;
-}
-
 async function assertAdmin(adminToken: string, portalId: string) {
   const { url, key } = supabaseConfig();
   const response = await fetch(`${url}/rest/v1/rpc/delivery_admin_list_files`, {
@@ -56,9 +25,9 @@ async function assertAdmin(adminToken: string, portalId: string) {
 
 async function adminUpsert(body: Record<string, unknown>) {
   const { url, key } = supabaseConfig();
-  const response = await fetch(\`\${url}/rest/v1/rpc/delivery_admin_upsert_file\`, {
+  const response = await fetch(`${url}/rest/v1/rpc/delivery_admin_upsert_file`, {
     method: 'POST',
-    headers: { apikey: key, Authorization: \`Bearer \${key}\`, 'content-type': 'application/json' },
+    headers: { apikey: key, Authorization: `Bearer ${key}`, 'content-type': 'application/json' },
     body: JSON.stringify(body),
   });
   if (!response.ok) throw new Error((await response.text()).slice(0, 400) || 'Could not save the delivery file.');
@@ -78,17 +47,14 @@ function extractDriveId(sourceUrl: string, kind: 'file' | 'folder') {
   return value.match(/[?&]id=([A-Za-z0-9_-]+)/i)?.[1] || null;
 }
 
-async function driveMetadata(id: string) {
-  const accessToken = await driveConfig();
+async function driveMetadata(id: string, connectedToken?: string) {
+  const accessToken = connectedToken || await getDeliveryDriveToken();
   const fields = 'id,name,mimeType,size,fileExtension,thumbnailLink,modifiedTime,trashed,parents';
-  const response = await fetch(\`https://www.googleapis.com/drive/v3/files/\${encodeURIComponent(id)}?fields=\${encodeURIComponent(fields)}&supportsAllDrives=true\`, {
-    headers: { Authorization: \`Bearer \${accessToken}\` },
+  const response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?fields=${encodeURIComponent(fields)}&supportsAllDrives=true`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!response.ok) {
-    const text = (await response.text()).slice(0, 300);
-    if (response.status === 404) throw new Error('Google Drive file was not found or is not shared with the connected account.');
-    if (response.status === 403) throw new Error('Google Drive permission denied. Keep the file private, but share it with the connected Google Drive connection.');
-    throw new Error(text || 'Google Drive metadata could not be read.');
+    throw new Error(driveReadError(response.status));
   }
   const data = await response.json();
   if (data.trashed) throw new Error('This Google Drive item is in the trash.');
@@ -119,9 +85,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const kind = fileType === 'FOLDER' ? 'folder' : 'file';
     const driveId = extractDriveId(sourceUrl, kind);
-    if (!driveId) return json(res, 400, { error: \`Could not extract a Google Drive \${kind} ID from this link.\` });
+    if (!driveId) return json(res, 400, { error: `Could not extract a Google Drive ${kind} ID from this link.` });
 
-    const metadata = await driveMetadata(driveId);
+    const connectedToken = typeof body.driveAccessToken === 'string' ? body.driveAccessToken.trim() : '';
+    const metadata = await driveMetadata(driveId, connectedToken);
     if (fileType === 'FOLDER' && metadata.mimeType !== 'application/vnd.google-apps.folder') {
       return json(res, 400, { error: 'This link is not a Google Drive folder.' });
     }
@@ -134,10 +101,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const isPhoto = mimeType.startsWith('image/') || (mimeType === 'application/octet-stream' && hasPhotoExtension);
     const isVideo = mimeType.startsWith('video/') || mimeType === 'application/vnd.google-apps.video' || (mimeType === 'application/octet-stream' && hasVideoExtension);
     if (fileType === 'PHOTO' && !isPhoto) {
-      return json(res, 400, { error: \`The selected Drive item is \${metadata.mimeType || 'unknown type'}, not a photo. Choose a JPG/PNG/photo file.\` });
+      return json(res, 400, { error: `The selected Drive item is ${metadata.mimeType || 'unknown type'}, not a photo. Choose a JPG/PNG/photo file.` });
     }
     if (fileType === 'VIDEO' && !isVideo) {
-      return json(res, 400, { error: \`The selected Drive item is \${metadata.mimeType || 'unknown type'}, not a video. Choose an MP4/MOV/video file.\` });
+      return json(res, 400, { error: `The selected Drive item is ${metadata.mimeType || 'unknown type'}, not a video. Choose an MP4/MOV/video file.` });
     }
 
     if (fileType === 'FOLDER' || body.persist === false) {

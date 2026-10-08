@@ -1,3 +1,4 @@
+import { getDeliveryDriveToken, driveReadError } from '../server/googleDrive';
 import JSZip from 'jszip';
 
 type VercelRequest = any;
@@ -28,8 +29,7 @@ async function getFile(token: string, id: string) {
 }
 
 async function fetchOriginal(fileId: string): Promise<Response> {
-  const auth = process.env.GOOGLE_DRIVE_ACCESS_TOKEN || '';
-  if (!auth) throw new Error('Protected Google Drive server configuration is missing.');
+  const auth = await getDeliveryDriveToken();
   return fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`, { headers: { Authorization: `Bearer ${auth}` } });
 }
 
@@ -49,10 +49,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const used = new Set<string>();
     for (const file of files) {
       const response = await fetchOriginal(String(file.drive_file_id));
-      if (!response.ok) throw new Error(`Could not read ${file.file_name || file.title || 'file'} from Google Drive.`);
-      let name = String(file.file_name || file.title || `delivery-${file.drive_file_id}.bin`).replace(/[\\/:*?"<>|\\u0000-\\u001f]/g, '_').slice(0, 220) || 'delivery-file';
+      if (!response.ok) throw new Error(`${file.file_name || file.title || 'File'}: ${driveReadError(response.status)}`);
+      let name = String(file.file_name || file.title || `delivery-${file.drive_file_id}.bin`).replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').slice(0, 220) || 'delivery-file';
       let base = name; let n = 2;
-      while (used.has(name)) name = base.replace(/(\\.[^.]+)?$/, `_${n++}$1`);
+      while (used.has(name)) name = base.replace(/(\.[^.]+)?$/, `_${n++}$1`);
       used.add(name);
       zip.file(name, Buffer.from(await response.arrayBuffer()));
     }
