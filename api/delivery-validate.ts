@@ -1,3 +1,4 @@
+import { getDeliveryDriveToken, driveReadError } from '../server/googleDrive';
 type VercelRequest = any;
 type VercelResponse = any;
 
@@ -10,38 +11,6 @@ function supabaseConfig() {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
   if (!url || !key) throw new Error('Protected delivery server configuration is missing.');
   return { url, key };
-}
-
-async function driveConfig() {
-  const refreshToken = process.env.GOOGLE_DRIVE_REFRESH_TOKEN || '';
-  const clientId = process.env.GOOGLE_DRIVE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || '';
-  const clientSecret = process.env.GOOGLE_DRIVE_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET || '';
-
-  if (refreshToken && clientId && clientSecret) {
-    const response = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: clientId,
-        client_secret: clientSecret,
-        refresh_token: refreshToken,
-        grant_type: 'refresh_token',
-      }).toString(),
-    });
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
-      const reason = String(body?.error || '');
-      if (reason === 'invalid_grant') throw new Error('Google Drive connection expired. Reconnect the Google account and try again.');
-      throw new Error('Google Drive could not refresh its private connection. Check the Drive OAuth settings in Vercel.');
-    }
-    const refreshed = await response.json();
-    if (refreshed?.access_token) return String(refreshed.access_token);
-    throw new Error('Google Drive did not return an access token. Check the Drive OAuth settings in Vercel.');
-  }
-
-  const accessToken = process.env.GOOGLE_DRIVE_ACCESS_TOKEN || '';
-  if (!accessToken) throw new Error('Google Drive server connection is not configured in Vercel.');
-  return accessToken;
 }
 
 async function assertAdmin(adminToken: string, portalId: string) {
@@ -79,16 +48,13 @@ function extractDriveId(sourceUrl: string, kind: 'file' | 'folder') {
 }
 
 async function driveMetadata(id: string, connectedToken?: string) {
-  const accessToken = connectedToken || await driveConfig();
+  const accessToken = connectedToken || await getDeliveryDriveToken();
   const fields = 'id,name,mimeType,size,fileExtension,thumbnailLink,modifiedTime,trashed,parents';
   const response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?fields=${encodeURIComponent(fields)}&supportsAllDrives=true`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!response.ok) {
-    const text = (await response.text()).slice(0, 300);
-    if (response.status === 404) throw new Error('Google Drive file was not found or is not shared with the connected account.');
-    if (response.status === 403) throw new Error('Google Drive permission denied. Keep the file private, but share it with the connected Google Drive connection.');
-    throw new Error(text || 'Google Drive metadata could not be read.');
+    throw new Error(driveReadError(response.status));
   }
   const data = await response.json();
   if (data.trashed) throw new Error('This Google Drive item is in the trash.');
