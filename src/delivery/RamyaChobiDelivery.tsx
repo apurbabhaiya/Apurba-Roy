@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { BadgeCheck, CalendarDays, Check, Copy, Download, FileText, LockKeyhole, MessageCircle, PlayCircle, ShieldCheck, Smartphone, WalletCards, X } from 'lucide-react';
+import { BadgeCheck, CalendarDays, Check, Copy, Download, FileText, Image as ImageIcon, LockKeyhole, MessageCircle, PlayCircle, ShieldCheck, Smartphone, WalletCards, X } from 'lucide-react';
 import { DeliveryFinalFile, DeliveryPortalData, getDeliveryPortal, getDeliveryPreviewPortal, submitDeliveryPayment, submitDeliveryReview } from '../services/deliveryPortalService';
 
 const fallbackHero = 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1800&q=85';

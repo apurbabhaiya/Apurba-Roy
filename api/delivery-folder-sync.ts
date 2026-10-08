@@ -50,7 +50,7 @@ async function driveJson(url: string, accessToken: string) {
 const PHOTO_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.heic', '.heif', '.tif', '.tiff', '.bmp', '.raw', '.arw', '.cr2', '.cr3', '.nef', '.dng', '.raf', '.orf', '.rw2', '.pef', '.srw', '.3fr', '.iiq'];
 const VIDEO_EXTENSIONS = ['.mp4', '.mov', '.m4v', '.avi', '.mkv', '.webm', '.wmv', '.flv', '.mpeg', '.mpg', '.3gp'];
 
-function classifyFile(file: any): 'PHOTO' | 'VIDEO' | null {
+function classifyFile(file: any): 'PHOTO' | 'VIDEO' | 'DOCUMENT' | null {
   const mime = String(file?.mimeType || '').toLowerCase();
   const name = String(file?.name || '').toLowerCase();
   if (mime.startsWith('image/') || PHOTO_EXTENSIONS.some((extension) => name.endsWith(extension))) return 'PHOTO';
