@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 17372)
+Total output lines: 1086
+
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   BadgeCheck,
@@ -598,6 +601,9 @@ export default function RamyaChobiDeliveryAdmin() {
     const nextUrl = window.prompt('Google Drive file or folder link', file.source_url);
     if (!nextUrl?.trim()) return;
     const nextTitle = window.prompt('Display title (optional)', file.title || '') ?? (file.title || '');
+    const nextOrderRaw = window.prompt('Display order', String(file.sort_order || 0));
+    if (nextOrderRaw === null || !Number.isFinite(Number(nextOrderRaw)) || Number(nextOrderRaw) < 0) return;
+    const nextSortOrder = Math.floor(Number(nextOrderRaw));
     setLoading(true); setNotice('Validating replacement link...');
     try {
       if (file.file_type === 'FOLDER') {
@@ -605,12 +611,12 @@ export default function RamyaChobiDeliveryAdmin() {
         await upsertDeliveryFile({
           token, portalId, fileId: file.id, sourceUrl: nextUrl.trim(), fileType: file.file_type,
           title: nextTitle.trim() || null, fileName: file.file_name || null, mimeType: file.mime_type || null,
-          sortOrder: file.sort_order || 0, isVisible: file.is_visible,
+          sortOrder: nextSortOrder, isVisible: file.is_visible,
         });
       } else {
         await validateAndSaveDeliveryFile({
           adminToken: token, portalId, fileId: file.id, sourceUrl: nextUrl.trim(), fileType: file.file_type,
-          title: nextTitle.trim() || null, fileName: file.file_name || null, sortOrder: file.sort_order || 0,
+          title: nextTitle.trim() || null, fileName: file.file_name || null, sortOrder: nextSortOrder,
           isVisible: file.is_visible, persist: true,
         });
       }
@@ -718,96 +724,7 @@ export default function RamyaChobiDeliveryAdmin() {
         <DriveConnectionCard adminToken={token} />
 
         <section className="grid gap-4 md:grid-cols-3">
-          <a href="/photo-selection" className="group rounded-3xl bg-stone-950 p-6 text-white shadow-sm transition hover:-translate-y-0.5">
-            <Images className="h-8 w-8 text-amber-300" />
-            <h2 className="mt-4 text-xl font-semibold">Photo Selection</h2>
-            <p className="mt-2 text-sm leading-6 text-white/60">
-              Open the existing Google Drive photo-selection admin and client gallery system.
-            </p>
-            <div className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-amber-300">
-              Open Photo Selection <ExternalLink className="h-4 w-4" />
-            </div>
-          </a>
-
-          <a href="/booking/admin" className="group rounded-3xl border border-stone-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5">
-            <FileCheck2 className="h-8 w-8 text-amber-700" />
-            <h2 className="mt-4 text-xl font-semibold">Booking Management</h2>
-            <p className="mt-2 text-sm leading-6 text-stone-500">
-              Manage bookings, client details, payments, events and agreements.
-            </p>
-          </a>
-
-          <a href="/delivery" target="_blank" rel="noreferrer" className="group rounded-3xl border border-stone-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5">
-            <Link2 className="h-8 w-8 text-amber-700" />
-            <h2 className="mt-4 text-xl font-semibold">Client Delivery</h2>
-            <p className="mt-2 text-sm leading-6 text-stone-500">
-              Preview the RamyaChobi payment, Final Delivery and access-restoration landing page.
-            </p>
-          </a>
-        </section>
-
-        <PortfolioManager adminToken={token} />
-
-        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          {[
-            [Link2, 'Delivery portals', counts.portals],
-            [WalletCards, 'Payment pending', counts.paymentPending],
-            [CheckCircle2, 'Final active', counts.finalActive],
-            [LockKeyhole, 'Locked', counts.locked],
-            [Clipboard, 'Review requests', counts.requests],
-          ].map(([Icon, label, value]: any) => (
-            <div key={label} className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-              <Icon className="h-5 w-5 text-amber-700" />
-              <div className="mt-3 text-2xl font-semibold">{value}</div>
-              <div className="text-sm text-stone-500">{label}</div>
-            </div>
-          ))}
-        </section>
-
-        <section className="rounded-3xl border border-stone-200 bg-white p-6 shadow-sm">
-          <div className="flex items-start gap-3">
-            <FileCheck2 className="mt-1 h-6 w-6 text-amber-700" />
-            <div>
-              <h2 className="text-xl font-semibold">Create delivery from booking</h2>
-              <p className="mt-1 text-sm text-stone-500">Select an existing booking. Package amount and verified payments are copied into the private delivery portal.</p>
-            </div>
-          </div>
-          <div className="mt-5 grid gap-4 lg:grid-cols-4">
-            <select value={selectedBooking} onChange={(e) => setSelectedBooking(e.target.value)} className="rounded-xl border border-stone-300 px-3.5 py-3 lg:col-span-2">
-              <option value="">Select booking</option>
-              {availableBookings.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.reference_no} · {b.client_name} · Due {money(Number(b.package_total) - Number(b.advance_paid) - Number(b.additional_paid))}
-                </option>
-              ))}
-            </select>
-            <input value={newBkash} onChange={(e) => setNewBkash(e.target.value)} placeholder="bKash number" className="rounded-xl border border-stone-300 px-3.5 py-3" />
-            <input type="datetime-local" value={newRetention} onChange={(e) => setNewRetention(e.target.value)} className="rounded-xl border border-stone-300 px-3.5 py-3" title="Storage retention end date" />
-          </div>
-          <button onClick={createPortal} disabled={loading || !selectedBooking} className="mt-4 rounded-xl bg-stone-950 px-5 py-3 text-sm font-bold text-white disabled:opacity-40">
-            Save as Draft
-          </button>
-        </section>
-
-        <section className="rounded-3xl border border-stone-200 bg-white p-6 shadow-sm">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h2 className="text-xl font-semibold">Payment verification</h2>
-              <p className="mt-1 text-sm text-stone-500">Package and access-fee submissions stay locked until you verify them.</p>
-            </div>
-            <StatusPill value={`${pendingRequests.length} SUBMITTED`} />
-          </div>
-          <div className="mt-5 space-y-3">
-            {pendingRequests.length === 0 ? (
-              <div className="rounded-2xl bg-stone-50 p-5 text-sm text-stone-500">No payments are waiting for review.</div>
-            ) : pendingRequests.map((s) => (
-              <div key={s.id} className="grid gap-4 rounded-2xl border border-stone-200 p-4 lg:grid-cols-[1.2fr_.8fr_.7fr_auto] lg:items-center">
-                <div>
-                  <div className="font-semibold">{s.client_name || 'Client'}</div>
-                  <div className="mt-1 text-sm text-stone-500">{s.event_name || 'Delivery'} · {s.payment_type}</div>
-                </div>
-                <div className="text-sm">
-                  <div><span className="text-stone-500">{s.payment_method} payer:</span> {s.payer_phone}</div>
+          <a href="/photo-selection" c…1372 tokens truncated…one}</div>
                   <div><span className="text-stone-500">TrxID:</span> {s.transaction_id}</div>
                 </div>
                 <div>

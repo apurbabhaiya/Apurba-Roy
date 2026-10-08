@@ -63,7 +63,7 @@ export default function DriveDeliveryPickerModal({ isOpen, adminToken, onClose, 
                   <span className={`rounded-xl p-2 ${type === 'folder' ? 'bg-amber-50 text-amber-700' : 'bg-stone-100 text-stone-600'}`}><Icon className="h-5 w-5" /></span>
                   <div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold" title={item.name}>{item.name}</div><div className="mt-0.5 text-xs capitalize text-stone-500">{type}{item.size ? ` · ${formatSize(item.size)}` : ''}</div></div>
                   {type === 'folder' && <button onClick={() => void load(item.id)} className="rounded-lg border border-stone-300 px-2.5 py-2 text-xs font-bold">Open</button>}
-                  <button onClick={() => onSelect(item)} className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-stone-950 px-3 py-2 text-xs font-bold text-white"><Check className="h-3.5 w-3.5" /> Add</button>
+                  <button onClick={() => onSelect(item)} className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-stone-950 px-3 py-2 text-xs font-bold text-white"><Check className="h-3.5 w-3.5" /> Select</button>
                 </div>;
               })}
             </div>
