@@ -34,7 +34,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       body: new URLSearchParams({ code, client_id: clientId, client_secret: clientSecret, redirect_uri: redirectUri, grant_type: 'authorization_code' }),
     });
     const tokens = await tokenResponse.json().catch(() => ({}));
-    if (!tokenResponse.ok || !tokens?.refresh_token) throw new Error('Google did not return a durable refresh token. Reconnect with consent enabled.');
+    if (!tokenResponse.ok) {
+      const messages: Record<string, string> = {
+        invalid_client: 'Google OAuth Client ID and Client Secret do not match. Update the matching secret in Vercel and redeploy.',
+        invalid_grant: 'Google authorization code expired or was already used. Start Connect Google again from Delivery Admin.',
+        redirect_uri_mismatch: 'Google OAuth callback URL does not match the authorized redirect URI.',
+        unauthorized_client: 'This Google OAuth client is not authorized for server login. Use a Web application client.',
+        invalid_request: 'Google rejected the token request. Check the server OAuth configuration.',
+      };
+      throw new Error(messages[String(tokens?.error)] || 'Google token exchange failed. Check the OAuth client configuration and reconnect.');
+    }
+    if (!tokens?.refresh_token) throw new Error('Google did not return a durable refresh token. Remove this app from your Google account connections, then reconnect and approve access.');
     const userResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', { headers: { Authorization: `Bearer ${tokens.access_token}` } });
     const user = await userResponse.json().catch(() => ({}));
     if (!userResponse.ok || !user?.email) throw new Error('Google account identity could not be verified.');
