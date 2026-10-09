@@ -164,7 +164,7 @@ export const FaceSearchModal: React.FC<FaceSearchModalProps> = ({
       setMatchResults(matches);
     } catch (err: any) {
       console.error(err);
-      setErrorMessage('ফেস সার্চ সম্পন্ন করতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।');
+      setErrorMessage(err?.message || 'ফেস সার্চ সম্পন্ন করতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।');
     } finally {
       setIsScanning(false);
     }
@@ -447,7 +447,7 @@ export const FaceSearchModal: React.FC<FaceSearchModalProps> = ({
                         {/* Match Score Badge */}
                         <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/75 text-emerald-300 font-mono text-[10px] font-bold border border-emerald-500/30 backdrop-blur-xs flex items-center gap-1">
                           <Sparkles className="w-2.5 h-2.5 text-emerald-400" />
-                          <span>{similarity}% Match</span>
+                          <span>Match score: {similarity}</span>
                         </div>
 
                         {/* Heart Select Button */}
