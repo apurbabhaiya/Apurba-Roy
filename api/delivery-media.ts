@@ -1,6 +1,7 @@
 type VercelRequest = any;
 type VercelResponse = any;
 import { getDriveAccessToken } from './_lib/driveAuth.js';
+import { attachmentHeader } from './_lib/fileName.js';
 
 function json(res: VercelResponse, status: number, message: string) {
   res.status(status).setHeader('content-type', 'application/json; charset=utf-8').end(JSON.stringify({ error: message }));
@@ -73,8 +74,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.setHeader('cache-control', 'private, no-store, max-age=0');
     res.setHeader('x-content-type-options', 'nosniff');
     if (mode === 'ORIGINAL') {
-      const name = String(file.file_name || file.title || 'ramyachobi-file').replace(/[\\/:*?"<>|\\u0000-\\u001f]/g, '_');
-      res.setHeader('content-disposition', `attachment; filename="${name}"`);
+      res.setHeader('content-disposition', attachmentHeader(String(file.file_name || file.title || 'ramyachobi-file')));
     } else {
       res.setHeader('content-disposition', 'inline');
     }
