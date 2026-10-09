@@ -1,8 +1,9 @@
 import type { DrivePhoto, FaceMatchScore } from '../types';
 import { descriptorDistance } from './faceMatchMath';
+import { faceRequest, getFaceIndexStatus, type FaceIndexStatus } from './faceIndexService';
 type FaceApi = typeof import('@vladmandic/face-api');
 let modelPromise: Promise<FaceApi> | undefined;
-// Session memory only: never persist reference images or biometric descriptors.
+// Legacy small-album cache stays in session memory. Reference images are never persisted.
 const faceCache = new Map<string, Float32Array[]>();
 let searchBusy = false;
 async function models(): Promise<FaceApi> {
@@ -41,11 +42,19 @@ export async function searchFaceInAlbum(
   referenceFaceDataUrl: string, albumPhotos: DrivePhoto[],
   onProgress?: (progressPercent: number, statusText: string) => void,
   onReport?: (report: FaceSearchReport) => void,
+  context?: { galleryId: string; pin?: string },
 ): Promise<FaceMatchScore[]> {
   if (searchBusy) throw new Error('A face search is already running. Please wait.');
   if (!albumPhotos.length) throw new Error('This album has no photos to search.');
   searchBusy = true;
   try {
+    const indexed = !!context && /^[0-9a-f-]{36}$/i.test(context.galleryId);
+    if (!indexed && albumPhotos.length > 50) throw new Error('This large album needs a server face index. Ask the photographer to open its customer gallery and start indexing.');
+    if (indexed) {
+      onProgress?.(0, 'Checking album face index…');
+      const coverage = await getFaceIndexStatus(context!.galleryId, context!.pin);
+      if (coverage.pending || coverage.unindexed) throw new Error(`Face index is not ready: ${coverage.ready + coverage.noFace}/${coverage.total} photos processed. The photographer can start or resume indexing in Admin.`);
+    }
     onProgress?.(0, 'Loading face recognition models…');
     const api = await models();
     const refFaces = await detect(api, await loadImage(referenceFaceDataUrl));
@@ -54,6 +63,18 @@ export async function searchFaceInAlbum(
     const box = refFaces[0].detection.box;
     if (Math.min(box.width, box.height) < 60) throw new Error('The face is too small. Upload a closer portrait.');
     const ref = refFaces[0].descriptor;
+    if (indexed) {
+      onProgress?.(60, 'Comparing your face with this album’s private index…');
+      const response = await faceRequest<{ matches: { photoId: string; similarity: number }[]; coverage: FaceIndexStatus }>('face-search', {
+        galleryId: context!.galleryId, pin: context!.pin, descriptor: Array.from(ref),
+      });
+      const byId = new Map(albumPhotos.map(photo => [photo.id, photo]));
+      const matches = response.matches.filter(match => byId.has(match.photoId)).map(match => ({ ...match, photo: byId.get(match.photoId)! }));
+      const { total, ready, noFace, failed } = response.coverage;
+      onReport?.({ total, analyzed: ready + noFace, failed, withoutFaces: noFace, faces: 0, matched: matches.length });
+      onProgress?.(100, `${matches.length} matching photos · indexed ${ready + noFace}/${total} · unreadable ${failed} · no face ${noFace}`);
+      return matches;
+    }
     // Conservative starting limit, not a calibrated accuracy guarantee.
     const maxDistance = 0.5;
     const photos = Array.from(new Map(albumPhotos.map(photo => [photo.id, photo])).values());

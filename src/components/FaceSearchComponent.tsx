@@ -194,7 +194,9 @@ export const FaceSearchComponent: React.FC<FaceSearchComponentProps> = ({
         (progress, text) => {
           setScanProgress(progress);
           setScanStatusText(text);
-        }
+        },
+        undefined,
+        { galleryId: album.id }
       );
 
       const matchIds = matches.map((m) => m.photoId);

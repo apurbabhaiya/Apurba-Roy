@@ -159,7 +159,9 @@ export const FaceSearchModal: React.FC<FaceSearchModalProps> = ({
         (progress, text) => {
           setScanProgress(progress);
           setScanStatusText(text);
-        }
+        },
+        undefined,
+        { galleryId: album.id }
       );
       setMatchResults(matches);
     } catch (err: any) {

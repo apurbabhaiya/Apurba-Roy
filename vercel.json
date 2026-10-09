@@ -1,5 +1,12 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/face-index-worker.ts": {
+      "maxDuration": 300,
+      "includeFiles": "node_modules/{@vladmandic/face-api/model/**,@tensorflow/tfjs-backend-wasm/dist/*.wasm}",
+      "experimentalTriggers": [{ "type": "queue/v2beta", "topic": "face-index" }]
+    }
+  },
   "rewrites": [
     {
       "source": "/(.*)",

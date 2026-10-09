@@ -48,6 +48,7 @@ import { CreateCustomerGalleryModal } from './CreateCustomerGalleryModal';
 import { CustomerSelectedPhotosModal } from './CustomerSelectedPhotosModal';
 import { ShareCustomerGalleryModal } from './ShareCustomerGalleryModal';
 import { EditCustomerGalleryModal } from './EditCustomerGalleryModal';
+import { FaceIndexControls } from './FaceIndexControls';
 
 interface CustomerGalleriesPanelProps {
   accessToken: string | null;
@@ -440,6 +441,7 @@ export const CustomerGalleriesPanel: React.FC<CustomerGalleriesPanelProps> = ({
 
                 {/* Right: Actions */}
                 <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <FaceIndexControls galleryId={gallery.id} />
                   {/* Open Gallery */}
                   <button
                     onClick={() => onOpenCustomerView(gallery)}
