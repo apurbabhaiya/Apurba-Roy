@@ -1,4 +1,4 @@
-import { assertDeliveryAdmin, decryptDriveSecret, encryptDriveSecret, supabaseServiceRequest } from './_lib/driveAuth.js';
+import { assertDeliveryAdmin, decryptDriveSecret, encryptDriveSecret, supabaseServiceRequest } from '../driveAuth.js';
 
 type VercelRequest = any;
 type VercelResponse = any;

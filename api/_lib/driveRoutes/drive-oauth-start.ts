@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { assertDeliveryAdmin, encryptDriveSecret, supabaseServiceRequest } from './_lib/driveAuth.js';
+import { assertDeliveryAdmin, encryptDriveSecret, supabaseServiceRequest } from '../driveAuth.js';
 
 type VercelRequest = any;
 type VercelResponse = any;

@@ -1,4 +1,4 @@
-import { assertDeliveryAdmin, getDriveAccessToken, getDriveConnection } from './_lib/driveAuth.js';
+import { assertDeliveryAdmin, getDriveAccessToken, getDriveConnection } from '../driveAuth.js';
 
 type VercelRequest = any;
 type VercelResponse = any;

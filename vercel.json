@@ -4,10 +4,31 @@
     "api/face-index-worker.ts": {
       "maxDuration": 300,
       "includeFiles": "node_modules/{@vladmandic/face-api/model/**,@tensorflow/tfjs-backend-wasm/dist/*.wasm}",
-      "experimentalTriggers": [{ "type": "queue/v2beta", "topic": "face-index" }]
+      "experimentalTriggers": [
+        {
+          "type": "queue/v2beta",
+          "topic": "face-index"
+        }
+      ]
     }
   },
   "rewrites": [
+    {
+      "source": "/api/drive-list",
+      "destination": "/api/drive-admin?route=drive-list"
+    },
+    {
+      "source": "/api/drive-oauth-start",
+      "destination": "/api/drive-admin?route=drive-oauth-start"
+    },
+    {
+      "source": "/api/drive-oauth-callback",
+      "destination": "/api/drive-admin?route=drive-oauth-callback"
+    },
+    {
+      "source": "/api/drive-status",
+      "destination": "/api/drive-admin?route=drive-status"
+    },
     {
       "source": "/(.*)",
       "destination": "/index.html"
