@@ -1,5 +1,6 @@
 import JSZip from 'jszip';
 import { getDriveAccessToken } from './_lib/driveAuth.js';
+import { uniqueZipName } from './_lib/fileName.js';
 
 type VercelRequest = any;
 type VercelResponse = any;
@@ -39,7 +40,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
     const token = String(body.token || '').trim();
     const ids = Array.isArray(body.files) ? body.files.map((id: unknown) => String(id)) : [];
-    if (!token || token.length < 12 || ids.length < 1 || ids.length > 5000) return json(res, 400, 'Invalid delivery ZIP request.');
+    if (!token || token.length < 12 || token.length > 128 || ids.length < 1 || ids.length > 5000) return json(res, 400, 'Invalid delivery ZIP request.');
     const files = [];
     for (const id of ids) {
       if (!/^[0-9a-f-]{36}$/i.test(id)) return json(res, 400, 'Invalid delivery file ID.');
@@ -50,10 +51,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     for (const file of files) {
       const response = await fetchOriginal(String(file.drive_file_id));
       if (!response.ok) throw new Error(`Could not read ${file.file_name || file.title || 'file'} from Google Drive.`);
-      let name = String(file.file_name || file.title || `delivery-${file.drive_file_id}.bin`).replace(/[\\/:*?"<>|\\u0000-\\u001f]/g, '_').slice(0, 220) || 'delivery-file';
-      let base = name; let n = 2;
-      while (used.has(name)) name = base.replace(/(\\.[^.]+)?$/, `_${n++}$1`);
-      used.add(name);
+      const name = uniqueZipName(String(file.file_name || file.title || `delivery-${file.drive_file_id}.bin`), used);
       zip.file(name, Buffer.from(await response.arrayBuffer()));
     }
     const output = await zip.generateAsync({ type: 'nodebuffer', compression: 'STORE' });

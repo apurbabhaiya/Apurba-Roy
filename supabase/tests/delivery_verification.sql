@@ -1,0 +1,38 @@
+begin;
+do $test$
+declare admin text:=encode(gen_random_bytes(32),'hex'); p uuid; f uuid; payment uuid; token text; r jsonb;
+begin
+ insert into public.booking_admin_sessions(token_hash,expires_at) values(encode(digest(admin,'sha256'),'hex'),now()+interval '5 minutes');
+ insert into public.delivery_portals(client_name,package_price,storage_retention_until,late_fee_enabled) values('TEST FIXTURE · rollback',100,now()+interval '30 days',false) returning id,secure_token into p,token;
+ r:=public.delivery_admin_add_payment(admin,p,current_date,'CASH',100,null,'TEST ONLY','PENDING');
+ payment:=(r->>'payment_id')::uuid;
+ if public.delivery_total_paid(p)<>0 then raise exception 'Pending payment counted'; end if;
+ perform public.delivery_admin_update_payment(admin,payment,null,null,null,null,null,'VERIFIED');
+ if public.delivery_total_paid(p)<>100 then raise exception 'Verified payment double counted'; end if;
+ perform public.delivery_admin_update_payment(admin,payment,null,null,null,null,null,'VERIFIED');
+ if public.delivery_total_paid(p)<>100 then raise exception 'Repeated verification double counted'; end if;
+ perform public.delivery_admin_update_payment(admin,payment,null,null,null,null,null,'PENDING');
+ if public.delivery_total_paid(p)<>0 then raise exception 'Pending reversal failed'; end if;
+ perform public.delivery_admin_update_payment(admin,payment,null,null,null,null,null,'VERIFIED');
+ r:=public.delivery_admin_upsert_file(admin,p,null,'https://drive.google.com/file/d/TEST_FIXTURE_NOT_A_REAL_FILE/view','PHOTO',null,'fixture.jpg','image/jpeg',0,true);
+ f:=(r->>'id')::uuid;
+ perform public.delivery_admin_set_published(admin,p,true);
+ perform public.delivery_admin_activate_final_delivery(admin,p);
+ update public.delivery_portals set photo_download_permission=true where id=p;
+ if public.get_delivery_media_by_token(token,f,'ORIGINAL') is null then raise exception 'Nullable size lost media'; end if;
+ update public.delivery_portals set free_access_expires_at=now()-interval '1 day',access_expires_at=null where id=p;
+ perform public.delivery_admin_restore_access(admin,p,1,false);
+ if not exists(select 1 from public.delivery_portals where id=p and access_expires_at>now()) then raise exception 'Restore failed'; end if;
+ update public.delivery_portals set storage_retention_until=now()-interval '1 minute' where id=p;
+ begin perform public.delivery_admin_restore_access(admin,p,1,false); raise exception 'Expired retention restored'; exception when others then if sqlerrm not like 'Storage retention has ended.%' then raise; end if; end;
+ begin perform public.delivery_admin_delete_portal(admin,p,'wrong name'); raise exception 'Name confirmation bypassed'; exception when others then if sqlerrm<>'Client name does not match' then raise; end if; end;
+ perform public.delivery_admin_delete_portal(admin,p,'TEST FIXTURE · rollback');
+ if exists(select 1 from public.delivery_files where portal_id=p) then raise exception 'Deleted file records remain'; end if;
+ if not exists(select 1 from public.delivery_payments where id=payment and amount=100 and status='VERIFIED' and note='TEST ONLY') then raise exception 'Payment history lost'; end if;
+ if public.get_delivery_portal_by_token(token) is not null then raise exception 'Old client link active'; end if;
+ r:=public.delivery_admin_dashboard(admin);
+ if exists(select 1 from jsonb_array_elements(r->'portals') x where x->>'id'=p::text) then raise exception 'Deleted portal visible'; end if;
+ begin perform public.delivery_admin_restore_access(admin,p,1,false); raise exception 'Deleted portal restored'; exception when others then if sqlerrm<>'Delivery portal not found' then raise; end if; end;
+end $test$;
+select 'PASS: payment transitions, exact totals, nullable metadata, restore, retention, delete confirmation, old link, retained ledger' as result;
+rollback;
