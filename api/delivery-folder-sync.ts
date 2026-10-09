@@ -1,6 +1,6 @@
 type VercelRequest = any;
 type VercelResponse = any;
-import { getDriveAccessToken, supabaseServiceRequest } from './_lib/driveAuth';
+import { getDriveAccessToken, supabaseServiceRequest } from './_lib/driveAuth.js';
 
 function json(res: VercelResponse, status: number, body: unknown) {
   res.status(status).setHeader('content-type', 'application/json; charset=utf-8').end(JSON.stringify(body));

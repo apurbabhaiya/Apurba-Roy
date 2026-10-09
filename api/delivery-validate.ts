@@ -1,4 +1,4 @@
-import { getDriveAccessToken, supabaseServiceRequest } from './_lib/driveAuth';
+import { getDriveAccessToken, supabaseServiceRequest } from './_lib/driveAuth.js';
 
 type VercelRequest = any;
 type VercelResponse = any;
