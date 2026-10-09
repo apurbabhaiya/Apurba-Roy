@@ -628,3 +628,11 @@ export async function validateAndSaveDeliveryFile(input: {
     file?: DeliveryAdminFile | null;
   };
 }
+
+export async function deleteClientDelivery(input: { token: string; portalId: string; clientName: string }) {
+  const { data, error } = await db.rpc('delivery_admin_delete_portal', {
+    p_token: input.token, p_portal_id: input.portalId, p_client_name: input.clientName,
+  });
+  if (error) throw error;
+  return data;
+}

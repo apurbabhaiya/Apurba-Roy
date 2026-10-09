@@ -37,6 +37,7 @@ import {
   listDeliveryFiles,
   upsertDeliveryFile,
   deleteDeliveryFile,
+  deleteClientDelivery,
   syncDeliveryFolder,
   validateAndSaveDeliveryFile,
   updateDeliveryPortal,
@@ -123,6 +124,21 @@ function StatusPill({ value }: { value: string }) {
 }
 
 export default function RamyaChobiDeliveryAdmin() {
+  const [deleteTarget, setDeleteTarget] = useState<DeliveryAdminPortal | null>(null);
+  const [deleteName, setDeleteName] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+  async function confirmDeleteClient() {
+    if (!deleteTarget || deleting || deleteName !== deleteTarget.client_name) return;
+    setDeleting(true); setDeleteError('');
+    try {
+      await deleteClientDelivery({ token, portalId: deleteTarget.id, clientName: deleteName });
+      setDeleteTarget(null); setDeleteName(''); setSelectedPortalId('');
+      setNotice('Client delivery removed. Previous client link is disabled. Drive files and payment history are preserved.');
+      await load();
+    } catch (e: any) { setDeleteError(e?.message || 'Could not delete client delivery. Try again.'); }
+    finally { setDeleting(false); }
+  }
   const [token, setToken] = useState('');
   const [accessCode, setAccessCode] = useState('');
   const [dashboard, setDashboard] = useState<DeliveryAdminDashboard | null>(null);
@@ -948,6 +964,7 @@ export default function RamyaChobiDeliveryAdmin() {
 
                   <div className="mt-4 flex flex-wrap gap-2">
                     {portal.client_phone && <a href={portalWhatsapp(portal.whatsapp_number || portal.client_phone)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-3.5 py-2 text-sm font-bold text-white">WhatsApp</a>}
+                    <button type="button" onClick={() => { setDeleteTarget(portal); setDeleteName(''); setDeleteError(''); }} disabled={loading} className="rounded-xl bg-red-50 px-3.5 py-2 text-sm font-bold text-red-700">Delete Client Delivery</button>
                     <button onClick={() => startPortalEdit(portal)} className="inline-flex items-center gap-2 rounded-xl bg-amber-100 px-3.5 py-2 text-sm font-bold text-amber-900">Edit Client</button>
                     <button onClick={() => previewClientPage(portal)} className="inline-flex items-center gap-2 rounded-xl border border-stone-300 px-3.5 py-2 text-sm font-bold"><ExternalLink className="h-4 w-4" /> Preview exact page</button>
                     <button onClick={() => setPublished(portal, !portal.is_published)} disabled={loading} className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-bold text-white ${portal.is_published ? 'bg-stone-700' : 'bg-emerald-700'}`}>
@@ -1070,6 +1087,23 @@ export default function RamyaChobiDeliveryAdmin() {
             <img src={paymentProofUrl} alt="Client payment proof" className="mx-auto max-h-[78vh] max-w-full rounded-lg object-contain" />
             <p className="mt-2 text-xs text-stone-500">This temporary private link expires in 5 minutes.</p>
           </div>
+        </div>
+      )}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 p-4">
+          <section role="dialog" aria-modal="true" aria-labelledby="delete-client-heading" className="max-h-[90vh] w-full max-w-lg overflow-auto rounded-2xl bg-white p-6 shadow-xl">
+            <h2 id="delete-client-heading" className="text-xl font-bold">Delete Client Delivery</h2>
+            <p className="mt-3 font-semibold">{deleteTarget.client_name}</p>
+            <p className="text-sm text-stone-600">{deleteTarget.event_name || 'Client delivery'} · {(filesByPortal[deleteTarget.id] || []).length} attached file records</p>
+            <p className="mt-4 text-sm text-stone-700">This removes the client delivery from this list and deletes its attached file records. The previous client link will stop working. Original Google Drive files, bookings and payment history are preserved.</p>
+            <label htmlFor="delete-client-name" className="mt-5 block text-sm font-semibold">Type the exact client name to confirm</label>
+            <input id="delete-client-name" autoFocus value={deleteName} onChange={(e) => setDeleteName(e.target.value)} disabled={deleting} autoComplete="off" className="mt-2 w-full rounded-xl border border-stone-300 p-3" />
+            {deleteError && <p role="alert" className="mt-3 text-sm text-red-700">{deleteError}</p>}
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button type="button" disabled={deleting} onClick={() => setDeleteTarget(null)} className="rounded-xl border px-4 py-2 font-semibold">Cancel</button>
+              <button type="button" disabled={deleting || deleteName !== deleteTarget.client_name} onClick={confirmDeleteClient} className="rounded-xl bg-red-700 px-4 py-2 font-semibold text-white disabled:opacity-40">{deleting ? 'Deleting…' : 'Delete Client Delivery'}</button>
+            </div>
+          </section>
         </div>
       )}
       <DriveDeliveryPickerModal
