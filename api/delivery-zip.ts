@@ -1,5 +1,5 @@
 import JSZip from 'jszip';
-import { getDriveAccessToken } from './_lib/driveAuth';
+import { getDriveAccessToken } from './_lib/driveAuth.js';
 
 type VercelRequest = any;
 type VercelResponse = any;
