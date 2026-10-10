@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { ensureAnonymousSupabaseAuth } from './supabaseAuth';
+import { startFaceIndex } from './faceIndexService';
 import {
   CustomerGallery,
   CustomerGalleryPhoto,
@@ -441,6 +442,10 @@ export async function saveCustomerGallery(gallery: CustomerGallery): Promise<voi
     (g) => g.id !== updatedGallery.id && (!legacyId || g.id !== legacyId)
   );
   saveLocalCustomerGalleries([updatedGallery, ...locals]);
+  // Face indexing is independent of gallery saving and selection/payment history.
+  // An unavailable queue must not prevent the existing save flow.
+  try { await startFaceIndex(gallery.id); }
+  catch { console.warn('Gallery saved. Face indexing did not start; use Start / Resume Index in Admin.'); }
 }
 
 export async function getCustomerGalleryByToken(identifier: string, onPhotoProgress?: (loaded: number) => void): Promise<CustomerGallery | null> {

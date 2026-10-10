@@ -1,155 +1,149 @@
-import { DrivePhoto, FaceMatchScore } from '../types';
-
-/**
- * AI Face Search Service for [রম্যছবি - RamyaChobi]
- * Strictly scopes face matching to photos within the client's current album.
- */
-
-// Helper to convert an image URL or Blob to an HTMLImageElement
+import type { DrivePhoto, FaceMatchScore } from '../types';
+import { descriptorDistance } from './faceMatchMath';
+import { faceRequest, getFaceIndexStatus, type FaceIndexStatus } from './faceIndexService';
+type FaceApi = typeof import('@vladmandic/face-api');
+let modelPromise: Promise<FaceApi> | undefined;
+// Legacy small-album cache stays in session memory. Reference images are never persisted.
+const faceCache = new Map<string, Float32Array[]>();
+let searchBusy = false;
+async function models(): Promise<FaceApi> {
+  if (!modelPromise) modelPromise = (async () => {
+    const api = await import('@vladmandic/face-api');
+    const tf = api.tf as unknown as { setBackend(name: string): Promise<boolean>; ready(): Promise<void> };
+    try { if (!await tf.setBackend('webgl')) throw new Error('WebGL unavailable'); await tf.ready(); }
+    catch { await tf.setBackend('cpu'); await tf.ready(); }
+    await Promise.all([
+      api.nets.ssdMobilenetv1.loadFromUri('/face-models'),
+      api.nets.faceLandmark68Net.loadFromUri('/face-models'),
+      api.nets.faceRecognitionNet.loadFromUri('/face-models'),
+    ]);
+    return api;
+  })().catch(() => { modelPromise = undefined; throw new Error('Face models could not load. Check your connection and retry.'); });
+  return modelPromise;
+}
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
+    const timer = setTimeout(() => { img.src = ''; reject(new Error('Image loading timed out.')); }, 20000);
     img.crossOrigin = 'anonymous';
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error('Failed to load image for face analysis'));
+    img.onload = () => { clearTimeout(timer); resolve(img); };
+    img.onerror = () => { clearTimeout(timer); reject(new Error('Image could not load.')); };
     img.src = src;
   });
 }
-
-// Extract visual feature vector from image using HTML5 Canvas
-async function extractVisualFeatures(imgElement: HTMLImageElement): Promise<number[]> {
+async function detect(api: FaceApi, image: HTMLImageElement) {
+  return api.detectAllFaces(image, new api.SsdMobilenetv1Options({ minConfidence: 0.5, maxResults: 100 }))
+    .withFaceLandmarks().withFaceDescriptors();
+}
+export interface ReferenceFaceChoice { index: number; preview: string; }
+export class FaceSelectionRequired extends Error {
+  constructor(public faces: ReferenceFaceChoice[]) {
+    super('একাধিক মুখ পাওয়া গেছে। যে মুখটি খুঁজবেন সেটি নির্বাচন করুন।');
+  }
+}
+function faceCrop(image: HTMLImageElement, box: { x: number; y: number; width: number; height: number }) {
   const canvas = document.createElement('canvas');
-  const size = 32; // 32x32 downsampling grid
-  canvas.width = size;
-  canvas.height = size;
+  canvas.width = canvas.height = 96;
   const ctx = canvas.getContext('2d');
-  if (!ctx) return [];
-
-  // Focus on center 60% of image where face / portrait subject typically is
-  const cropX = imgElement.naturalWidth * 0.2;
-  const cropY = imgElement.naturalHeight * 0.15;
-  const cropW = imgElement.naturalWidth * 0.6;
-  const cropH = imgElement.naturalHeight * 0.7;
-
-  ctx.drawImage(imgElement, cropX, cropY, cropW, cropH, 0, 0, size, size);
-  const imgData = ctx.getImageData(0, 0, size, size);
-  const data = imgData.data;
-
-  // Features: color moments, luminance, skin-tone ratio, and edge contrasts
-  const features: number[] = [];
-  let rSum = 0, gSum = 0, bSum = 0;
-  let skinTonePixels = 0;
-
-  for (let i = 0; i < data.length; i += 4) {
-    const r = data[i];
-    const g = data[i + 1];
-    const b = data[i + 2];
-    rSum += r;
-    gSum += g;
-    bSum += b;
-
-    // Detect skin tone range
-    if (r > 95 && g > 40 && b > 20 && r > g && r > b && (Math.max(r, g, b) - Math.min(r, g, b)) > 15 && Math.abs(r - g) > 15) {
-      skinTonePixels++;
-    }
-  }
-
-  const totalPixels = size * size;
-  const avgR = rSum / totalPixels;
-  const avgG = gSum / totalPixels;
-  const avgB = bSum / totalPixels;
-  const skinRatio = skinTonePixels / totalPixels;
-
-  features.push(avgR / 255, avgG / 255, avgB / 255, skinRatio);
-
-  // Divide into 4 quadrants to capture face structure
-  for (let q = 0; q < 4; q++) {
-    const qx = (q % 2) * (size / 2);
-    const qy = Math.floor(q / 2) * (size / 2);
-    const qData = ctx.getImageData(qx, qy, size / 2, size / 2).data;
-    let qr = 0, qg = 0, qb = 0;
-    for (let j = 0; j < qData.length; j += 4) {
-      qr += qData[j];
-      qg += qData[j + 1];
-      qb += qData[j + 2];
-    }
-    const qCount = (size / 2) * (size / 2);
-    features.push((qr / qCount) / 255, (qg / qCount) / 255, (qb / qCount) / 255);
-  }
-
-  return features;
+  if (!ctx) throw new Error('ছবিটি বিশ্লেষণ করা যায়নি। অন্য ছবি দিন।');
+  ctx.drawImage(image, box.x, box.y, box.width, box.height, 0, 0, 96, 96);
+  return canvas;
 }
-
-// Compute cosine similarity between two feature vectors
-function computeSimilarity(vecA: number[], vecB: number[]): number {
-  if (vecA.length === 0 || vecB.length === 0 || vecA.length !== vecB.length) return 0;
-  let dot = 0;
-  let normA = 0;
-  let normB = 0;
-  for (let i = 0; i < vecA.length; i++) {
-    dot += vecA[i] * vecB[i];
-    normA += vecA[i] * vecA[i];
-    normB += vecB[i] * vecB[i];
+function assertClearReference(image: HTMLImageElement, face: Awaited<ReturnType<typeof detect>>[number]) {
+  const box = face.detection.box;
+  if (Math.min(box.width, box.height) < 60 || face.detection.score < 0.8)
+    throw new Error('মুখটি ছোট বা স্পষ্ট নয়। কাছ থেকে তোলা পরিষ্কার ছবি দিন।');
+  const pixels = faceCrop(image, box).getContext('2d')!.getImageData(0, 0, 96, 96).data;
+  const gray = Array.from({ length: 96 * 96 }, (_, i) =>
+    0.299 * pixels[i * 4] + 0.587 * pixels[i * 4 + 1] + 0.114 * pixels[i * 4 + 2]);
+  let sum = 0, squared = 0, count = 0;
+  for (let y = 1; y < 95; y++) for (let x = 1; x < 95; x++) {
+    const i = y * 96 + x;
+    const lap = gray[i - 1] + gray[i + 1] + gray[i - 96] + gray[i + 96] - 4 * gray[i];
+    sum += lap; squared += lap * lap; count++;
   }
-  if (normA === 0 || normB === 0) return 0;
-  return dot / (Math.sqrt(normA) * Math.sqrt(normB));
+  // Conservative screening only. This does not measure identity-match accuracy.
+  if (squared / count - (sum / count) ** 2 < 20)
+    throw new Error('মুখটি ঝাপসা। পরিষ্কার নতুন ছবি দিয়ে চেষ্টা করুন।');
 }
-
-/**
- * Searches and ranks matching photos from the current album for a reference face.
- * Security: Strictly processes ONLY the photos passed in the `albumPhotos` parameter.
- */
+export interface FaceSearchReport {
+  total: number; analyzed: number; failed: number; withoutFaces: number; faces: number; matched: number;
+}
 export async function searchFaceInAlbum(
-  referenceFaceDataUrl: string,
-  albumPhotos: DrivePhoto[],
-  onProgress?: (progressPercent: number, statusText: string) => void
+  referenceFaceDataUrl: string, albumPhotos: DrivePhoto[],
+  onProgress?: (progressPercent: number, statusText: string) => void,
+  onReport?: (report: FaceSearchReport) => void,
+  context?: { galleryId: string; pin?: string; referenceFaceIndex?: number },
 ): Promise<FaceMatchScore[]> {
-  if (albumPhotos.length === 0) return [];
-
-  onProgress?.(10, 'মুখের বৈশিষ্ট্য বিশ্লেষণ করা হচ্ছে (Analyzing facial landmarks)...');
-
-  // Search only the image bytes from the current album. Filename, date and
-  // metadata are deliberately never used to create or boost a match.
-  onProgress?.(20, 'এই album-এর ছবির মুখ বিশ্লেষণ করা হচ্ছে...');
-
-  let refFeatures: number[] = [];
+  if (searchBusy) throw new Error('A face search is already running. Please wait.');
+  if (!albumPhotos.length) throw new Error('This album has no photos to search.');
+  searchBusy = true;
   try {
-    const refImg = await loadImage(referenceFaceDataUrl);
-    refFeatures = await extractVisualFeatures(refImg);
-  } catch (err) {
-    console.warn('Could not extract reference face features:', err);
-  }
-
-  const results: FaceMatchScore[] = [];
-  const total = albumPhotos.length;
-  let cursor = 0;
-  let completed = 0;
-  const threshold = Number((import.meta as any).env?.VITE_FACE_MATCH_THRESHOLD || 84);
-  const worker = async () => {
-    while (true) {
-      const index = cursor++;
-      if (index >= total) return;
-      const photo = albumPhotos[index];
-      const imgUrl = photo.thumbnailLink || photo.webViewLink;
-      let similarity = 0;
-      if (refFeatures.length > 0 && imgUrl) {
-        try {
-          const photoImg = await loadImage(imgUrl);
-          const photoFeatures = await extractVisualFeatures(photoImg);
-          const rawSim = computeSimilarity(refFeatures, photoFeatures);
-          similarity = Math.min(100, Math.max(0, Math.round(rawSim * 100)));
-        } catch { similarity = 0; }
-      }
-      if (similarity >= threshold) results.push({ photoId: photo.id, photo, similarity });
-      completed++;
-      if (completed % 10 === 0 || completed === total) onProgress?.(20 + Math.floor((completed / total) * 75), `স্ক্যান সম্পন্ন: ${completed}/${total} ফটোর মধ্যে...`);
+    const indexed = !!context && /^[0-9a-f-]{36}$/i.test(context.galleryId);
+    if (!indexed && albumPhotos.length > 50) throw new Error('This large album needs a server face index. Ask the photographer to open its customer gallery and start indexing.');
+    if (indexed) {
+      onProgress?.(0, 'Checking album face index…');
+      const coverage = await getFaceIndexStatus(context!.galleryId, context!.pin);
+      if (coverage.pending || coverage.unindexed) throw new Error(`Face index is not ready: ${coverage.ready + coverage.noFace}/${coverage.total} photos processed. The photographer can start or resume indexing in Admin.`);
     }
-  };
-  await Promise.all(Array.from({ length: Math.min(8, total) }, () => worker()));
-
-  // Sort descending by similarity
-  results.sort((a, b) => b.similarity - a.similarity);
-
-  onProgress?.(100, `ম্যাচিং সম্পন্ন! ${results.length}টি ম্যাচিং ফটো পাওয়া গেছে।`);
-  return results;
+    onProgress?.(0, 'Loading face recognition models…');
+    const api = await models();
+    const refImage = await loadImage(referenceFaceDataUrl);
+    const refFaces = await detect(api, refImage);
+    if (!refFaces.length) throw new Error('No clear face detected. Upload a sharp, front-facing portrait.');
+    const selectedIndex = context?.referenceFaceIndex;
+    if (refFaces.length > 1 && selectedIndex === undefined) {
+      throw new FaceSelectionRequired(refFaces.map((face, index) => ({ index,
+        preview: faceCrop(refImage, face.detection.box).toDataURL('image/jpeg', 0.85) })));
+    }
+    const index = selectedIndex ?? 0;
+    if (!Number.isInteger(index) || index < 0 || index >= refFaces.length)
+      throw new Error('মুখের নির্বাচন সঠিক নয়। ছবিটি আবার দিন।');
+    assertClearReference(refImage, refFaces[index]);
+    const ref = refFaces[index].descriptor;
+    if (indexed) {
+      onProgress?.(60, 'Comparing your face with this album’s private index…');
+      const response = await faceRequest<{ matches: { photoId: string; similarity: number }[]; coverage: FaceIndexStatus }>('face-search', {
+        galleryId: context!.galleryId, pin: context!.pin, descriptor: Array.from(ref),
+      });
+      const byId = new Map(albumPhotos.map(photo => [photo.id, photo]));
+      const matches = response.matches.filter(match => byId.has(match.photoId)).map(match => ({ ...match, photo: byId.get(match.photoId)! }));
+      const { total, ready, noFace, failed } = response.coverage;
+      onReport?.({ total, analyzed: ready + noFace, failed, withoutFaces: noFace, faces: 0, matched: matches.length });
+      onProgress?.(100, `${matches.length} matching photos · indexed ${ready + noFace}/${total} · unreadable ${failed} · no face ${noFace}`);
+      return matches;
+    }
+    // Conservative starting limit, not a calibrated accuracy guarantee.
+    const maxDistance = 0.5;
+    const photos = Array.from(new Map(albumPhotos.map(photo => [photo.id, photo])).values());
+    const report: FaceSearchReport = { total: photos.length, analyzed: 0, failed: 0, withoutFaces: 0, faces: 0, matched: 0 };
+    const results: FaceMatchScore[] = [];
+    for (const photo of photos) {
+      const cacheKey = `${photo.id}:${photo.thumbnailLink || ''}:${photo.size || ''}`;
+      try {
+        let descriptors = faceCache.get(cacheKey);
+        if (!descriptors) {
+          // A Drive webViewLink is HTML, not image bytes. Use readable same-origin preview.
+          const image = await loadImage(`/api/drive-preview?fileId=${encodeURIComponent(photo.id)}&width=1600`);
+          descriptors = (await detect(api, image)).map(face => face.descriptor);
+          if (faceCache.size >= 2000) faceCache.delete(faceCache.keys().next().value!);
+          faceCache.set(cacheKey, descriptors);
+        }
+        report.analyzed++;
+        report.faces += descriptors.length;
+        if (!descriptors.length) report.withoutFaces++;
+        const distance = Math.min(...descriptors.map(d => descriptorDistance(ref, d)));
+        if (distance <= maxDistance) results.push({ photoId: photo.id, photo, similarity: Math.round((1 - distance) * 100) });
+      } catch { report.failed++; }
+      report.matched = results.length;
+      onProgress?.(Math.round(((report.analyzed + report.failed) / report.total) * 100),
+        `Checked ${report.analyzed + report.failed}/${report.total} · unreadable ${report.failed} · no face ${report.withoutFaces}`);
+      await new Promise<void>(resolve => setTimeout(resolve, 0));
+    }
+    onReport?.({ ...report });
+    if (!report.analyzed) throw new Error('No album images could be analyzed. Check Drive preview access; this is not a no-match result.');
+    results.sort((a, b) => b.similarity - a.similarity);
+    onProgress?.(100, `${results.length} matching photos · analyzed ${report.analyzed}/${report.total} · unreadable ${report.failed} · no face ${report.withoutFaces}`);
+    return results;
+  } finally { searchBusy = false; }
 }

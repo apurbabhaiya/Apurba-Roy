@@ -155,7 +155,7 @@ export interface Album {
 export interface FaceMatchScore {
   photoId: string;
   photo: DrivePhoto;
-  similarity: number; // 0 to 100 percentage
+  similarity: number; // Distance-derived ranking score, not an accuracy percentage
 }
 
 export interface ClientProfileData {

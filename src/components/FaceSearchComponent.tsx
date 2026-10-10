@@ -16,7 +16,8 @@ import {
   Image as ImageIcon,
 } from 'lucide-react';
 import { Album, DrivePhoto, FaceMatchScore } from '../types';
-import { searchFaceInAlbum } from '../services/faceSearchService';
+import { ReferenceFacePicker } from './ReferenceFacePicker';
+import { searchFaceInAlbum, FaceSelectionRequired, type ReferenceFaceChoice } from '../services/faceSearchService';
 
 interface FaceSearchComponentProps {
   album: Album;
@@ -51,6 +52,7 @@ export const FaceSearchComponent: React.FC<FaceSearchComponentProps> = ({
   const [isScanning, setIsScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
   const [scanStatusText, setScanStatusText] = useState('');
+  const [faceChoices, setFaceChoices] = useState<ReferenceFaceChoice[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
 
@@ -180,7 +182,8 @@ export const FaceSearchComponent: React.FC<FaceSearchComponentProps> = ({
   };
 
   // Execute AI Search
-  const runFaceSearch = async (imageDataUrl: string) => {
+  const runFaceSearch = async (imageDataUrl: string, referenceFaceIndex?: number) => {
+    setFaceChoices([]);
     setIsScanning(true);
     setScanProgress(10);
     setScanStatusText('মুখের বৈশিষ্ট্য বিশ্লেষণ করা হচ্ছে...');
@@ -194,7 +197,9 @@ export const FaceSearchComponent: React.FC<FaceSearchComponentProps> = ({
         (progress, text) => {
           setScanProgress(progress);
           setScanStatusText(text);
-        }
+        },
+        undefined,
+        { galleryId: album.id, referenceFaceIndex }
       );
 
       const matchIds = matches.map((m) => m.photoId);
@@ -205,9 +210,9 @@ export const FaceSearchComponent: React.FC<FaceSearchComponentProps> = ({
 
       onFilterMatchingPhotos(matchIds, imageDataUrl, scoreMap);
     } catch (err: any) {
-      console.error('Face search error:', err);
-      setErrorMessage(
-        'ফেস সার্চ সম্পন্ন করতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।'
+      if (err instanceof FaceSelectionRequired) setFaceChoices(err.faces);
+      else setErrorMessage(
+        err?.message || 'ফেস সার্চ সম্পন্ন করতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।'
       );
     } finally {
       setIsScanning(false);
@@ -219,6 +224,7 @@ export const FaceSearchComponent: React.FC<FaceSearchComponentProps> = ({
     stopCamera();
     setPreviewImage(null);
     setErrorMessage(null);
+    setFaceChoices([]);
     setIsScanning(false);
     setScanProgress(0);
     onFilterMatchingPhotos(null, null, {});
@@ -399,6 +405,7 @@ export const FaceSearchComponent: React.FC<FaceSearchComponentProps> = ({
             </div>
           )}
 
+          {faceChoices.length > 0 && <ReferenceFacePicker faces={faceChoices} onSelect={index => previewImage && void runFaceSearch(previewImage, index)} onCancel={handleClearSearch} />}
           {/* Error Message */}
           {errorMessage && (
             <div className="p-3.5 rounded-2xl bg-rose-950/40 border border-rose-500/40 text-rose-300 text-xs flex items-center gap-2 animate-fade-in">
