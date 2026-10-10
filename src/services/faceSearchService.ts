@@ -35,6 +35,37 @@ async function detect(api: FaceApi, image: HTMLImageElement) {
   return api.detectAllFaces(image, new api.SsdMobilenetv1Options({ minConfidence: 0.5, maxResults: 100 }))
     .withFaceLandmarks().withFaceDescriptors();
 }
+export interface ReferenceFaceChoice { index: number; preview: string; }
+export class FaceSelectionRequired extends Error {
+  constructor(public faces: ReferenceFaceChoice[]) {
+    super('একাধিক মুখ পাওয়া গেছে। যে মুখটি খুঁজবেন সেটি নির্বাচন করুন।');
+  }
+}
+function faceCrop(image: HTMLImageElement, box: { x: number; y: number; width: number; height: number }) {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 96;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('ছবিটি বিশ্লেষণ করা যায়নি। অন্য ছবি দিন।');
+  ctx.drawImage(image, box.x, box.y, box.width, box.height, 0, 0, 96, 96);
+  return canvas;
+}
+function assertClearReference(image: HTMLImageElement, face: Awaited<ReturnType<typeof detect>>[number]) {
+  const box = face.detection.box;
+  if (Math.min(box.width, box.height) < 60 || face.detection.score < 0.8)
+    throw new Error('মুখটি ছোট বা স্পষ্ট নয়। কাছ থেকে তোলা পরিষ্কার ছবি দিন।');
+  const pixels = faceCrop(image, box).getContext('2d')!.getImageData(0, 0, 96, 96).data;
+  const gray = Array.from({ length: 96 * 96 }, (_, i) =>
+    0.299 * pixels[i * 4] + 0.587 * pixels[i * 4 + 1] + 0.114 * pixels[i * 4 + 2]);
+  let sum = 0, squared = 0, count = 0;
+  for (let y = 1; y < 95; y++) for (let x = 1; x < 95; x++) {
+    const i = y * 96 + x;
+    const lap = gray[i - 1] + gray[i + 1] + gray[i - 96] + gray[i + 96] - 4 * gray[i];
+    sum += lap; squared += lap * lap; count++;
+  }
+  // Conservative screening only. This does not measure identity-match accuracy.
+  if (squared / count - (sum / count) ** 2 < 20)
+    throw new Error('মুখটি ঝাপসা। পরিষ্কার নতুন ছবি দিয়ে চেষ্টা করুন।');
+}
 export interface FaceSearchReport {
   total: number; analyzed: number; failed: number; withoutFaces: number; faces: number; matched: number;
 }
@@ -42,7 +73,7 @@ export async function searchFaceInAlbum(
   referenceFaceDataUrl: string, albumPhotos: DrivePhoto[],
   onProgress?: (progressPercent: number, statusText: string) => void,
   onReport?: (report: FaceSearchReport) => void,
-  context?: { galleryId: string; pin?: string },
+  context?: { galleryId: string; pin?: string; referenceFaceIndex?: number },
 ): Promise<FaceMatchScore[]> {
   if (searchBusy) throw new Error('A face search is already running. Please wait.');
   if (!albumPhotos.length) throw new Error('This album has no photos to search.');
@@ -57,12 +88,19 @@ export async function searchFaceInAlbum(
     }
     onProgress?.(0, 'Loading face recognition models…');
     const api = await models();
-    const refFaces = await detect(api, await loadImage(referenceFaceDataUrl));
+    const refImage = await loadImage(referenceFaceDataUrl);
+    const refFaces = await detect(api, refImage);
     if (!refFaces.length) throw new Error('No clear face detected. Upload a sharp, front-facing portrait.');
-    if (refFaces.length !== 1) throw new Error('More than one face detected. Crop the photo to the person you want to search.');
-    const box = refFaces[0].detection.box;
-    if (Math.min(box.width, box.height) < 60) throw new Error('The face is too small. Upload a closer portrait.');
-    const ref = refFaces[0].descriptor;
+    const selectedIndex = context?.referenceFaceIndex;
+    if (refFaces.length > 1 && selectedIndex === undefined) {
+      throw new FaceSelectionRequired(refFaces.map((face, index) => ({ index,
+        preview: faceCrop(refImage, face.detection.box).toDataURL('image/jpeg', 0.85) })));
+    }
+    const index = selectedIndex ?? 0;
+    if (!Number.isInteger(index) || index < 0 || index >= refFaces.length)
+      throw new Error('মুখের নির্বাচন সঠিক নয়। ছবিটি আবার দিন।');
+    assertClearReference(refImage, refFaces[index]);
+    const ref = refFaces[index].descriptor;
     if (indexed) {
       onProgress?.(60, 'Comparing your face with this album’s private index…');
       const response = await faceRequest<{ matches: { photoId: string; similarity: number }[]; coverage: FaceIndexStatus }>('face-search', {
