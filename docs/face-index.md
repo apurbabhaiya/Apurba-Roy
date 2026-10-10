@@ -14,7 +14,9 @@ deadline, and PIN when enabled. Only a non-anonymous gallery owner can start,
 retry, or rebuild. Existing gallery/photo RLS is unchanged. The worker endpoint
 is a private Vercel Queue consumer, not a publicly callable indexing endpoint.
 
-The browser detects one clear reference face, then sends its 128 features in an
+The browser detects reference faces, offers a face picker for group references,
+and checks minimum face size, detector confidence and crop sharpness. It then sends
+the selected face’s 128 features in an
 authenticated, uncached search request. The reference image is not uploaded or
 persisted. The server does not save reference features or log face data. Only
 matching Drive photo IDs and ranking scores return to the client; gallery
@@ -73,3 +75,32 @@ all three fixture statuses, upload the authorized reference in a separate client
 session, and verify results. Repeated search must not read album images again.
 Test retry after an inaccessible fixture preview and confirm that original Drive
 files are unchanged. Do not merge this draft until those checks are observed.
+
+## Labeled accuracy evaluation
+
+Run `node --import tsx scripts/evaluate-face-matches.ts /absolute/labels.json`
+with authorized local photos and photographer-assigned labels:
+
+```json
+{
+  "reference": "reference.jpg",
+  "cutoff": 0.5,
+  "cases": [
+    { "file": "same-person-different-light.jpg", "expected": true },
+    { "file": "group-with-reference-person.jpg", "expected": true },
+    { "file": "different-person.jpg", "expected": false }
+  ]
+}
+```
+
+For a group reference add `referenceFaceIndex` after verifying its detected face
+order. Reports include true/false positives, true/false negatives, unreadable
+photos, precision and recall. Exit status is nonzero for a missed positive, false
+positive or unreadable case. The 0.5 cutoff and quality gates are starting values,
+not calibrated guarantees. Use held-out photos and multiple people before release.
+
+Current production `apurba-roy-three.vercel.app` still runs the main branch's
+RGB heuristic; draft PR 14 contains this replacement. The target 1491-photo
+gallery has no derived index yet. Preview needs the server-only Supabase key,
+which currently targets Production only. Keep release blocked until actual
+Queue processing and labeled cross-runtime searches pass.
