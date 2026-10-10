@@ -18,7 +18,8 @@ import {
   SwitchCamera,
 } from 'lucide-react';
 import { Album, DrivePhoto, FaceMatchScore } from '../types';
-import { searchFaceInAlbum } from '../services/faceSearchService';
+import { ReferenceFacePicker } from './ReferenceFacePicker';
+import { searchFaceInAlbum, FaceSelectionRequired, type ReferenceFaceChoice } from '../services/faceSearchService';
 import { isPhotoApprovedForClient } from '../services/albumStorage';
 
 interface FaceSearchModalProps {
@@ -42,14 +43,13 @@ export const FaceSearchModal: React.FC<FaceSearchModalProps> = ({
   selectedIds,
   onToggleSelect,
 }) => {
-  if (!isOpen) return null;
-
   const [mode, setMode] = useState<'upload' | 'camera'>('upload');
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
   const [scanStatusText, setScanStatusText] = useState('');
   const [matchResults, setMatchResults] = useState<FaceMatchScore[] | null>(null);
+  const [faceChoices, setFaceChoices] = useState<ReferenceFaceChoice[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Camera handling
@@ -92,7 +92,7 @@ export const FaceSearchModal: React.FC<FaceSearchModalProps> = ({
   };
 
   useEffect(() => {
-    if (mode === 'camera' && !capturedImage) {
+    if (isOpen && mode === 'camera' && !capturedImage) {
       startCamera();
     } else {
       stopCamera();
@@ -100,7 +100,7 @@ export const FaceSearchModal: React.FC<FaceSearchModalProps> = ({
     return () => {
       stopCamera();
     };
-  }, [mode, capturedImage, cameraFacing]);
+  }, [isOpen, mode, capturedImage, cameraFacing]);
 
   // Capture frame from webcam
   const handleCaptureFromCamera = () => {
@@ -144,7 +144,8 @@ export const FaceSearchModal: React.FC<FaceSearchModalProps> = ({
   };
 
   // Run AI Search
-  const runFaceSearch = async (imageDataUrl: string) => {
+  const runFaceSearch = async (imageDataUrl: string, referenceFaceIndex?: number) => {
+    setFaceChoices([]);
     setIsScanning(true);
     setScanProgress(5);
     setScanStatusText('ছবি লোড করা হচ্ছে...');
@@ -161,12 +162,12 @@ export const FaceSearchModal: React.FC<FaceSearchModalProps> = ({
           setScanStatusText(text);
         },
         undefined,
-        { galleryId: album.id }
+        { galleryId: album.id, referenceFaceIndex }
       );
       setMatchResults(matches);
     } catch (err: any) {
-      console.error(err);
-      setErrorMessage(err?.message || 'ফেস সার্চ সম্পন্ন করতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।');
+      if (err instanceof FaceSelectionRequired) setFaceChoices(err.faces);
+      else setErrorMessage(err?.message || 'ফেস সার্চ সম্পন্ন করতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।');
     } finally {
       setIsScanning(false);
     }
@@ -175,6 +176,7 @@ export const FaceSearchModal: React.FC<FaceSearchModalProps> = ({
   const handleResetSearch = () => {
     setCapturedImage(null);
     setMatchResults(null);
+    setFaceChoices([]);
     setIsScanning(false);
     setScanProgress(0);
     setErrorMessage(null);
@@ -198,6 +200,8 @@ export const FaceSearchModal: React.FC<FaceSearchModalProps> = ({
       }
     });
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-70 flex items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-4 animate-fade-in">
@@ -272,6 +276,7 @@ export const FaceSearchModal: React.FC<FaceSearchModalProps> = ({
           )}
 
           {/* Error Message */}
+          {faceChoices.length > 0 && <ReferenceFacePicker faces={faceChoices} onSelect={index => capturedImage && void runFaceSearch(capturedImage, index)} onCancel={handleResetSearch} />}
           {errorMessage && (
             <div className="p-3.5 rounded-2xl bg-rose-950/40 border border-rose-500/40 text-rose-300 text-xs flex items-center gap-2">
               <AlertCircle className="w-4 h-4 shrink-0" />
