@@ -397,6 +397,16 @@ function ClientForm() {
     consent: false,
     events: [blankEvent(0)],
   });
+  const [allowPublish, setAllowPublish] = useState(true);
+  const noPublishFee = allowPublish ? 0 : 10000;
+  // Persist the policy using the existing booking fields for admin and PDF compatibility.
+  const bookingPayload: FormData = {
+    ...form,
+    client_extra_charge: form.client_extra_charge + noPublishFee,
+    client_notes: (allowPublish
+      ? "Publication policy: Allow Publish (free). Selected photos may be published on Ramya Chobi portfolio/page."
+      : "Publication policy: No-Publish. No publish fee: BDT 10,000 (included in extra charge). Photos must not be published online.") + (form.client_notes ? "\n" + form.client_notes : ""),
+  };
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [savedRef, setSavedRef] = useState("");
@@ -441,7 +451,7 @@ function ClientForm() {
 
   const total = Math.max(
     0,
-    form.package_amount + form.client_extra_charge - form.discount
+    form.package_amount + form.client_extra_charge + noPublishFee - form.discount
   );
   const due = Math.max(0, total - form.advance_paid);
 
@@ -468,9 +478,9 @@ function ClientForm() {
 
     setSaving(true);
     try {
-      const saved = await submitBooking(form);
+      const saved = await submitBooking(bookingPayload);
       setSavedRef(saved.reference_no);
-      downloadPdf(form, saved.reference_no, 0);
+      downloadPdf(bookingPayload, saved.reference_no, 0);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err: any) {
       setError(err && err.message ? err.message : "Could not submit the form.");
@@ -495,7 +505,7 @@ function ClientForm() {
           <button
             type="button"
             onClick={function () {
-              downloadPdf(form, savedRef, 0);
+              downloadPdf(bookingPayload, savedRef, 0);
             }}
             className="mt-6 inline-flex items-center gap-2 rounded-xl bg-slate-950 px-5 py-3 font-bold text-white"
           >
@@ -845,6 +855,24 @@ function ClientForm() {
                 }}
               />
             </Field>
+          </div>
+          <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <Field label="No-Publish (অনলাইনে পাবলিশ না করলে)">
+              <select
+                className={inputClass}
+                value={allowPublish ? "allow" : "no_publish"}
+                onChange={(e) => setAllowPublish(e.target.value === "allow")}
+              >
+                <option value="allow">Allow Publish (ফ্রি)</option>
+                <option value="no_publish">No publish fee +৳10,000</option>
+              </select>
+            </Field>
+            <p className="mt-3 text-sm leading-relaxed text-slate-600">
+              BD ইন্ডাস্ট্রিতে টিম সাধারণত পোর্টফোলিও/পেজে নির্বাচিত ছবি পোস্ট করে। ক্লায়েন্ট নিষেধ করলে “No publish fee” প্রযোজ্য।
+            </p>
+            <p className="mt-2 text-sm font-semibold text-slate-900" aria-live="polite">
+              {allowPublish ? "প্রকাশের অনুমতি: ফ্রি।" : "অনলাইনে ছবি প্রকাশ করা যাবে না। মোট বিলের সঙ্গে ৳10,000 যোগ হয়েছে।"}
+            </p>
           </div>
           <div className="mt-5 grid gap-3 rounded-2xl bg-slate-950 p-5 text-white sm:grid-cols-3">
             <div>
