@@ -703,6 +703,12 @@ export default function RamyaChobiDeliveryAdmin() {
               <Images className="h-4 w-4" /> Photo Selection
             </a>
             <a
+              href="/delivery-admin/ai-inbox"
+              className="inline-flex items-center gap-2 rounded-xl bg-fuchsia-600 px-3.5 py-2 text-sm font-bold text-white"
+            >
+              <MessageSquare className="h-4 w-4" /> AI Inbox
+            </a>
+            <a
               href="/booking/admin"
               className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-3.5 py-2 text-sm font-semibold"
             >
