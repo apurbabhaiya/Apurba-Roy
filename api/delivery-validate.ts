@@ -181,6 +181,9 @@ async function handleMetaWebhookPost(rawBody: Buffer, signature: string, res: Ve
       if (!settingsRes.ok) throw new Error('Could not verify connected Page for webhook.');
       const settings = (await settingsRes.json())[0];
       if (!settings?.is_connected || String(settings.page_id) !== pageId) continue;
+      const duplicate = await supabaseServiceRequest(`messenger_messages?select=id&external_id=eq.${encodeURIComponent(messageId)}&limit=1`);
+      if (!duplicate.ok) throw new Error('Could not check Messenger webhook retry.');
+      if ((await duplicate.json()).length) continue;
       const externalId = `${pageId}:${senderId}`;
       const existing = await supabaseServiceRequest(`messenger_threads?select=id,unread_count&external_id=eq.${encodeURIComponent(externalId)}&limit=1`);
       if (!existing.ok) throw new Error('Could not read Messenger thread.');
