@@ -20,10 +20,10 @@ export default function MessengerAIInbox() {
   const [answer, setAnswer] = useState('');
 
   const call = useCallback(async (action: string, extra: Record<string, unknown> = {}) => {
-    const response = await fetch('/api/ai-inbox', {
+    const response = await fetch('/api/delivery-validate', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ adminToken: token, action, ...extra }),
+      body: JSON.stringify({ feature: 'ai-inbox', adminToken: token, action, ...extra }),
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Request failed.');
