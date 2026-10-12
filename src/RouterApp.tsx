@@ -10,6 +10,7 @@ import ClientAccessPage from "./home/ClientAccessPage";
 import PortfolioPage from "./home/PortfolioPage";
 import AlbumGalleryPage from "./home/AlbumGalleryPage";
 import GalleryFollowGatePage from "./home/GalleryFollowGatePage";
+import MessengerAIInbox from "./delivery/MessengerAIInbox";
 
 export default function RouterApp() {
   const path = window.location.pathname;
@@ -62,6 +63,8 @@ export default function RouterApp() {
   if (path.startsWith("/album/")) return <AlbumGalleryPage token={decodeURIComponent(path.replace(/^\/album\//, "").split("/")[0] || "")} />;
 
   if (path.startsWith("/booking")) return <BookingPortal />;
+
+  if (path === "/delivery-admin/ai-inbox") return <MessengerAIInbox />;
 
   if (path === "/delivery-admin" || path.startsWith("/delivery-admin/")) {
     return <RamyaChobiDeliveryAdmin />;
