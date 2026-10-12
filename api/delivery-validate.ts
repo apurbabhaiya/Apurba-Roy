@@ -1,4 +1,7 @@
+import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { getDriveAccessToken, supabaseServiceRequest } from './_lib/driveAuth.js';
+
+export const config = { api: { bodyParser: false } };
 
 type VercelRequest = any;
 type VercelResponse = any;
@@ -23,6 +26,187 @@ async function rpc(name: string, body: Record<string, unknown>) {
   });
   if (!response.ok) throw new Error((await response.text()).slice(0, 400) || `Supabase RPC ${name} failed.`);
   return response.json();
+}
+
+function readRawBody(req: any): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    req.on('data', (chunk: Buffer | string) => {
+      const value = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      size += value.length;
+      if (size > 1_000_000) { reject(new Error('Request body is too large.')); req.destroy(); return; }
+      chunks.push(value);
+    });
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+}
+
+function graphVersion() {
+  return process.env.META_GRAPH_VERSION || 'v26.0';
+}
+
+function metaConfig() {
+  const appId = process.env.META_APP_ID || '';
+  const appSecret = process.env.META_APP_SECRET || '';
+  const redirectUri = process.env.META_REDIRECT_URI || '';
+  if (!appId || !appSecret || !redirectUri) throw new Error('Meta App ID, App Secret, and OAuth redirect URI must be configured in Vercel.');
+  return { appId, appSecret, redirectUri };
+}
+
+function encryptionKey() {
+  const value = process.env.META_TOKEN_ENCRYPTION_KEY || '';
+  const key = /^[a-f0-9]{64}$/i.test(value) ? Buffer.from(value, 'hex') : Buffer.from(value, 'base64');
+  if (key.length !== 32) throw new Error('META_TOKEN_ENCRYPTION_KEY must decode to exactly 32 bytes.');
+  return key;
+}
+
+function encryptPageToken(token: string) {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv('aes-256-gcm', encryptionKey(), iv);
+  const encrypted = Buffer.concat([cipher.update(token, 'utf8'), cipher.final()]);
+  return [iv, cipher.getAuthTag(), encrypted].map((part) => part.toString('base64url')).join('.');
+}
+
+function decryptPageToken(value: string) {
+  const [iv, tag, encrypted] = value.split('.').map((part) => Buffer.from(part, 'base64url'));
+  if (!iv || !tag || !encrypted) throw new Error('Stored Facebook Page token is invalid.');
+  const decipher = createDecipheriv('aes-256-gcm', encryptionKey(), iv);
+  decipher.setAuthTag(tag);
+  return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8');
+}
+
+async function metaFetch(path: string, init?: RequestInit) {
+  const response = await fetch(`https://graph.facebook.com/${graphVersion()}/${path}`, init);
+  const data: any = await response.json().catch(() => ({}));
+  if (!response.ok || data?.error) throw new Error(data?.error?.message || `Meta Graph API request failed (HTTP ${response.status}).`);
+  return data;
+}
+
+async function verifyAdminToken(token: string) {
+  if (!token) throw new Error('Admin session is required.');
+  await rpc('delivery_admin_dashboard', { p_token: token });
+}
+
+function safeEqualText(left: string, right: string) {
+  const a = Buffer.from(left);
+  const b = Buffer.from(right);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+async function startMetaOAuth(req: any, body: any, res: VercelResponse) {
+  await verifyAdminToken(String(body.adminToken || '').trim());
+  const { appId, redirectUri } = metaConfig();
+  const state = randomBytes(32).toString('hex');
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+  const saved = await supabaseServiceRequest('messenger_settings?on_conflict=id', {
+    method: 'POST',
+    headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify({ id: 1, oauth_state_hash: createHash('sha256').update(state).digest('hex'), oauth_state_expires_at: expiresAt, updated_at: new Date().toISOString() }),
+  });
+  if (!saved.ok) throw new Error('Could not start Facebook connection. Apply the AI Inbox connection migration first.');
+  const url = new URL(`https://www.facebook.com/${graphVersion()}/dialog/oauth`);
+  url.searchParams.set('client_id', appId);
+  url.searchParams.set('redirect_uri', redirectUri);
+  url.searchParams.set('state', state);
+  url.searchParams.set('response_type', 'code');
+  url.searchParams.set('scope', 'pages_show_list,pages_messaging,pages_manage_metadata');
+  return json(res, 200, { url: url.toString() });
+}
+
+async function handleMetaOAuthCallback(req: any, res: VercelResponse) {
+  const query = req.query || {};
+  const code = String(query.code || '');
+  const state = String(query.state || '');
+  if (query.error) return json(res, 400, { error: 'Facebook permission was not granted. Return to AI Inbox and try again.' });
+  if (!code || !state) return json(res, 400, { error: 'Facebook callback is missing code or state.' });
+  const stateHash = createHash('sha256').update(state).digest('hex');
+  const savedState = await supabaseServiceRequest('messenger_settings?select=oauth_state_hash,oauth_state_expires_at&id=eq.1&limit=1');
+  if (!savedState.ok) throw new Error('AI Inbox database is not ready for Facebook OAuth.');
+  const settings = (await savedState.json())[0];
+  if (!settings?.oauth_state_hash || !safeEqualText(stateHash, String(settings.oauth_state_hash)) || Date.parse(settings.oauth_state_expires_at || '') < Date.now()) {
+    return json(res, 400, { error: 'Facebook login expired or state check failed. Start again from AI Inbox.' });
+  }
+  const { appId, appSecret, redirectUri } = metaConfig();
+  const tokenUrl = new URL(`https://graph.facebook.com/${graphVersion()}/oauth/access_token`);
+  tokenUrl.searchParams.set('client_id', appId);
+  tokenUrl.searchParams.set('client_secret', appSecret);
+  tokenUrl.searchParams.set('redirect_uri', redirectUri);
+  tokenUrl.searchParams.set('code', code);
+  const tokenResponse = await fetch(tokenUrl);
+  const tokenData: any = await tokenResponse.json().catch(() => ({}));
+  if (!tokenResponse.ok || !tokenData.access_token) throw new Error(tokenData?.error?.message || 'Could not exchange Facebook login code.');
+  const pages = await metaFetch(`me/accounts?fields=id,name,access_token,tasks&limit=100&access_token=${encodeURIComponent(tokenData.access_token)}`);
+  const eligible = (pages.data || []).filter((page: any) => page?.id && page?.access_token && (page.tasks || []).some((task: string) => task === 'MESSAGING'));
+  const page = eligible.find((candidate: any) => String(candidate.name || '').trim().toLowerCase() === 'ramyachobi') || (eligible.length === 1 ? eligible[0] : null);
+  if (!page) throw new Error(eligible.length ? 'আপনার Facebook login-এ RamyaChobi Page খুঁজে পাইনি। একাধিক Page থাকলে Meta-তে RamyaChobi-র permission দিন।' : 'আপনার Facebook account-এ messaging permission-সহ কোনো Page পাওয়া যায়নি।');
+  await metaFetch(`${encodeURIComponent(page.id)}/subscribed_apps?subscribed_fields=messages,messaging_postbacks&access_token=${encodeURIComponent(page.access_token)}`, { method: 'POST' });
+  const saved = await supabaseServiceRequest('messenger_settings?on_conflict=id', {
+    method: 'POST',
+    headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify({ id: 1, page_id: String(page.id), page_name: String(page.name || 'RamyaChobi'), page_access_token_enc: encryptPageToken(String(page.access_token)), is_connected: true, oauth_state_hash: null, oauth_state_expires_at: null, updated_at: new Date().toISOString() }),
+  });
+  if (!saved.ok) throw new Error('Facebook connected but Page credentials could not be saved securely.');
+  res.status(302).setHeader('location', '/delivery-admin/ai-inbox?connected=1').setHeader('cache-control', 'no-store').end();
+}
+
+async function handleMetaWebhookGet(req: any, res: VercelResponse) {
+  const query = req.query || {};
+  const mode = String(query['hub.mode'] || '');
+  const token = String(query['hub.verify_token'] || '');
+  const challenge = String(query['hub.challenge'] || '');
+  const expected = process.env.META_WEBHOOK_VERIFY_TOKEN || '';
+  if (mode === 'subscribe' && expected && safeEqualText(token, expected)) {
+    return res.status(200).setHeader('content-type', 'text/plain; charset=utf-8').setHeader('cache-control', 'no-store').end(challenge);
+  }
+  return res.status(403).end('Webhook verification failed.');
+}
+
+async function handleMetaWebhookPost(rawBody: Buffer, signature: string, res: VercelResponse) {
+  const appSecret = process.env.META_APP_SECRET || '';
+  if (!appSecret || !signature.startsWith('sha256=')) return res.status(401).end('Invalid signature.');
+  const expected = `sha256=${createHmac('sha256', appSecret).update(rawBody).digest('hex')}`;
+  if (!safeEqualText(signature, expected)) return res.status(401).end('Invalid signature.');
+  const payload: any = JSON.parse(rawBody.toString('utf8'));
+  if (payload.object !== 'page') return res.status(404).end('Unsupported webhook object.');
+  for (const entry of payload.entry || []) {
+    const pageId = String(entry.id || '');
+    for (const event of entry.messaging || []) {
+      const text = String(event.message?.text || '').trim();
+      const senderId = String(event.sender?.id || '');
+      const messageId = String(event.message?.mid || '');
+      if (!pageId || !senderId || !messageId || !text || event.message?.is_echo) continue;
+      const settingsRes = await supabaseServiceRequest(`messenger_settings?select=id,page_id,is_connected&id=eq.1&limit=1`);
+      if (!settingsRes.ok) throw new Error('Could not verify connected Page for webhook.');
+      const settings = (await settingsRes.json())[0];
+      if (!settings?.is_connected || String(settings.page_id) !== pageId) continue;
+      const externalId = `${pageId}:${senderId}`;
+      const existing = await supabaseServiceRequest(`messenger_threads?select=id,unread_count&external_id=eq.${encodeURIComponent(externalId)}&limit=1`);
+      if (!existing.ok) throw new Error('Could not read Messenger thread.');
+      const priorThread = (await existing.json())[0];
+      const savedThread = await supabaseServiceRequest('messenger_threads?on_conflict=external_id', {
+        method: 'POST',
+        headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
+        body: JSON.stringify({ platform: 'facebook', external_id: externalId, customer_name: 'Facebook customer', last_message: text.slice(0, 2000), last_message_at: new Date(Number(event.timestamp) || Date.now()).toISOString(), unread_count: Math.min(9999, Number(priorThread?.unread_count || 0) + 1), updated_at: new Date().toISOString() }),
+      });
+      if (!savedThread.ok) throw new Error('Could not save Messenger thread.');
+      const thread = (await savedThread.json())[0];
+      if (!thread?.id) continue;
+      const savedMessage = await supabaseServiceRequest('messenger_messages?on_conflict=external_id', {
+        method: 'POST',
+        headers: { Prefer: 'resolution=ignore-duplicates,return=representation' },
+        body: JSON.stringify({ thread_id: thread.id, external_id: messageId, direction: 'inbound', message_text: text.slice(0, 4000), sent_by: 'customer' }),
+      });
+      if (!savedMessage.ok) throw new Error('Could not save Messenger message.');
+    }
+  }
+  return res.status(200).end('EVENT_RECEIVED');
+}
+
+function callbackHtml(message: string) {
+  const escaped = message.replace(/[&<>"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[char] || char));
+  return `<!doctype html><html><meta name="viewport" content="width=device-width"><title>Facebook connection</title><body style="font:16px system-ui;max-width:560px;margin:48px auto;padding:0 20px;color:#292719"><h2>Facebook Page connection</h2><p>${escaped}</p><a href="/delivery-admin/ai-inbox">Return to AI Inbox</a></body></html>`;
 }
 
 function extractDriveId(sourceUrl: string, kind: 'file' | 'folder') {
@@ -102,9 +286,34 @@ async function handleMessengerRequest(body: any, res: VercelResponse) {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  const query = req.query || {};
+  const url = new URL(req.url || '/', 'https://vercel.local');
+  const isWebhook = query.meta_webhook === '1' || url.searchParams.get('meta_webhook') === '1';
+  const isCallback = query.meta_oauth_callback === '1' || url.searchParams.get('meta_oauth_callback') === '1';
+  if (isWebhook && req.method === 'GET') return handleMetaWebhookGet(req, res);
+  if (isCallback && req.method === 'GET') {
+    try { return await handleMetaOAuthCallback(req, res); }
+    catch (error: any) {
+      console.error('[meta-oauth-callback]', String(error?.message || 'OAuth callback failed').slice(0, 180));
+      return res.status(502).setHeader('content-type', 'text/html; charset=utf-8').setHeader('cache-control', 'no-store').end(callbackHtml(error?.message || 'Facebook connection failed.'));
+    }
+  }
+  if (isWebhook && req.method === 'POST') {
+    try {
+      const rawBody = await readRawBody(req);
+      return await handleMetaWebhookPost(rawBody, String(req.headers['x-hub-signature-256'] || ''), res);
+    } catch (error: any) {
+      console.error('[meta-webhook]', String(error?.message || 'Webhook failed').slice(0, 180));
+      return res.status(500).end('Webhook processing failed.');
+    }
+  }
   if (req.method !== 'POST') return json(res, 405, { error: 'Only POST is supported.' });
   try {
-    const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
+    const rawBody = await readRawBody(req);
+    const body = rawBody.length ? JSON.parse(rawBody.toString('utf8')) : {};
+    if (body.feature === 'ai-inbox' && body.action === 'connect_facebook') {
+      return await startMetaOAuth(req, body, res);
+    }
     const adminToken = String(body.adminToken || '').trim();
     if (body.feature === 'ai-inbox') {
       if (!adminToken) return json(res, 401, { error: 'Admin session is required.' });
@@ -133,7 +342,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const detected = classifyFile(String(metadata.mimeType || ''), String(metadata.name || ''));
     if (fileType !== detected) return json(res, 400, { error: `This Drive item is a ${detected.toLowerCase()}, not a ${fileType.toLowerCase()}.` });
     if (body.persist === false) return json(res, 200, { verified: true, fileType, driveId, metadata: { id: metadata.id, name: metadata.name, mimeType: metadata.mimeType, size: metadata.size || null } });
-
     const saved: any = await rpc('delivery_admin_upsert_file', {
       p_token: adminToken, p_portal_id: portalId, p_file_id: existingFileId,
       p_source_url: sourceUrl, p_file_type: fileType, p_title: title || metadata.name || null,
