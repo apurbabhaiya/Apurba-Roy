@@ -245,8 +245,25 @@ function classifyFile(mime: string, fileName: string): 'PHOTO' | 'VIDEO' | 'DOCU
   return 'DOCUMENT';
 }
 
+async function loadMessengerThread(threadId: string) {
+  const threadRes = await supabaseServiceRequest(`messenger_threads?select=id,platform,external_id,customer_name,last_message,last_message_at,unread_count,status&id=eq.${encodeURIComponent(threadId)}&limit=1`);
+  if (!threadRes.ok) throw new Error('Could not load this conversation.');
+  const thread = (await threadRes.json())[0] || null;
+  if (!thread) return null;
+  const messagesRes = await supabaseServiceRequest(`messenger_messages?select=id,direction,message_text,sent_by,created_at&thread_id=eq.${encodeURIComponent(threadId)}&order=created_at.asc&limit=100`);
+  if (!messagesRes.ok) throw new Error('Could not load conversation messages.');
+  return { thread, messages: await messagesRes.json() };
+}
+
 async function handleMessengerRequest(body: any, res: VercelResponse) {
   const action = String(body.action || 'load');
+  if (action === 'load_thread') {
+    const threadId = String(body.thread_id || '');
+    if (!/^[0-9a-f-]{36}$/i.test(threadId)) return json(res, 400, { error: 'Conversation ID is invalid.' });
+    const conversation = await loadMessengerThread(threadId);
+    if (!conversation) return json(res, 404, { error: 'Conversation was not found.' });
+    return json(res, 200, conversation);
+  }
   if (action === 'load') {
     const [settingsRes, faqsRes, threadsRes] = await Promise.all([
       supabaseServiceRequest('messenger_settings?select=id,page_id,page_name,is_connected,ai_enabled,auto_reply_enabled&id=eq.1&limit=1'),
