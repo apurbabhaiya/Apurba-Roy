@@ -58,11 +58,59 @@ function classifyFile(mime: string, fileName: string): 'PHOTO' | 'VIDEO' | 'DOCU
   return 'DOCUMENT';
 }
 
+async function handleMessengerRequest(body: any, res: VercelResponse) {
+  const action = String(body.action || 'load');
+  if (action === 'load') {
+    const [settingsRes, faqsRes, threadsRes] = await Promise.all([
+      supabaseServiceRequest('messenger_settings?select=id,page_id,page_name,is_connected,ai_enabled,auto_reply_enabled&id=eq.1&limit=1'),
+      supabaseServiceRequest('messenger_faqs?select=id,question,answer,keywords,is_active,created_at&order=created_at.desc'),
+      supabaseServiceRequest('messenger_threads?select=id,platform,customer_name,last_message,last_message_at,unread_count,status&order=last_message_at.desc.nullslast&limit=50'),
+    ]);
+    if (!settingsRes.ok || !faqsRes.ok || !threadsRes.ok) throw new Error('AI Inbox database is not ready. Apply the AI Inbox migration and retry.');
+    const [settings, faqs, threads] = await Promise.all([settingsRes.json(), faqsRes.json(), threadsRes.json()]);
+    return json(res, 200, { settings: settings[0] || { id: 1, is_connected: false, ai_enabled: false, auto_reply_enabled: false }, faqs, threads });
+  }
+  if (action === 'settings') {
+    const currentRes = await supabaseServiceRequest('messenger_settings?select=id,is_connected&id=eq.1&limit=1');
+    if (!currentRes.ok) throw new Error('AI Inbox database is not ready. Apply the AI Inbox migration and retry.');
+    const current = (await currentRes.json())[0] || { id: 1, is_connected: false };
+    const saved = await supabaseServiceRequest('messenger_settings?on_conflict=id', {
+      method: 'POST',
+      headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({ id: 1, ai_enabled: Boolean(body.ai_enabled), auto_reply_enabled: Boolean(body.auto_reply_enabled) && Boolean(current.is_connected), updated_at: new Date().toISOString() }),
+    });
+    if (!saved.ok) throw new Error('Could not save AI Inbox settings.');
+    return json(res, 200, { ok: true });
+  }
+  if (action === 'save_faq') {
+    const question = String(body.question || '').trim();
+    const answer = String(body.answer || '').trim();
+    if (question.length < 3 || question.length > 1000 || !answer || answer.length > 4000) return json(res, 400, { error: 'প্রশ্ন ৩–১০০০ অক্ষর এবং উত্তর ১–৪০০০ অক্ষর দিন।' });
+    const record = { question, answer, keywords: Array.isArray(body.keywords) ? body.keywords.map((v: unknown) => String(v).slice(0, 80)).slice(0, 20) : [], is_active: true };
+    const saved = await supabaseServiceRequest('messenger_faqs', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(record) });
+    if (!saved.ok) throw new Error('FAQ save failed.');
+    return json(res, 200, { faq: (await saved.json())[0] });
+  }
+  if (action === 'delete_faq') {
+    const id = String(body.id || '');
+    if (!/^[0-9a-f-]{36}$/i.test(id)) return json(res, 400, { error: 'FAQ ID is invalid.' });
+    const deleted = await supabaseServiceRequest(`messenger_faqs?id=eq.${encodeURIComponent(id)}`, { method: 'DELETE' });
+    if (!deleted.ok) throw new Error('FAQ delete failed.');
+    return json(res, 200, { ok: true });
+  }
+  return json(res, 400, { error: 'Unknown AI Inbox action.' });
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return json(res, 405, { error: 'Only POST is supported.' });
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
     const adminToken = String(body.adminToken || '').trim();
+    if (body.feature === 'ai-inbox') {
+      if (!adminToken) return json(res, 401, { error: 'Admin session is required.' });
+      await rpc('delivery_admin_dashboard', { p_token: adminToken });
+      return await handleMessengerRequest(body, res);
+    }
     const portalId = String(body.portalId || '').trim();
     const sourceUrl = String(body.sourceUrl || '').trim();
     const requestedType = String(body.fileType || 'PHOTO').toUpperCase();
