@@ -2,6 +2,14 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
+      "source": "/api/meta-oauth-callback",
+      "destination": "/api/delivery-validate?meta_oauth_callback=1"
+    },
+    {
+      "source": "/api/meta-webhook",
+      "destination": "/api/delivery-validate?meta_webhook=1"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
