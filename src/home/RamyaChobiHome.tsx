@@ -125,7 +125,6 @@ const reviewGroups = [
 const menuItems = [
   { label: 'Home', href: '#home', icon: Sparkles, kind: 'section' },
   { label: 'Portfolio', href: '/portfolio', icon: Images, kind: 'section' },
-  { label: 'Photo Selection', href: '/photo-selection', icon: Images, kind: 'app' },
   { label: 'Final Delivery', href: '/delivery', icon: Download, kind: 'app' },
   { label: 'Face Search', href: '/face-search', icon: Camera, kind: 'app' },
   { label: 'Client Gallery', href: '/client-gallery', icon: FolderHeart, kind: 'app' },
