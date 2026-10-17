@@ -13,6 +13,7 @@ import {
   Trash2,
   WalletCards,
 } from "lucide-react";
+import TeamConfirmation from "./TeamConfirmation";
 import FinanceCalendar from "./FinanceCalendar";
 import { jsPDF } from "jspdf";
 import { supabase } from "../services/supabase";
@@ -1745,7 +1746,7 @@ function BookingDetail(props: {
         <p className="mt-3 text-xs leading-5 text-slate-400">সম্ভাব্য লাভ = মোট বিল − রেকর্ড করা খরচ। বকেয়া টাকা হাতে পাওয়া আয় নয়।</p>
       </section>
       <nav aria-label="Client account sections" className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
-        {['overview','payments','costs','events','documents'].map(section => <button key={section} type="button" aria-current={detailSection === section ? 'page' : undefined} onClick={() => setDetailSection(section)} className={`rounded-xl px-3 py-2 text-sm font-bold capitalize focus-visible:outline-2 focus-visible:outline-amber-600 ${detailSection === section ? 'bg-slate-950 text-white' : 'text-slate-600 hover:bg-slate-100'}`}>{({overview:"সারাংশ",payments:"টাকা জমা",costs:"খরচ",events:"অনুষ্ঠান",documents:"কাগজপত্র"} as Record<string,string>)[section]}</button>)}
+        {['overview','payments','costs','events','team','documents'].map(section => <button key={section} type="button" aria-current={detailSection === section ? 'page' : undefined} onClick={() => setDetailSection(section)} className={`rounded-xl px-3 py-2 text-sm font-bold capitalize focus-visible:outline-2 focus-visible:outline-amber-600 ${detailSection === section ? 'bg-slate-950 text-white' : 'text-slate-600 hover:bg-slate-100'}`}>{({overview:"সারাংশ",payments:"টাকা জমা",costs:"খরচ",events:"অনুষ্ঠান",team:"টিম কনফার্মেশন",documents:"কাগজপত্র"} as Record<string,string>)[section]}</button>)}
       </nav>
       <section hidden={detailSection !== 'overview'} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
         <h3 className="font-black">হিসাবের বিস্তারিত</h3>
@@ -1764,6 +1765,7 @@ function BookingDetail(props: {
         {totals.paid > totals.total && <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-800">বিলের অতিরিক্ত জমা: {money(totals.paid - totals.total)}। রিফান্ড বা সমন্বয়ের তথ্য যাচাই করুন।</p>}
         <div className="mt-4 rounded-xl bg-slate-50 p-3 text-sm"><span className="text-slate-600">হাতে পাওয়া টাকা − খরচ: </span><strong className={totals.paid - totals.internalCost < 0 ? 'text-red-700' : 'text-emerald-700'}>{money(totals.paid - totals.internalCost)}</strong><p className="mt-1 text-xs text-slate-500">এই ক্লায়েন্টের রেকর্ডভিত্তিক নগদ উদ্বৃত্ত/ঘাটতি।</p></div>
       </section>
+      <div hidden={detailSection !== 'team'}><TeamConfirmation key={booking.id} client={booking.client_name} reference={booking.reference_no} status={booking.status} events={bookingEvents} /></div>
       <section hidden={detailSection !== 'documents'} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
         <h3 className="font-black">ক্লায়েন্টের কাগজপত্র</h3><p className="mt-2 text-sm text-slate-500">বুকিং ও পেমেন্টের সারাংশসহ ক্লায়েন্ট PDF। অভ্যন্তরীণ খরচ ও ব্যক্তিগত নোট এতে থাকবে না।</p><button type="button" onClick={adminPdf} className="mt-4 rounded-xl bg-slate-950 px-4 py-3 text-sm font-bold text-white">ক্লায়েন্ট PDF ডাউনলোড</button>
       </section>
