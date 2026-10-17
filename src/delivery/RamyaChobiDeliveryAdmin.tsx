@@ -716,7 +716,7 @@ export default function RamyaChobiDeliveryAdmin() {
               {section}{section === 'payments' && counts.requests > 0 ? ` (${counts.requests})` : ''}
             </button>
           ))}
-          <a href="/booking/admin" className="rounded-xl bg-stone-100 px-4 py-2.5 text-sm font-semibold text-stone-700 hover:bg-amber-100">Booking</a>
+          <a href="https://apurba-kay8bym4c-ramyachobi.vercel.app/booking/admin" className="rounded-xl bg-stone-100 px-4 py-2.5 text-sm font-semibold text-stone-700 hover:bg-amber-100">Booking</a>
           <a href="/photo-selection" className="rounded-xl bg-stone-100 px-4 py-2.5 text-sm font-semibold text-stone-700 hover:bg-amber-100">Photo Selection</a>
         </div>
       </nav>
@@ -741,7 +741,7 @@ export default function RamyaChobiDeliveryAdmin() {
             </div>
           </a>
 
-          <a href="/booking/admin" className="group rounded-3xl border border-stone-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5">
+          <a href="https://apurba-kay8bym4c-ramyachobi.vercel.app/booking/admin" className="group rounded-3xl border border-stone-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5">
             <FileCheck2 className="h-8 w-8 text-amber-700" />
             <h2 className="mt-4 text-xl font-semibold">Booking Management</h2>
             <p className="mt-2 text-sm leading-6 text-stone-500">
