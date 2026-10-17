@@ -134,6 +134,7 @@ const menuItems = [
   { label: 'About RamyaChobi', href: '/about', icon: BookOpenCheck, kind: 'section' },
   { label: 'Client Reviews', href: '#reviews', icon: Star, kind: 'section' },
   { label: 'Contact / Booking', href: '#contact', icon: CalendarDays, kind: 'section' },
+  { label: 'অ্যাডমিন প্যানেল', href: '/delivery-admin', icon: ShieldCheck, kind: 'admin' },
 ];
 
 function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose?: () => void }) {
