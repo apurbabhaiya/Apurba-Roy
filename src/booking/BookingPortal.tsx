@@ -13,6 +13,7 @@ import {
   Trash2,
   WalletCards,
 } from "lucide-react";
+import FinanceCalendar from "./FinanceCalendar";
 import { jsPDF } from "jspdf";
 import { supabase } from "../services/supabase";
 
@@ -1241,7 +1242,7 @@ function AdminPanel() {
 
   const selected =
     bookings.find(function (b) {
-      return b.id === selectedId;
+      return b.id === selectedId && !b.deleted_at && !showTrash;
     }) || null;
 
   async function signIn(e?: React.FormEvent) {
@@ -1530,6 +1531,7 @@ function AdminPanel() {
         </section>
 
         <aside className="min-w-0">
+          <FinanceCalendar bookings={bookings} payments={payments} costs={costs} />
           {selected ? (
             <BookingDetail
               token={token}
