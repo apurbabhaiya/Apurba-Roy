@@ -59,6 +59,7 @@ type FormData = {
 };
 
 type Booking = {
+  deleted_at?: string | null;
   id: string;
   reference_no: string;
   client_name: string;
@@ -1124,7 +1125,30 @@ function saveAdminToken(token: string) {
   } catch {}
 }
 
+function bookingPhoneHref(phone: string) {
+  const normalized = phone.trim().replace(/[\s()-]/g, '');
+  return /^\+?[0-9]{7,15}$/.test(normalized) && !/^0+$/.test(normalized) ? `tel:${normalized}` : null;
+}
+
 function AdminPanel() {
+  const [showTrash, setShowTrash] = useState(false);
+  const [pendingTrash, setPendingTrash] = useState<Booking | null>(null);
+  const [trashBusy, setTrashBusy] = useState(false);
+  async function changeTrash(booking: Booking, deleted: boolean) {
+    if (trashBusy) return;
+    setTrashBusy(true);
+    try {
+      const result = await db.rpc('booking_admin_set_trash', { p_token: token, p_booking_id: booking.id, p_deleted: deleted });
+      if (result.error) throw result.error;
+      if (!result.data) throw new Error('Booking was not found. Refresh and try again.');
+      setPendingTrash(null);
+      setSelectedId('');
+      await load();
+      setNotice(deleted ? 'Booking moved to Trash. Payments and events are preserved. Use Restore to recover it.' : 'Booking restored.');
+    } catch (error: any) { setNotice(error?.message || 'Could not update booking.'); }
+    finally { setTrashBusy(false); }
+  }
+
   const [ready, setReady] = useState(false);
   const [token, setToken] = useState("");
   const [accessCode, setAccessCode] = useState("");
@@ -1164,7 +1188,7 @@ function AdminPanel() {
       } else if (
         selectedId &&
         !nextBookings.some(function (b) {
-          return b.id === selectedId;
+          return b.id === selectedId && !b.deleted_at && !showTrash;
         })
       ) {
         setSelectedId(nextBookings[0] ? nextBookings[0].id : "");
@@ -1196,8 +1220,9 @@ function AdminPanel() {
   const filtered = useMemo(
     function () {
       const q = search.trim().toLowerCase();
-      if (!q) return bookings;
-      return bookings.filter(function (b) {
+      const visible = bookings.filter((b) => Boolean(b.deleted_at) === showTrash);
+      if (!q) return visible;
+      return visible.filter(function (b) {
         return [
           b.reference_no,
           b.client_name,
@@ -1211,7 +1236,7 @@ function AdminPanel() {
           .includes(q);
       });
     },
-    [bookings, search]
+    [bookings, search, showTrash]
   );
 
   const selected =
@@ -1418,6 +1443,10 @@ function AdminPanel() {
       <div className="mx-auto grid max-w-[1500px] gap-4 px-4 py-5 xl:grid-cols-[1.45fr_1fr]">
         <section className="min-w-0 rounded-3xl bg-white shadow-sm">
           <div className="border-b border-slate-200 p-4">
+            <div className="mb-3 flex gap-2" aria-label="Booking list view">
+              <button type="button" aria-pressed={!showTrash} onClick={() => setShowTrash(false)} className="rounded-xl border px-4 py-2 font-bold">Active ({bookings.filter(b => !b.deleted_at).length})</button>
+              <button type="button" aria-pressed={showTrash} onClick={() => setShowTrash(true)} className="rounded-xl border px-4 py-2 font-bold">Trash ({bookings.filter(b => b.deleted_at).length})</button>
+            </div>
             <div className="relative">
               <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
               <input
@@ -1448,10 +1477,11 @@ function AdminPanel() {
                   <th className="px-4 py-3">Due</th>
                   <th className="px-4 py-3">Cost</th>
                   <th className="px-4 py-3">Profit</th>
-                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Status</th><th className="px-4 py-3">Actions</th>
                 </tr>
               </thead>
               <tbody>
+                {filtered.length === 0 && <tr><td colSpan={10} className="p-6 text-center text-slate-500">{showTrash ? 'Trash is empty.' : 'No bookings found.'}</td></tr>}
                 {filtered.map(function (b) {
                   const t = totalsFor(b, payments, costs);
                   const active = b.id === selectedId;
@@ -1469,7 +1499,7 @@ function AdminPanel() {
                       <td className="px-4 py-3 font-black">{b.reference_no}</td>
                       <td className="px-4 py-3">
                         <div className="font-bold">{b.client_name}</div>
-                        <div className="text-xs text-slate-500">{b.phone}</div>
+                        {bookingPhoneHref(b.phone) ? <a onClick={e => e.stopPropagation()} href={bookingPhoneHref(b.phone)!} className="text-xs font-semibold text-blue-700 underline">Call {b.phone}</a> : <span className="text-xs text-slate-500">{b.phone} (invalid phone)</span>}
                       </td>
                       <td className="px-4 py-3">{b.event_count}</td>
                       <td className="px-4 py-3 font-semibold">
@@ -1490,6 +1520,7 @@ function AdminPanel() {
                           {b.status}
                         </span>
                       </td>
+                      <td className="px-4 py-3"><button type="button" disabled={trashBusy} onClick={e => { e.stopPropagation(); if (showTrash) void changeTrash(b, false); else setPendingTrash(b); }} className="rounded-lg border px-3 py-2 font-bold disabled:opacity-50">{showTrash ? 'Restore' : 'Delete'}</button></td>
                     </tr>
                   );
                 })}
@@ -1515,6 +1546,7 @@ function AdminPanel() {
           )}
         </aside>
       </div>
+      {pendingTrash && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"><section role="dialog" aria-modal="true" aria-labelledby="trash-title" className="w-full max-w-md rounded-2xl bg-white p-6"><h2 id="trash-title" className="text-xl font-bold">Move booking to Trash?</h2><p className="mt-3">{pendingTrash.reference_no} · {pendingTrash.client_name}</p><p className="mt-2 text-sm">Payments, costs and events will be preserved. Restore this booking from Trash at any time. Existing delivery access is unchanged.</p><div className="mt-5 flex gap-3"><button autoFocus disabled={trashBusy} onClick={() => setPendingTrash(null)} className="rounded-xl border px-4 py-2">Cancel</button><button disabled={trashBusy} onClick={() => void changeTrash(pendingTrash, true)} className="rounded-xl bg-red-700 px-4 py-2 text-white">{trashBusy ? 'Moving…' : 'Move to Trash'}</button></div></section></div>}
     </main>
   );
 }
@@ -1687,7 +1719,7 @@ function BookingDetail(props: {
             <h2 className="mt-1 text-2xl font-black">
               {booking.client_name}
             </h2>
-            <div className="mt-1 text-sm text-slate-300">{booking.phone}</div>
+            {bookingPhoneHref(booking.phone) ? <a href={bookingPhoneHref(booking.phone)!} className="mt-1 inline-block text-sm text-amber-300 underline">Call {booking.phone}</a> : <div className="mt-1 text-sm text-slate-300">{booking.phone}</div>}
           </div>
           <button
             onClick={adminPdf}
