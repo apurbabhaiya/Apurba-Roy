@@ -1184,15 +1184,16 @@ function AdminPanel() {
       setPayments((payload.payments || []) as Payment[]);
       setCosts((payload.costs || []) as Cost[]);
 
-      if (!selectedId && nextBookings[0]) {
-        setSelectedId(nextBookings[0].id);
+      const activeBookings = nextBookings.filter(b => !b.deleted_at);
+      if (!selectedId && activeBookings[0]) {
+        setSelectedId(activeBookings[0].id);
       } else if (
         selectedId &&
         !nextBookings.some(function (b) {
           return b.id === selectedId && !b.deleted_at && !showTrash;
         })
       ) {
-        setSelectedId(nextBookings[0] ? nextBookings[0].id : "");
+        setSelectedId(activeBookings[0] ? activeBookings[0].id : "");
       }
     } catch (err: any) {
       const message =
@@ -1441,7 +1442,7 @@ function AdminPanel() {
         </div>
       </header>
 
-      <div className="mx-auto grid max-w-[1500px] gap-4 px-4 py-5 xl:grid-cols-[1.45fr_1fr]">
+      <div className="mx-auto grid max-w-[1500px] gap-4 px-4 py-5 xl:grid-cols-[1.1fr_1fr]">
         <section className="min-w-0 rounded-3xl bg-white shadow-sm">
           <div className="border-b border-slate-200 p-4">
             <div className="mb-3 flex gap-2" aria-label="Booking list view">
@@ -1531,9 +1532,9 @@ function AdminPanel() {
         </section>
 
         <aside className="min-w-0">
-          <FinanceCalendar bookings={bookings} payments={payments} costs={costs} />
           {selected ? (
             <BookingDetail
+              key={selected.id}
               token={token}
               booking={selected}
               events={events}
@@ -1546,6 +1547,11 @@ function AdminPanel() {
               Select a client row.
             </div>
           )}
+          <details className="mt-5 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+            <summary className="cursor-pointer font-bold text-slate-800">সব ক্লায়েন্টের মাসিক ও বার্ষিক রিপোর্ট</summary>
+            <p className="my-3 text-xs text-slate-500">সমস্ত বুকিংয়ের সম্মিলিত হিসাব। ক্লায়েন্টভিত্তিক হিসাব উপরে দেখুন।</p>
+            <FinanceCalendar bookings={bookings} payments={payments} costs={costs} />
+          </details>
         </aside>
       </div>
       {pendingTrash && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"><section role="dialog" aria-modal="true" aria-labelledby="trash-title" className="w-full max-w-md rounded-2xl bg-white p-6"><h2 id="trash-title" className="text-xl font-bold">Move booking to Trash?</h2><p className="mt-3">{pendingTrash.reference_no} · {pendingTrash.client_name}</p><p className="mt-2 text-sm">Payments, costs and events will be preserved. Restore this booking from Trash at any time. Existing delivery access is unchanged.</p><div className="mt-5 flex gap-3"><button autoFocus disabled={trashBusy} onClick={() => setPendingTrash(null)} className="rounded-xl border px-4 py-2">Cancel</button><button disabled={trashBusy} onClick={() => void changeTrash(pendingTrash, true)} className="rounded-xl bg-red-700 px-4 py-2 text-white">{trashBusy ? 'Moving…' : 'Move to Trash'}</button></div></section></div>}
@@ -1562,6 +1568,7 @@ function BookingDetail(props: {
   costs: Cost[];
   onChanged: () => Promise<void>;
 }) {
+  const [detailSection, setDetailSection] = useState("overview");
   const booking = props.booking;
   const bookingEvents = props.events.filter(function (e) {
     return e.booking_id === booking.id;
@@ -1732,34 +1739,43 @@ function BookingDetail(props: {
           </button>
         </div>
 
-        <div className="mt-5 grid grid-cols-2 gap-3">
-          <div className="rounded-2xl bg-white/10 p-3">
-            <div className="text-xs text-slate-400">Total</div>
-            <div className="mt-1 text-lg font-black">
-              {money(totals.total)}
-            </div>
-          </div>
-          <div className="rounded-2xl bg-white/10 p-3">
-            <div className="text-xs text-slate-400">Due</div>
-            <div className="mt-1 text-lg font-black text-amber-300">
-              {money(totals.due)}
-            </div>
-          </div>
-          <div className="rounded-2xl bg-white/10 p-3">
-            <div className="text-xs text-slate-400">Internal cost</div>
-            <div className="mt-1 text-lg font-black">
-              {money(totals.internalCost)}
-            </div>
-          </div>
-          <div className="rounded-2xl bg-white/10 p-3">
-            <div className="text-xs text-slate-400">Projected profit</div>
-            <div className="mt-1 text-lg font-black">
-              {money(totals.profit)}
-            </div>
-          </div>
+        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {[
+            {label:'মোট বিল', value:totals.total, style:'text-white'},
+            {label:'টাকা পাওয়া', value:totals.paid, style:'text-emerald-300'},
+            {label:'বাকি টাকা', value:totals.due, style:totals.due > 0 ? 'text-red-300' : 'text-white'},
+            {label:'রেকর্ড করা খরচ', value:totals.internalCost, style:'text-white'},
+            {label:totals.profit < 0 ? 'সম্ভাব্য লস' : 'সম্ভাব্য লাভ', value:Math.abs(totals.profit), style:totals.profit < 0 ? 'text-red-300' : 'text-emerald-300'},
+          ].map(card => <div key={card.label} className="rounded-2xl border border-white/10 bg-white/5 p-3"><div className="text-xs text-slate-300">{card.label}</div><div className={`mt-2 break-words text-lg font-black ${card.style}`}>{money(card.value)}</div></div>)}
         </div>
+        <p className="mt-3 text-xs leading-5 text-slate-400">সম্ভাব্য লাভ = মোট বিল − রেকর্ড করা খরচ। বকেয়া টাকা হাতে পাওয়া আয় নয়।</p>
+      </section>
+      <nav aria-label="Client account sections" className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
+        {['overview','payments','costs','events','documents'].map(section => <button key={section} type="button" aria-current={detailSection === section ? 'page' : undefined} onClick={() => setDetailSection(section)} className={`rounded-xl px-3 py-2 text-sm font-bold capitalize focus-visible:outline-2 focus-visible:outline-amber-600 ${detailSection === section ? 'bg-slate-950 text-white' : 'text-slate-600 hover:bg-slate-100'}`}>{section}</button>)}
+      </nav>
+      <section hidden={detailSection !== 'overview'} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h3 className="font-black">হিসাবের বিস্তারিত</h3>
+        <dl className="mt-4 space-y-3 text-sm">
+          {[
+            ['প্যাকেজের দাম',Number(booking.package_amount || 0)],
+            ['অতিরিক্ত চার্জ',Number(booking.client_extra_charge || 0)],
+            ['ছাড়',-Number(booking.discount || 0)],
+            ['চূড়ান্ত বিল',totals.total],
+            ['অগ্রিম জমা',Number(booking.advance_paid || 0)],
+            ['পরবর্তী জমা',totals.paid - Number(booking.advance_paid || 0)],
+            ['মোট পাওয়া',totals.paid],
+            ['বাকি টাকা',totals.due],
+          ].map(([label,value]) => <div key={String(label)} className="flex justify-between gap-3 border-b border-slate-100 pb-2"><dt className="text-slate-600">{label}</dt><dd className="font-bold">{money(Number(value))}</dd></div>)}
+        </dl>
+        {totals.paid > totals.total && <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-800">বিলের অতিরিক্ত জমা: {money(totals.paid - totals.total)}। রিফান্ড বা সমন্বয়ের তথ্য যাচাই করুন।</p>}
+        <div className="mt-4 rounded-xl bg-slate-50 p-3 text-sm"><span className="text-slate-600">হাতে পাওয়া টাকা − খরচ: </span><strong className={totals.paid - totals.internalCost < 0 ? 'text-red-700' : 'text-emerald-700'}>{money(totals.paid - totals.internalCost)}</strong><p className="mt-1 text-xs text-slate-500">এই ক্লায়েন্টের রেকর্ডভিত্তিক নগদ উদ্বৃত্ত/ঘাটতি।</p></div>
+      </section>
+      <section hidden={detailSection !== 'documents'} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h3 className="font-black">Client document</h3><p className="mt-2 text-sm text-slate-500">বুকিং ও পেমেন্টের সারাংশসহ ক্লায়েন্ট PDF। অভ্যন্তরীণ খরচ ও ব্যক্তিগত নোট এতে থাকবে না।</p><button type="button" onClick={adminPdf} className="mt-4 rounded-xl bg-slate-950 px-4 py-3 text-sm font-bold text-white">Download client PDF</button>
       </section>
 
+
+      <div hidden={detailSection !== "overview"}>
       <section className="rounded-3xl bg-white p-5 shadow-sm">
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
@@ -1817,7 +1833,9 @@ function BookingDetail(props: {
           </select>
         </div>
       </section>
+      </div>
 
+      <div hidden={detailSection !== "events"}>
       <section className="rounded-3xl bg-white p-5 shadow-sm">
         <div className="flex items-center gap-2 font-black">
           <CalendarDays className="h-5 w-5" />
@@ -1876,7 +1894,9 @@ function BookingDetail(props: {
           })}
         </div>
       </section>
+      </div>
 
+      <div hidden={detailSection !== "payments"}>
       <section className="rounded-3xl bg-white p-5 shadow-sm">
         <div className="flex items-center gap-2 font-black">
           <WalletCards className="h-5 w-5" />
@@ -1887,6 +1907,7 @@ function BookingDetail(props: {
             type="number"
             min={0}
             className={inputClass}
+            aria-label="Payment amount"
             placeholder="Amount"
             value={paymentAmount}
             onChange={function (e) {
@@ -1933,6 +1954,8 @@ function BookingDetail(props: {
         >
           Save payment
         </button>
+        <h3 className="mt-5 border-t border-slate-100 pt-4 text-sm font-bold">Payment history</h3>
+        <div className="mt-2 flex justify-between rounded-xl bg-emerald-50 p-3 text-sm"><span>অগ্রিম জমা <small className="block text-slate-500">লেনদেনের তারিখ সংরক্ষিত নেই</small></span><strong>{money(Number(booking.advance_paid || 0))}</strong></div>
         {bookingPayments.length ? (
           <div className="mt-4 space-y-2 text-sm">
             {bookingPayments.map(function (p) {
@@ -1943,6 +1966,7 @@ function BookingDetail(props: {
                 >
                   <span>
                     {p.paid_on} • {p.method || "Payment"}
+                    {p.note && <small className="block text-slate-500">{p.note}</small>}
                   </span>
                   <b>{money(Number(p.amount))}</b>
                 </div>
@@ -1951,7 +1975,9 @@ function BookingDetail(props: {
           </div>
         ) : null}
       </section>
+      </div>
 
+      <div hidden={detailSection !== "costs"}>
       <section className="rounded-3xl bg-white p-5 shadow-sm">
         <div className="font-black">Internal cost only</div>
         <p className="mt-1 text-xs text-slate-500">
@@ -1975,6 +2001,7 @@ function BookingDetail(props: {
             type="number"
             min={0}
             className={inputClass}
+            aria-label="Cost amount"
             placeholder="Amount"
             value={costAmount}
             onChange={function (e) {
@@ -2026,6 +2053,7 @@ function BookingDetail(props: {
                   <span>
                     {c.cost_type}
                     {c.vendor ? " • " + c.vendor : ""}
+                    <small className="block text-slate-500">{c.paid_on || "তারিখ নেই"}{c.note ? " · " + c.note : ""}</small>
                   </span>
                   <b>{money(Number(c.amount))}</b>
                 </div>
@@ -2034,7 +2062,9 @@ function BookingDetail(props: {
           </div>
         ) : null}
       </section>
+      </div>
 
+      <div hidden={detailSection !== "overview"}>
       <section className="rounded-3xl bg-white p-5 shadow-sm">
         <div className="font-black">Admin private notes</div>
         <textarea
@@ -2055,6 +2085,7 @@ function BookingDetail(props: {
           Save private notes
         </button>
       </section>
+      </div>
     </div>
   );
 }
