@@ -13,6 +13,8 @@ import {
   Trash2,
   WalletCards,
 } from "lucide-react";
+import TeamConfirmation from "./TeamConfirmation";
+import FinanceCalendar from "./FinanceCalendar";
 import { jsPDF } from "jspdf";
 import { supabase } from "../services/supabase";
 
@@ -59,6 +61,7 @@ type FormData = {
 };
 
 type Booking = {
+  deleted_at?: string | null;
   id: string;
   reference_no: string;
   client_name: string;
@@ -1124,7 +1127,30 @@ function saveAdminToken(token: string) {
   } catch {}
 }
 
+function bookingPhoneHref(phone: string) {
+  const normalized = phone.trim().replace(/[\s()-]/g, '');
+  return /^\+?[0-9]{7,15}$/.test(normalized) && !/^0+$/.test(normalized) ? `tel:${normalized}` : null;
+}
+
 function AdminPanel() {
+  const [showTrash, setShowTrash] = useState(false);
+  const [pendingTrash, setPendingTrash] = useState<Booking | null>(null);
+  const [trashBusy, setTrashBusy] = useState(false);
+  async function changeTrash(booking: Booking, deleted: boolean) {
+    if (trashBusy) return;
+    setTrashBusy(true);
+    try {
+      const result = await db.rpc('booking_admin_set_trash', { p_token: token, p_booking_id: booking.id, p_deleted: deleted });
+      if (result.error) throw result.error;
+      if (!result.data) throw new Error('Booking was not found. Refresh and try again.');
+      setPendingTrash(null);
+      setSelectedId('');
+      await load();
+      setNotice(deleted ? 'Booking moved to Trash. Payments and events are preserved. Use Restore to recover it.' : 'Booking restored.');
+    } catch (error: any) { setNotice(error?.message || 'Could not update booking.'); }
+    finally { setTrashBusy(false); }
+  }
+
   const [ready, setReady] = useState(false);
   const [token, setToken] = useState("");
   const [accessCode, setAccessCode] = useState("");
@@ -1159,15 +1185,16 @@ function AdminPanel() {
       setPayments((payload.payments || []) as Payment[]);
       setCosts((payload.costs || []) as Cost[]);
 
-      if (!selectedId && nextBookings[0]) {
-        setSelectedId(nextBookings[0].id);
+      const activeBookings = nextBookings.filter(b => !b.deleted_at);
+      if (!selectedId && activeBookings[0]) {
+        setSelectedId(activeBookings[0].id);
       } else if (
         selectedId &&
         !nextBookings.some(function (b) {
-          return b.id === selectedId;
+          return b.id === selectedId && !b.deleted_at && !showTrash;
         })
       ) {
-        setSelectedId(nextBookings[0] ? nextBookings[0].id : "");
+        setSelectedId(activeBookings[0] ? activeBookings[0].id : "");
       }
     } catch (err: any) {
       const message =
@@ -1196,8 +1223,9 @@ function AdminPanel() {
   const filtered = useMemo(
     function () {
       const q = search.trim().toLowerCase();
-      if (!q) return bookings;
-      return bookings.filter(function (b) {
+      const visible = bookings.filter((b) => Boolean(b.deleted_at) === showTrash);
+      if (!q) return visible;
+      return visible.filter(function (b) {
         return [
           b.reference_no,
           b.client_name,
@@ -1211,12 +1239,12 @@ function AdminPanel() {
           .includes(q);
       });
     },
-    [bookings, search]
+    [bookings, search, showTrash]
   );
 
   const selected =
     bookings.find(function (b) {
-      return b.id === selectedId;
+      return b.id === selectedId && !b.deleted_at && !showTrash;
     }) || null;
 
   async function signIn(e?: React.FormEvent) {
@@ -1383,7 +1411,8 @@ function AdminPanel() {
             <div className="text-xs font-bold uppercase tracking-[0.22em] text-slate-500">
               Ramya Chobi
             </div>
-            <h1 className="text-xl font-black">Client Sheet & Accounts</h1>
+            <h1 className="text-xl font-black">ক্লায়েন্ট ও হিসাব</h1>
+            <p className="mt-1 text-xs text-slate-500">ক্লায়েন্ট বাছুন → হিসাব দেখুন → জমা বা খরচ যোগ করুন</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button
@@ -1415,9 +1444,13 @@ function AdminPanel() {
         </div>
       </header>
 
-      <div className="mx-auto grid max-w-[1500px] gap-4 px-4 py-5 xl:grid-cols-[1.45fr_1fr]">
+      <div className="mx-auto grid max-w-[1500px] gap-4 px-4 py-5 xl:grid-cols-[1.1fr_1fr]">
         <section className="min-w-0 rounded-3xl bg-white shadow-sm">
           <div className="border-b border-slate-200 p-4">
+            <div className="mb-3 flex gap-2" aria-label="Booking list view">
+              <button type="button" aria-pressed={!showTrash} onClick={() => setShowTrash(false)} className="rounded-xl border px-4 py-2 font-bold">ক্লায়েন্ট ({bookings.filter(b => !b.deleted_at).length})</button>
+              <button type="button" aria-pressed={showTrash} onClick={() => setShowTrash(true)} className="rounded-xl border px-4 py-2 font-bold">ট্র্যাশ / রিকভারি ({bookings.filter(b => b.deleted_at).length})</button>
+            </div>
             <div className="relative">
               <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
               <input
@@ -1426,7 +1459,8 @@ function AdminPanel() {
                   setSearch(e.target.value);
                 }}
                 className={inputClass + " pl-9"}
-                placeholder="Search client, phone, reference, bride or groom..."
+                aria-label="ক্লায়েন্ট খুঁজুন"
+                placeholder="নাম, ফোন বা বুকিং নম্বর দিয়ে খুঁজুন…"
               />
             </div>
             {notice ? (
@@ -1437,21 +1471,19 @@ function AdminPanel() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1000px] text-sm">
+            <table className="w-full min-w-[680px] text-sm">
               <thead className="bg-slate-50 text-left text-xs uppercase tracking-wider text-slate-500">
                 <tr>
-                  <th className="px-4 py-3">Reference</th>
-                  <th className="px-4 py-3">Client</th>
-                  <th className="px-4 py-3">Events</th>
-                  <th className="px-4 py-3">Total</th>
-                  <th className="px-4 py-3">Paid</th>
-                  <th className="px-4 py-3">Due</th>
-                  <th className="px-4 py-3">Cost</th>
-                  <th className="px-4 py-3">Profit</th>
-                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">বুকিং নম্বর</th>
+                  <th className="px-4 py-3">ক্লায়েন্ট</th>
+                  <th className="px-4 py-3">মোট বিল</th>
+                  <th className="px-4 py-3">জমা</th>
+                  <th className="px-4 py-3">বাকি</th>
+                  <th className="px-4 py-3">অবস্থা</th><th className="px-4 py-3">করণীয়</th>
                 </tr>
               </thead>
               <tbody>
+                {filtered.length === 0 && <tr><td colSpan={7} className="p-6 text-center text-slate-500">{showTrash ? 'ট্র্যাশে কোনো বুকিং নেই।' : 'কোনো ক্লায়েন্ট পাওয়া যায়নি।'}</td></tr>}
                 {filtered.map(function (b) {
                   const t = totalsFor(b, payments, costs);
                   const active = b.id === selectedId;
@@ -1468,10 +1500,9 @@ function AdminPanel() {
                     >
                       <td className="px-4 py-3 font-black">{b.reference_no}</td>
                       <td className="px-4 py-3">
-                        <div className="font-bold">{b.client_name}</div>
-                        <div className="text-xs text-slate-500">{b.phone}</div>
+                        <button type="button" aria-pressed={active} onClick={e => { e.stopPropagation(); setSelectedId(b.id); }} className="text-left font-bold text-slate-950 underline decoration-slate-300 underline-offset-4 focus-visible:outline-2 focus-visible:outline-amber-600">{b.client_name}</button>
+                        {bookingPhoneHref(b.phone) ? <a onClick={e => e.stopPropagation()} href={bookingPhoneHref(b.phone)!} className="text-xs font-semibold text-blue-700 underline">Call {b.phone}</a> : <span className="text-xs text-slate-500">{b.phone} (invalid phone)</span>}
                       </td>
-                      <td className="px-4 py-3">{b.event_count}</td>
                       <td className="px-4 py-3 font-semibold">
                         {money(t.total)}
                       </td>
@@ -1481,15 +1512,12 @@ function AdminPanel() {
                       <td className="px-4 py-3 font-black text-red-600">
                         {money(t.due)}
                       </td>
-                      <td className="px-4 py-3">{money(t.internalCost)}</td>
-                      <td className="px-4 py-3 font-semibold">
-                        {money(t.profit)}
-                      </td>
                       <td className="px-4 py-3">
                         <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold capitalize">
                           {b.status}
                         </span>
                       </td>
+                      <td className="px-4 py-3"><button type="button" disabled={trashBusy} onClick={e => { e.stopPropagation(); if (showTrash) void changeTrash(b, false); else setPendingTrash(b); }} className="rounded-lg border px-3 py-2 font-bold disabled:opacity-50">{showTrash ? 'ফিরিয়ে আনুন' : 'ট্র্যাশে নিন'}</button></td>
                     </tr>
                   );
                 })}
@@ -1501,6 +1529,7 @@ function AdminPanel() {
         <aside className="min-w-0">
           {selected ? (
             <BookingDetail
+              key={selected.id}
               token={token}
               booking={selected}
               events={events}
@@ -1510,11 +1539,17 @@ function AdminPanel() {
             />
           ) : (
             <div className="rounded-3xl bg-white p-8 text-slate-500 shadow-sm">
-              Select a client row.
+              তালিকা থেকে ক্লায়েন্টের নাম চাপুন। তার হিসাব এখানে দেখা যাবে।
             </div>
           )}
+          <details className="mt-5 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+            <summary className="cursor-pointer font-bold text-slate-800">সব ক্লায়েন্টের মাসিক ও বার্ষিক রিপোর্ট</summary>
+            <p className="my-3 text-xs text-slate-500">সমস্ত বুকিংয়ের সম্মিলিত হিসাব। ক্লায়েন্টভিত্তিক হিসাব উপরে দেখুন।</p>
+            <FinanceCalendar bookings={bookings} payments={payments} costs={costs} />
+          </details>
         </aside>
       </div>
+      {pendingTrash && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"><section role="dialog" aria-modal="true" aria-labelledby="trash-title" className="w-full max-w-md rounded-2xl bg-white p-6"><h2 id="trash-title" className="text-xl font-bold">বুকিং ট্র্যাশে নিতে চান?</h2><p className="mt-3">{pendingTrash.reference_no} · {pendingTrash.client_name}</p><p className="mt-2 text-sm">জমা, খরচ ও অনুষ্ঠানের তথ্য সংরক্ষিত থাকবে। ট্র্যাশ থেকে বুকিং ফিরিয়ে আনতে পারবেন। ডেলিভারির প্রবেশাধিকার আগের মতো থাকবে।</p><div className="mt-5 flex gap-3"><button autoFocus disabled={trashBusy} onClick={() => setPendingTrash(null)} className="rounded-xl border px-4 py-2">Cancel</button><button disabled={trashBusy} onClick={() => void changeTrash(pendingTrash, true)} className="rounded-xl bg-red-700 px-4 py-2 text-white">{trashBusy ? 'সরানো হচ্ছে…' : 'ট্র্যাশে নিন'}</button></div></section></div>}
     </main>
   );
 }
@@ -1528,6 +1563,7 @@ function BookingDetail(props: {
   costs: Cost[];
   onChanged: () => Promise<void>;
 }) {
+  const [detailSection, setDetailSection] = useState("overview");
   const booking = props.booking;
   const bookingEvents = props.events.filter(function (e) {
     return e.booking_id === booking.id;
@@ -1687,7 +1723,7 @@ function BookingDetail(props: {
             <h2 className="mt-1 text-2xl font-black">
               {booking.client_name}
             </h2>
-            <div className="mt-1 text-sm text-slate-300">{booking.phone}</div>
+            {bookingPhoneHref(booking.phone) ? <a href={bookingPhoneHref(booking.phone)!} className="mt-1 inline-block text-sm text-amber-300 underline">Call {booking.phone}</a> : <div className="mt-1 text-sm text-slate-300">{booking.phone}</div>}
           </div>
           <button
             onClick={adminPdf}
@@ -1698,34 +1734,44 @@ function BookingDetail(props: {
           </button>
         </div>
 
-        <div className="mt-5 grid grid-cols-2 gap-3">
-          <div className="rounded-2xl bg-white/10 p-3">
-            <div className="text-xs text-slate-400">Total</div>
-            <div className="mt-1 text-lg font-black">
-              {money(totals.total)}
-            </div>
-          </div>
-          <div className="rounded-2xl bg-white/10 p-3">
-            <div className="text-xs text-slate-400">Due</div>
-            <div className="mt-1 text-lg font-black text-amber-300">
-              {money(totals.due)}
-            </div>
-          </div>
-          <div className="rounded-2xl bg-white/10 p-3">
-            <div className="text-xs text-slate-400">Internal cost</div>
-            <div className="mt-1 text-lg font-black">
-              {money(totals.internalCost)}
-            </div>
-          </div>
-          <div className="rounded-2xl bg-white/10 p-3">
-            <div className="text-xs text-slate-400">Projected profit</div>
-            <div className="mt-1 text-lg font-black">
-              {money(totals.profit)}
-            </div>
-          </div>
+        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {[
+            {label:'মোট বিল', value:totals.total, style:'text-white'},
+            {label:'টাকা পাওয়া', value:totals.paid, style:'text-emerald-300'},
+            {label:'বাকি টাকা', value:totals.due, style:totals.due > 0 ? 'text-red-300' : 'text-white'},
+            {label:'রেকর্ড করা খরচ', value:totals.internalCost, style:'text-white'},
+            {label:totals.profit < 0 ? 'সম্ভাব্য লস' : 'সম্ভাব্য লাভ', value:Math.abs(totals.profit), style:totals.profit < 0 ? 'text-red-300' : 'text-emerald-300'},
+          ].map(card => <div key={card.label} className="rounded-2xl border border-white/10 bg-white/5 p-3"><div className="text-xs text-slate-300">{card.label}</div><div className={`mt-2 break-words text-lg font-black ${card.style}`}>{money(card.value)}</div></div>)}
         </div>
+        <p className="mt-3 text-xs leading-5 text-slate-400">সম্ভাব্য লাভ = মোট বিল − রেকর্ড করা খরচ। বকেয়া টাকা হাতে পাওয়া আয় নয়।</p>
+      </section>
+      <nav aria-label="Client account sections" className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
+        {['overview','payments','costs','events','team','documents'].map(section => <button key={section} type="button" aria-current={detailSection === section ? 'page' : undefined} onClick={() => setDetailSection(section)} className={`rounded-xl px-3 py-2 text-sm font-bold capitalize focus-visible:outline-2 focus-visible:outline-amber-600 ${detailSection === section ? 'bg-slate-950 text-white' : 'text-slate-600 hover:bg-slate-100'}`}>{({overview:"সারাংশ",payments:"টাকা জমা",costs:"খরচ",events:"অনুষ্ঠান",team:"টিম কনফার্মেশন",documents:"কাগজপত্র"} as Record<string,string>)[section]}</button>)}
+      </nav>
+      <section hidden={detailSection !== 'overview'} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h3 className="font-black">হিসাবের বিস্তারিত</h3>
+        <dl className="mt-4 space-y-3 text-sm">
+          {[
+            ['প্যাকেজের দাম',Number(booking.package_amount || 0)],
+            ['অতিরিক্ত চার্জ',Number(booking.client_extra_charge || 0)],
+            ['ছাড়',-Number(booking.discount || 0)],
+            ['চূড়ান্ত বিল',totals.total],
+            ['অগ্রিম জমা',Number(booking.advance_paid || 0)],
+            ['পরবর্তী জমা',totals.paid - Number(booking.advance_paid || 0)],
+            ['মোট পাওয়া',totals.paid],
+            ['বাকি টাকা',totals.due],
+          ].map(([label,value]) => <div key={String(label)} className="flex justify-between gap-3 border-b border-slate-100 pb-2"><dt className="text-slate-600">{label}</dt><dd className="font-bold">{money(Number(value))}</dd></div>)}
+        </dl>
+        {totals.paid > totals.total && <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-800">বিলের অতিরিক্ত জমা: {money(totals.paid - totals.total)}। রিফান্ড বা সমন্বয়ের তথ্য যাচাই করুন।</p>}
+        <div className="mt-4 rounded-xl bg-slate-50 p-3 text-sm"><span className="text-slate-600">হাতে পাওয়া টাকা − খরচ: </span><strong className={totals.paid - totals.internalCost < 0 ? 'text-red-700' : 'text-emerald-700'}>{money(totals.paid - totals.internalCost)}</strong><p className="mt-1 text-xs text-slate-500">এই ক্লায়েন্টের রেকর্ডভিত্তিক নগদ উদ্বৃত্ত/ঘাটতি।</p></div>
+      </section>
+      <div hidden={detailSection !== 'team'}><TeamConfirmation key={booking.id} client={booking.client_name} reference={booking.reference_no} status={booking.status} events={bookingEvents} /></div>
+      <section hidden={detailSection !== 'documents'} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h3 className="font-black">ক্লায়েন্টের কাগজপত্র</h3><p className="mt-2 text-sm text-slate-500">বুকিং ও পেমেন্টের সারাংশসহ ক্লায়েন্ট PDF। অভ্যন্তরীণ খরচ ও ব্যক্তিগত নোট এতে থাকবে না।</p><button type="button" onClick={adminPdf} className="mt-4 rounded-xl bg-slate-950 px-4 py-3 text-sm font-bold text-white">ক্লায়েন্ট PDF ডাউনলোড</button>
       </section>
 
+
+      <div hidden={detailSection !== "overview"}>
       <section className="rounded-3xl bg-white p-5 shadow-sm">
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
@@ -1783,11 +1829,13 @@ function BookingDetail(props: {
           </select>
         </div>
       </section>
+      </div>
 
+      <div hidden={detailSection !== "events"}>
       <section className="rounded-3xl bg-white p-5 shadow-sm">
         <div className="flex items-center gap-2 font-black">
           <CalendarDays className="h-5 w-5" />
-          Events
+          অনুষ্ঠানের তথ্য
         </div>
         <div className="mt-4 space-y-3">
           {bookingEvents.map(function (ev) {
@@ -1842,18 +1890,21 @@ function BookingDetail(props: {
           })}
         </div>
       </section>
+      </div>
 
+      <div hidden={detailSection !== "payments"}>
       <section className="rounded-3xl bg-white p-5 shadow-sm">
         <div className="flex items-center gap-2 font-black">
           <WalletCards className="h-5 w-5" />
-          Add payment
+          টাকা জমা করুন
         </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <input
             type="number"
             min={0}
             className={inputClass}
-            placeholder="Amount"
+            aria-label="জমার পরিমাণ"
+            placeholder="টাকার পরিমাণ"
             value={paymentAmount}
             onChange={function (e) {
               setPaymentAmount(e.target.value);
@@ -1861,6 +1912,7 @@ function BookingDetail(props: {
           />
           <select
             className={inputClass}
+            aria-label="জমার মাধ্যম"
             value={paymentMethod}
             onChange={function (e) {
               setPaymentMethod(e.target.value);
@@ -1876,6 +1928,7 @@ function BookingDetail(props: {
           <input
             type="date"
             className={inputClass}
+            aria-label="জমার তারিখ"
             value={paymentDate}
             onChange={function (e) {
               setPaymentDate(e.target.value);
@@ -1883,7 +1936,7 @@ function BookingDetail(props: {
           />
           <input
             className={inputClass}
-            placeholder="Payment note"
+            placeholder="জমার বিবরণ (ঐচ্ছিক)"
             value={paymentNote}
             onChange={function (e) {
               setPaymentNote(e.target.value);
@@ -1897,8 +1950,10 @@ function BookingDetail(props: {
           }}
           className="mt-3 rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60"
         >
-          Save payment
+          জমা সংরক্ষণ করুন
         </button>
+        <h3 className="mt-5 border-t border-slate-100 pt-4 text-sm font-bold">জমার ইতিহাস</h3>
+        <div className="mt-2 flex justify-between rounded-xl bg-emerald-50 p-3 text-sm"><span>অগ্রিম জমা <small className="block text-slate-500">লেনদেনের তারিখ সংরক্ষিত নেই</small></span><strong>{money(Number(booking.advance_paid || 0))}</strong></div>
         {bookingPayments.length ? (
           <div className="mt-4 space-y-2 text-sm">
             {bookingPayments.map(function (p) {
@@ -1909,6 +1964,7 @@ function BookingDetail(props: {
                 >
                   <span>
                     {p.paid_on} • {p.method || "Payment"}
+                    {p.note && <small className="block text-slate-500">{p.note}</small>}
                   </span>
                   <b>{money(Number(p.amount))}</b>
                 </div>
@@ -1917,15 +1973,18 @@ function BookingDetail(props: {
           </div>
         ) : null}
       </section>
+      </div>
 
+      <div hidden={detailSection !== "costs"}>
       <section className="rounded-3xl bg-white p-5 shadow-sm">
-        <div className="font-black">Internal cost only</div>
+        <div className="font-black">এই ক্লায়েন্টের কাজের খরচ</div>
         <p className="mt-1 text-xs text-slate-500">
           This is private admin information and never appears in the client PDF.
         </p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <select
             className={inputClass}
+            aria-label="খরচের ধরন"
             value={costType}
             onChange={function (e) {
               setCostType(e.target.value);
@@ -1941,7 +2000,8 @@ function BookingDetail(props: {
             type="number"
             min={0}
             className={inputClass}
-            placeholder="Amount"
+            aria-label="খরচের পরিমাণ"
+            placeholder="টাকার পরিমাণ"
             value={costAmount}
             onChange={function (e) {
               setCostAmount(e.target.value);
@@ -1949,7 +2009,7 @@ function BookingDetail(props: {
           />
           <input
             className={inputClass}
-            placeholder="Vendor / person"
+            placeholder="কাকে দেওয়া হয়েছে (ঐচ্ছিক)"
             value={costVendor}
             onChange={function (e) {
               setCostVendor(e.target.value);
@@ -1958,6 +2018,7 @@ function BookingDetail(props: {
           <input
             type="date"
             className={inputClass}
+            aria-label="খরচের তারিখ"
             value={costDate}
             onChange={function (e) {
               setCostDate(e.target.value);
@@ -1965,7 +2026,7 @@ function BookingDetail(props: {
           />
           <input
             className={inputClass + " sm:col-span-2"}
-            placeholder="Cost note"
+            placeholder="খরচের বিবরণ (ঐচ্ছিক)"
             value={costNote}
             onChange={function (e) {
               setCostNote(e.target.value);
@@ -1979,7 +2040,7 @@ function BookingDetail(props: {
           }}
           className="mt-3 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60"
         >
-          Save internal cost
+          খরচ সংরক্ষণ করুন
         </button>
         {bookingCosts.length ? (
           <div className="mt-4 space-y-2 text-sm">
@@ -1992,6 +2053,7 @@ function BookingDetail(props: {
                   <span>
                     {c.cost_type}
                     {c.vendor ? " • " + c.vendor : ""}
+                    <small className="block text-slate-500">{c.paid_on || "তারিখ নেই"}{c.note ? " · " + c.note : ""}</small>
                   </span>
                   <b>{money(Number(c.amount))}</b>
                 </div>
@@ -2000,9 +2062,11 @@ function BookingDetail(props: {
           </div>
         ) : null}
       </section>
+      </div>
 
+      <div hidden={detailSection !== "overview"}>
       <section className="rounded-3xl bg-white p-5 shadow-sm">
-        <div className="font-black">Admin private notes</div>
+        <div className="font-black">নিজস্ব নোট (শুধু অ্যাডমিন)</div>
         <textarea
           className={inputClass + " mt-3"}
           rows={4}
@@ -2018,9 +2082,10 @@ function BookingDetail(props: {
           }}
           className="mt-3 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60"
         >
-          Save private notes
+          নোট সংরক্ষণ করুন
         </button>
       </section>
+      </div>
     </div>
   );
 }

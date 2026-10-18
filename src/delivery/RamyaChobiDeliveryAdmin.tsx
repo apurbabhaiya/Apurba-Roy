@@ -127,6 +127,7 @@ function StatusPill({ value }: { value: string }) {
 }
 
 export default function RamyaChobiDeliveryAdmin() {
+  const [adminSection, setAdminSection] = useState('delivery');
   const [deleteTarget, setDeleteTarget] = useState<DeliveryAdminPortal | null>(null);
   const [deleteName, setDeleteName] = useState('');
   const [deleting, setDeleting] = useState(false);
@@ -717,26 +718,6 @@ export default function RamyaChobiDeliveryAdmin() {
             <h1 className="mt-1 text-2xl font-semibold">RamyaChobi Admin Panel</h1>
           </div>
           <div className="flex flex-wrap gap-2">
-            <a
-              href="/photo-selection"
-              className="inline-flex items-center gap-2 rounded-xl bg-amber-300 px-3.5 py-2 text-sm font-bold text-stone-950"
-            >
-              <Images className="h-4 w-4" /> Photo Selection
-            </a>
-            <a
-              href="/booking/admin"
-              className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-3.5 py-2 text-sm font-semibold"
-            >
-              <FileCheck2 className="h-4 w-4" /> Booking Admin
-            </a>
-            <a
-              href="/delivery"
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-3.5 py-2 text-sm font-semibold"
-            >
-              <ExternalLink className="h-4 w-4" /> Delivery Demo
-            </a>
             <button onClick={() => load()} disabled={loading} className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-3.5 py-2 text-sm font-semibold">
               <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Refresh
             </button>
@@ -747,13 +728,28 @@ export default function RamyaChobiDeliveryAdmin() {
         </div>
       </header>
 
+      <nav aria-label="Admin navigation" className="border-b border-stone-200 bg-white px-5 py-3">
+        <div className="mx-auto flex max-w-7xl flex-wrap gap-2">
+          {(['dashboard', 'delivery', 'payments', 'portfolio', 'settings'] as const).map((section) => (
+            <button key={section} type="button" aria-current={adminSection === section ? 'page' : undefined}
+              onClick={() => setAdminSection(section)}
+              className={`rounded-xl px-4 py-2.5 text-sm font-semibold capitalize focus-visible:outline-2 focus-visible:outline-amber-600 ${adminSection === section ? 'bg-stone-950 text-white' : 'bg-stone-100 text-stone-700 hover:bg-amber-100'}`}>
+              {section}{section === 'payments' && counts.requests > 0 ? ` (${counts.requests})` : ''}
+            </button>
+          ))}
+          <a href="/booking/admin" className="rounded-xl bg-stone-100 px-4 py-2.5 text-sm font-semibold text-stone-700 hover:bg-amber-100">Booking</a>
+          <a href="/photo-selection" className="rounded-xl bg-stone-100 px-4 py-2.5 text-sm font-semibold text-stone-700 hover:bg-amber-100">Photo Selection</a>
+        </div>
+      </nav>
+
       <div className="mx-auto max-w-7xl space-y-7 px-5 py-8">
         {notice && (
           <div className="rounded-2xl border border-stone-200 bg-white p-4 text-sm font-medium shadow-sm">{notice}</div>
         )}
 
-        <DriveConnectionCard adminToken={token} />
+        {adminSection === 'settings' && <section className="space-y-4" aria-label="Connection settings"><h2 className="text-xl font-semibold">Settings</h2><DriveConnectionCard adminToken={token} /></section>}
 
+        {adminSection === 'dashboard' && (
         <section className="grid gap-4 md:grid-cols-3">
           <a href="/photo-selection" className="group rounded-3xl bg-stone-950 p-6 text-white shadow-sm transition hover:-translate-y-0.5">
             <Images className="h-8 w-8 text-amber-300" />
@@ -782,9 +778,11 @@ export default function RamyaChobiDeliveryAdmin() {
             </p>
           </a>
         </section>
+        )}
 
-        <PortfolioManager adminToken={token} />
+        {adminSection === 'portfolio' && <PortfolioManager adminToken={token} />}
 
+        {adminSection === 'dashboard' && (
         <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {[
             [Link2, 'Delivery portals', counts.portals],
@@ -800,7 +798,9 @@ export default function RamyaChobiDeliveryAdmin() {
             </div>
           ))}
         </section>
+        )}
 
+        {adminSection === 'delivery' && (
         <section className="rounded-3xl border border-stone-200 bg-white p-6 shadow-sm">
           <div className="flex items-start gap-3">
             <FileCheck2 className="mt-1 h-6 w-6 text-amber-700" />
@@ -825,7 +825,9 @@ export default function RamyaChobiDeliveryAdmin() {
             Save as Draft
           </button>
         </section>
+        )}
 
+        {adminSection === 'payments' && (
         <section className="rounded-3xl border border-stone-200 bg-white p-6 shadow-sm">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -866,7 +868,9 @@ export default function RamyaChobiDeliveryAdmin() {
             ))}
           </div>
         </section>
+        )}
 
+        {adminSection === 'delivery' && (
         <section className="rounded-3xl border border-stone-200 bg-white p-6 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-xl font-semibold">Client delivery portals</h2>
@@ -1087,7 +1091,9 @@ export default function RamyaChobiDeliveryAdmin() {
             })}
           </div>
         </section>
+        )}
 
+        {adminSection === 'dashboard' && (
         <section className="rounded-3xl border border-stone-200 bg-white p-6 shadow-sm">
           <div className="flex items-center gap-2">
             <CalendarClock className="h-5 w-5 text-amber-700" />
@@ -1108,6 +1114,7 @@ export default function RamyaChobiDeliveryAdmin() {
             )}
           </div>
         </section>
+        )}
       </div>
       {paymentProofUrl && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 p-4" onClick={() => setPaymentProofUrl('')}>

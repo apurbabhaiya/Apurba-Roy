@@ -133,7 +133,7 @@ const menuItems = [
   { label: 'About RamyaChobi', href: '/about', icon: BookOpenCheck, kind: 'section' },
   { label: 'Client Reviews', href: '#reviews', icon: Star, kind: 'section' },
   { label: 'Contact / Booking', href: '#contact', icon: CalendarDays, kind: 'section' },
-  { label: 'অ্যাডমিন প্যানেল', href: 'https://apurba-6nvqe94q0-ramyachobi.vercel.app/delivery-admin', icon: ShieldCheck, kind: 'admin' },
+  { label: 'অ্যাডমিন প্যানেল', href: 'https://apurba-roy-git-codex-admin-menu-sections-ramyachobi.vercel.app/delivery-admin', icon: ShieldCheck, kind: 'admin' },
 ];
 
 function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose?: () => void }) {
