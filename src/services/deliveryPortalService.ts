@@ -81,6 +81,7 @@ export type DeliveryPortalData = {
 
 export type DeliveryAdminPortal = DeliveryPortalData & {
   public_listed?: boolean;
+  public_download_enabled?: boolean;
   booking_id?: string | null;
   gallery_id?: string | null;
   secure_token: string;
@@ -640,6 +641,13 @@ export async function deleteClientDelivery(input: { token: string; portalId: str
 
 export async function setPublicDeliveryListing(input: {token:string;portalId:string;visible:boolean}) {
  const {data,error} = await db.rpc('delivery_admin_set_public_listing',{p_token:input.token,p_portal_id:input.portalId,p_visible:input.visible});
+ if(error)throw error;
+ if(!data)throw new Error('Album was not found.');
+ return data;
+}
+
+export async function setPublicDeliveryDownload(input: {token:string;portalId:string;enabled:boolean}) {
+ const {data,error} = await db.rpc('delivery_admin_set_public_download',{p_token:input.token,p_portal_id:input.portalId,p_enabled:input.enabled});
  if(error)throw error;
  if(!data)throw new Error('Album was not found.');
  return data;
