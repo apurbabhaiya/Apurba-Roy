@@ -130,6 +130,14 @@ function StatusPill({ value }: { value: string }) {
 export default function RamyaChobiDeliveryAdmin() {
   const [adminSection, setAdminSection] = useState('delivery');
   const [portalSections, setPortalSections] = useState<Record<string, string>>({});
+  const [paymentFocusId, setPaymentFocusId] = useState('');
+  useEffect(() => {
+    if (!paymentFocusId) return;
+    const ledger = document.getElementById(`payment-ledger-${paymentFocusId}`);
+    ledger?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    ledger?.focus({ preventScroll: true });
+    setPaymentFocusId('');
+  }, [paymentFocusId, portalSections]);
   const [deleteTarget, setDeleteTarget] = useState<DeliveryAdminPortal | null>(null);
   const [deleteName, setDeleteName] = useState('');
   const [deleting, setDeleting] = useState(false);
@@ -922,11 +930,7 @@ export default function RamyaChobiDeliveryAdmin() {
 
                   <DeliveryPaymentShortcut portal={portal} onReview={() => {
                     setPortalSections(current => ({ ...current, [portal.id]: 'payments' }));
-                    requestAnimationFrame(() => {
-                      const ledger = document.getElementById(`payment-ledger-${portal.id}`);
-                      ledger?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                      ledger?.focus({ preventScroll: true });
-                    });
+                    setPaymentFocusId(portal.id);
                   }} />
                   <nav aria-label={`${portal.client_name} ডেলিভারির বিভাগ`} className="mt-4 flex flex-wrap gap-2 rounded-2xl bg-stone-100 p-2">
                     {Object.entries({ overview: 'সারাংশ', files: '১. ছবি ও ভিডিও', payments: '২. পেমেন্ট', delivery: '৩. ডেলিভারি নিয়ন্ত্রণ' }).map(([key, label]) => <button key={key} type="button" aria-current={portalSection === key ? 'page' : undefined} onClick={() => setPortalSections(current => ({ ...current, [portal.id]: key }))} className={`rounded-xl px-4 py-2.5 text-sm font-bold focus-visible:outline-2 focus-visible:outline-emerald-600 ${portalSection === key ? 'bg-stone-950 text-white shadow-sm' : 'text-stone-600 hover:bg-white'}`}>{label}</button>)}
@@ -948,6 +952,7 @@ export default function RamyaChobiDeliveryAdmin() {
                   </div>
 
                   <section hidden={portalSection !== 'files'} className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                    <DeliveryDownloadSettings portal={portal} token={token} onChanged={load} />
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
                         <h3 className="font-semibold">Final Delivery Files</h3>
@@ -1015,7 +1020,6 @@ export default function RamyaChobiDeliveryAdmin() {
                     <button type="button" onClick={() => void setPublicListing(portal)} disabled={loading || (!portal.public_listed && (!portal.is_published || portal.preview_enabled === false))} className="rounded-xl bg-stone-950 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-40">{portal.public_listed ? 'লুকান' : 'দেখান'}</button>
                   </section>
 
-                  <DeliveryDownloadSettings portal={portal} token={token} onChanged={load} />
                   <section className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
                     <div><h3 className="text-sm font-bold">ফুল পেমেন্টের পরে ডাউনলোড</h3><p className="mt-1 text-xs text-stone-600">অনুমতি: {portal.public_download_enabled ? 'চালু' : 'বন্ধ'}। বকেয়া থাকলে ডাউনলোড বন্ধ থাকবে।</p><p className="mt-1 text-xs text-stone-500">দেখান, Activate Final Delivery ও Photo / Video download ON থাকতে হবে। অ্যাক্সেসের মেয়াদ ও ফি-র নিয়মও প্রযোজ্য।</p></div>
                     <button type="button" onClick={() => void changePublicDownload(portal)} disabled={loading || (!portal.public_download_enabled && (Number(portal.package_price) <= 0 || Number(portal.remaining_due) > 0))} className="rounded-xl bg-emerald-800 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-40">{portal.public_download_enabled ? 'ডাউনলোড বন্ধ করুন' : 'ডাউনলোডের অনুমতি দিন'}</button>
