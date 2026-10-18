@@ -31,6 +31,8 @@ export type DeliveryAdminFile = DeliveryFinalFile & {
 };
 
 export type DeliveryPortalData = {
+  download_window_ends_at?: string | null;
+  download_access_hours?: number;
   id: string;
   client_name: string;
   event_name?: string | null;
@@ -82,6 +84,11 @@ export type DeliveryPortalData = {
 export type DeliveryAdminPortal = DeliveryPortalData & {
   public_listed?: boolean;
   public_download_enabled?: boolean;
+  photo_delivery_folder_url?: string | null;
+  video_delivery_folder_url?: string | null;
+  download_access_hours?: number;
+  download_window_started_at?: string | null;
+  download_window_ends_at?: string | null;
   booking_id?: string | null;
   gallery_id?: string | null;
   secure_token: string;
@@ -411,7 +418,7 @@ export async function deleteDeliveryFile(input: { token: string; fileId: string 
 }
 
 
-export async function syncDeliveryFolder(input: { adminToken: string; portalId: string; folderUrl: string }) {
+export async function syncDeliveryFolder(input: { adminToken: string; portalId: string; folderUrl: string; fileType?: 'PHOTO' | 'VIDEO' }) {
   let pageToken = '';
   let imported = 0;
   let skipped = 0;
@@ -651,4 +658,9 @@ export async function setPublicDeliveryDownload(input: {token:string;portalId:st
  if(error)throw error;
  if(!data)throw new Error('Album was not found.');
  return data;
+}
+
+export async function configureDeliveryDownloads(input: {token:string;portalId:string;photoFolder:string;videoFolder:string;hours:number}) {
+ const {data,error} = await db.rpc('delivery_admin_configure_downloads',{p_token:input.token,p_portal_id:input.portalId,p_photo_folder:input.photoFolder,p_video_folder:input.videoFolder,p_hours:input.hours});
+ if(error)throw error;if(!data)throw new Error('Album was not found.');return data;
 }

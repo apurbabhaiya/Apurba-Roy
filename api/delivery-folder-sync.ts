@@ -67,6 +67,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const portalId = String(body.portalId || '').trim();
     const folderUrl = String(body.folderUrl || '').trim();
     const pageToken = String(body.pageToken || '').trim();
+    const requestedType = body.fileType;
+    if (requestedType && !['PHOTO','VIDEO'].includes(requestedType)) return json(res,400,{error:'Invalid folder media type.'});
 
     if (!adminToken || !portalId || !folderUrl) return json(res, 400, { error: 'Admin token, portal ID and folder link are required.' });
     if (!/^[0-9a-f-]{36}$/i.test(portalId)) return json(res, 400, { error: 'Invalid delivery portal.' });
@@ -96,7 +98,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const page = await driveJson(listUrl, accessToken);
     const files: any[] = Array.isArray(page.files) ? page.files : [];
     const supported = files.map((file, sourceIndex) => ({ file, sourceIndex, type: classifyFile(file) }))
-      .filter((item): item is { file: any; sourceIndex: number; type: 'PHOTO' | 'VIDEO' | 'DOCUMENT' } => Boolean(item.type));
+      .filter((item): item is { file: any; sourceIndex: number; type: 'PHOTO' | 'VIDEO' | 'DOCUMENT' } => Boolean(item.type) && (!requestedType || item.type === requestedType));
 
     let imported = 0;
     for (let start = 0; start < supported.length; start += 5) {

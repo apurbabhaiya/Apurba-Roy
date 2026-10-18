@@ -33,6 +33,8 @@ function deliveryLabel(status?: string) {
 }
 
 export default function RamyaChobiDelivery({ token }: { token: string }) {
+  const [clock, setClock] = useState(Date.now());
+  useEffect(() => { const timer = window.setInterval(() => setClock(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
   const [data, setData] = useState<DeliveryPortalData | null>(null);
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState('');
@@ -87,7 +89,7 @@ export default function RamyaChobiDelivery({ token }: { token: string }) {
   const galleryStatus = data?.gallery_status || 'PREVIEW';
   const locked = galleryStatus === 'LOCKED';
   const unavailable = galleryStatus === 'UNAVAILABLE';
-  const canDownload = data?.download_status === 'ENABLED' && !unavailable && data?.is_published !== false;
+  const canDownload = data?.download_status === 'ENABLED' && !unavailable && data?.is_published !== false && (!data?.download_window_ends_at || new Date(data.download_window_ends_at).getTime() > clock);
   const canPhoto = canDownload && data?.photo_download_permission === true;
   const canVideo = canDownload && data?.video_download_permission === true;
   const canDocument = canDownload && data?.document_download_permission === true;
@@ -95,7 +97,8 @@ export default function RamyaChobiDelivery({ token }: { token: string }) {
   const remaining = Number(data?.remaining_due || 0);
   const isAccessPayment = locked && fullyPaid && Number(data?.late_fee_balance || 0) > 0;
   const dailyFee = Number(data?.daily_late_fee ?? data?.access_fee_per_day ?? 20);
-  const accessExpiry = data?.access_expires_at || data?.free_access_expires_at;
+  const standardExpiry = data?.access_expires_at || data?.free_access_expires_at;
+  const accessExpiry = data?.download_window_ends_at && (!standardExpiry || new Date(data.download_window_ends_at) < new Date(standardExpiry)) ? data.download_window_ends_at : standardExpiry;
   const paymentOptions = [
     { id: 'BKASH' as const, label: 'bKash', account: data?.bkash_number || '', mark: 'b', color: 'bg-[#e2136e]' },
     { id: 'NAGAD' as const, label: 'Nagad', account: data?.nagad_number || '', mark: 'N', color: 'bg-[#f58220]' },
