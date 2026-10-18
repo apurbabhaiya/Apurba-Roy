@@ -1,0 +1,21 @@
+import React,{useEffect,useState} from 'react';
+import {DeliveryAdminPortal,configureDeliveryDownloads,setPublicDeliveryDownload,syncDeliveryFolder} from '../services/deliveryPortalService';
+const field='mt-1 w-full rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm';
+export default function DeliveryDownloadSettings({portal,token,onChanged}:{portal:DeliveryAdminPortal;token:string;onChanged:()=>Promise<void>}) {
+ const [photo,setPhoto]=useState(portal.photo_delivery_folder_url||''),[video,setVideo]=useState(portal.video_delivery_folder_url||''),[hours,setHours]=useState(String(portal.download_access_hours??48)),[busy,setBusy]=useState(false),[notice,setNotice]=useState('');
+ useEffect(()=>{setPhoto(portal.photo_delivery_folder_url||'');setVideo(portal.video_delivery_folder_url||'');setHours(String(portal.download_access_hours??48));},[portal.id,portal.photo_delivery_folder_url,portal.video_delivery_folder_url,portal.download_access_hours]);
+ const paid=Number(portal.package_price)>0 && Number(portal.remaining_due)<=0;
+ async function save(){const duration=Number(hours);if(!Number.isInteger(duration)||duration<1||duration>8760)throw Error('মেয়াদ ১ থেকে ৮৭৬০ ঘণ্টার মধ্যে দিন।');await configureDeliveryDownloads({token,portalId:portal.id,photoFolder:photo.trim(),videoFolder:video.trim(),hours:duration});}
+ async function run(action:'SAVE'|'PHOTO'|'VIDEO'|'START') {
+  if(busy)return;
+  if(action==='START'&&!window.confirm(`${hours} ঘণ্টার জন্য ডাউনলোড সময় এখন থেকে শুরু করবেন? ফুল পেমেন্ট ও অন্য অনুমতিগুলোও যাচাই হবে।`))return;
+  setBusy(true);setNotice('');
+  try {await save();if(action==='PHOTO'||action==='VIDEO'){const url=action==='PHOTO'?photo:video;if(!url.trim())throw Error('আগে Google Drive ফোল্ডার লিংক দিন।');const result=await syncDeliveryFolder({adminToken:token,portalId:portal.id,folderUrl:url.trim(),fileType:action});setNotice(`${result.imported}টি ${action==='PHOTO'?'ছবি':'ভিডিও'} যুক্ত হয়েছে।`);}else if(action==='START'){await setPublicDeliveryDownload({token,portalId:portal.id,enabled:true});setNotice(`${hours} ঘণ্টার ডাউনলোড সময় শুরু হয়েছে।`);}else setNotice('দুটি ফোল্ডার লিংক ও মেয়াদ সংরক্ষিত হয়েছে। চালু সময় বদলাতে আবার সময় শুরু করুন।');await onChanged();}
+  catch(error:any){setNotice(error?.message||'সংরক্ষণ করা যায়নি। লিংক সংরক্ষিত হলেও import ব্যর্থ হতে পারে; পুনরায় চেষ্টা করুন।');}
+  finally{setBusy(false);}
+ }
+ const format=(value?:string|null)=>value?new Intl.DateTimeFormat('bn-BD',{dateStyle:'medium',timeStyle:'short',timeZone:'Asia/Dhaka'}).format(new Date(value)):'শুরু হয়নি';
+ return <section className="mt-4 rounded-2xl border border-sky-200 bg-sky-50 p-4"><h3 className="font-bold">ছবি ও ভিডিওর Drive ফোল্ডার / ডাউনলোডের মেয়াদ</h3><p className="mt-1 text-xs leading-5 text-stone-600">দুটি private Drive ফোল্ডার দিন। নিচের প্রিভিউ ও ওপরের ডাউনলোড বাটনের জন্য ফাইলগুলো যুক্ত করুন। Drive ফোল্ডার পাবলিক করার প্রয়োজন নেই।</p>
+ <div className="mt-3 grid gap-3 sm:grid-cols-2"><label className="text-xs font-semibold">ছবির Google Drive লিংক<input value={photo} onChange={e=>setPhoto(e.target.value)} placeholder="https://drive.google.com/drive/folders/..." className={field}/></label><label className="text-xs font-semibold">ভিডিওর Google Drive লিংক<input value={video} onChange={e=>setVideo(e.target.value)} placeholder="https://drive.google.com/drive/folders/..." className={field}/></label><label className="text-xs font-semibold">ডাউনলোডের মেয়াদ (ঘণ্টা)<input type="number" min="1" max="8760" step="1" value={hours} onChange={e=>setHours(e.target.value)} className={field}/><span className="mt-1 block text-stone-500">৪৮ ঘণ্টা = ২ দিন। অনুমতি চালুর সময় থেকে গণনা।</span></label><div className="rounded-xl bg-white p-3 text-xs leading-6">শুরু: {format(portal.download_window_started_at)}<br/>শেষ: {format(portal.download_window_ends_at)}</div></div>
+ <div className="mt-3 flex flex-wrap gap-2">{([['SAVE','লিংক ও মেয়াদ সংরক্ষণ'],['PHOTO','ছবি আনুন'],['VIDEO','ভিডিও আনুন'],['START','ডাউনলোড সময় শুরু / নবায়ন']] as const).map(([action,label])=><button key={action} type="button" disabled={busy||(action==='START'&&!paid)} onClick={()=>void run(action)} className="rounded-xl bg-stone-950 px-3 py-2.5 text-xs font-bold text-white disabled:opacity-40">{busy?'অপেক্ষা করুন…':label}</button>)}</div><p role="status" className="mt-3 text-sm text-stone-700">{notice}</p></section>;
+}
