@@ -1,6 +1,7 @@
 import React, { useEffect } from "react";
 import LegacyApp from "./App";
 import BookingPortal from "./booking/BookingPortal";
+import PublicDeliveryAlbums from "./delivery/PublicDeliveryAlbums";
 import RamyaChobiDelivery from "./delivery/RamyaChobiDelivery";
 import RamyaChobiDeliveryAdmin from "./delivery/RamyaChobiDeliveryAdmin";
 import RamyaChobiHome from "./home/RamyaChobiHome";
@@ -78,13 +79,15 @@ export default function RouterApp() {
     return <LegacyApp />;
   }
 
+  if (path.startsWith("/delivery/album/")) return <PublicDeliveryAlbums albumId={path.split("/")[3] || ""} />;
+
   if (path.startsWith("/delivery/")) {
     const token = decodeURIComponent(path.replace(/^\/delivery\//, "").split("/")[0] || "");
     return <RamyaChobiDelivery token={token} />;
   }
 
   if (path === "/delivery") {
-    return <RamyaChobiDelivery token="demo-ramyachobi-2026" />;
+    return <PublicDeliveryAlbums />;
   }
 
   return <RamyaChobiHome />;

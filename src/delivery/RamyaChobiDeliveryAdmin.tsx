@@ -48,9 +48,12 @@ import {
   restoreDeliveryAccess,
   setDeliveryPermissions,
   setDeliveryPublished,
+  setPublicDeliveryListing,
+  setPublicDeliveryDownload,
   setDeliveryDocumentPermission,
   DeliveryPaymentLedger,
 } from '../services/deliveryPortalService';
+import DeliveryDownloadSettings from './DeliveryDownloadSettings';
 import PortfolioManager from '../components/PortfolioManager';
 import DriveDeliveryPickerModal from '../components/DriveDeliveryPickerModal';
 import DriveConnectionCard from '../components/DriveConnectionCard';
@@ -532,6 +535,24 @@ export default function RamyaChobiDeliveryAdmin() {
     setNotice('Private client link copied.');
   }
 
+  async function changePublicDownload(portal: DeliveryAdminPortal) {
+    const enabled = !portal.public_download_enabled;
+    if (enabled && !window.confirm('ফুল পেমেন্ট ও সক্রিয় Final Delivery থাকলে প্রকাশ্য অ্যালবামের দর্শকরা আসল ছবি ডাউনলোড করতে পারবেন। অনুমতি দিতে চান?')) return;
+    setLoading(true);
+    try { await setPublicDeliveryDownload({token,portalId:portal.id,enabled}); await load(); setNotice(enabled ? 'ফুল পেমেন্ট সাপেক্ষে ডাউনলোডের অনুমতি দেওয়া হয়েছে।' : 'প্রকাশ্য অ্যালবামের ডাউনলোড বন্ধ করা হয়েছে।'); }
+    catch(error:any) {setNotice(error?.message || 'ডাউনলোডের অনুমতি পরিবর্তন করা যায়নি।');}
+    finally {setLoading(false);}
+  }
+
+  async function setPublicListing(portal: DeliveryAdminPortal) {
+    const visible = !portal.public_listed;
+    if (visible && !window.confirm('এই অ্যালবামের ছবির প্রিভিউ /delivery পেজে সবার জন্য দেখাতে চান? ব্যক্তিগত পেমেন্ট বা ডেলিভারি লিংক প্রকাশ হবে না।')) return;
+    setLoading(true);
+    try { await setPublicDeliveryListing({token,portalId:portal.id,visible}); await load(); setNotice(visible ? 'অ্যালবাম প্রকাশ্য তালিকায় দেখানো হচ্ছে।' : 'অ্যালবাম প্রকাশ্য তালিকা থেকে লুকানো হয়েছে।'); }
+    catch(error:any) {setNotice(error?.message || 'অ্যালবামের দৃশ্যমানতা পরিবর্তন করা যায়নি।');}
+    finally {setLoading(false);}
+  }
+
   async function setPublished(portal: DeliveryAdminPortal, published: boolean) {
     setLoading(true); setNotice('');
     try {
@@ -716,7 +737,7 @@ export default function RamyaChobiDeliveryAdmin() {
               {section}{section === 'payments' && counts.requests > 0 ? ` (${counts.requests})` : ''}
             </button>
           ))}
-          <a href="https://apurba-kay8bym4c-ramyachobi.vercel.app/booking/admin" className="rounded-xl bg-stone-100 px-4 py-2.5 text-sm font-semibold text-stone-700 hover:bg-amber-100">Booking</a>
+          <a href="/booking/admin" className="rounded-xl bg-stone-100 px-4 py-2.5 text-sm font-semibold text-stone-700 hover:bg-amber-100">Booking</a>
           <a href="/photo-selection" className="rounded-xl bg-stone-100 px-4 py-2.5 text-sm font-semibold text-stone-700 hover:bg-amber-100">Photo Selection</a>
         </div>
       </nav>
@@ -741,7 +762,7 @@ export default function RamyaChobiDeliveryAdmin() {
             </div>
           </a>
 
-          <a href="https://apurba-kay8bym4c-ramyachobi.vercel.app/booking/admin" className="group rounded-3xl border border-stone-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5">
+          <a href="/booking/admin" className="group rounded-3xl border border-stone-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5">
             <FileCheck2 className="h-8 w-8 text-amber-700" />
             <h2 className="mt-4 text-xl font-semibold">Booking Management</h2>
             <p className="mt-2 text-sm leading-6 text-stone-500">
@@ -964,6 +985,17 @@ export default function RamyaChobiDeliveryAdmin() {
                         </div>
                       ))}
                     </div>
+                  </section>
+
+                  <section className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                    <div><h3 className="text-sm font-bold">প্রকাশিত অ্যালবামের তালিকা</h3><p className="mt-1 text-xs text-stone-600">{portal.public_listed && portal.is_published && portal.preview_enabled !== false ? '/delivery পেজে সবার জন্য দেখানো হচ্ছে।' : 'প্রকাশ্য তালিকায় লুকানো আছে।'} শুধু ছবির প্রিভিউ দেখাবে।</p><p className="mt-1 text-xs text-stone-500">আগে Publish Delivery ও Preview চালু করুন।</p></div>
+                    <button type="button" onClick={() => void setPublicListing(portal)} disabled={loading || (!portal.public_listed && (!portal.is_published || portal.preview_enabled === false))} className="rounded-xl bg-stone-950 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-40">{portal.public_listed ? 'লুকান' : 'দেখান'}</button>
+                  </section>
+
+                  <DeliveryDownloadSettings portal={portal} token={token} onChanged={load} />
+                  <section className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                    <div><h3 className="text-sm font-bold">ফুল পেমেন্টের পরে ডাউনলোড</h3><p className="mt-1 text-xs text-stone-600">অনুমতি: {portal.public_download_enabled ? 'চালু' : 'বন্ধ'}। বকেয়া থাকলে ডাউনলোড বন্ধ থাকবে।</p><p className="mt-1 text-xs text-stone-500">দেখান, Activate Final Delivery ও Photo / Video download ON থাকতে হবে। অ্যাক্সেসের মেয়াদ ও ফি-র নিয়মও প্রযোজ্য।</p></div>
+                    <button type="button" onClick={() => void changePublicDownload(portal)} disabled={loading || (!portal.public_download_enabled && (Number(portal.package_price) <= 0 || Number(portal.remaining_due) > 0))} className="rounded-xl bg-emerald-800 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-40">{portal.public_download_enabled ? 'ডাউনলোড বন্ধ করুন' : 'ডাউনলোডের অনুমতি দিন'}</button>
                   </section>
 
                   <div className="mt-4 flex flex-wrap gap-2">

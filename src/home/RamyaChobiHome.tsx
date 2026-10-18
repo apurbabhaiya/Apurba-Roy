@@ -125,7 +125,6 @@ const reviewGroups = [
 const menuItems = [
   { label: 'Home', href: '#home', icon: Sparkles, kind: 'section' },
   { label: 'Portfolio', href: '/portfolio', icon: Images, kind: 'section' },
-  { label: 'Photo Selection', href: '/photo-selection', icon: Images, kind: 'app' },
   { label: 'Final Delivery', href: '/delivery', icon: Download, kind: 'app' },
   { label: 'Face Search', href: '/face-search', icon: Camera, kind: 'app' },
   { label: 'Client Gallery', href: '/client-gallery', icon: FolderHeart, kind: 'app' },
@@ -134,6 +133,7 @@ const menuItems = [
   { label: 'About RamyaChobi', href: '/about', icon: BookOpenCheck, kind: 'section' },
   { label: 'Client Reviews', href: '#reviews', icon: Star, kind: 'section' },
   { label: 'Contact / Booking', href: '#contact', icon: CalendarDays, kind: 'section' },
+  { label: 'অ্যাডমিন প্যানেল', href: 'https://apurba-roy-git-codex-admin-menu-sections-ramyachobi.vercel.app/delivery-admin', icon: ShieldCheck, kind: 'admin' },
 ];
 
 function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose?: () => void }) {
