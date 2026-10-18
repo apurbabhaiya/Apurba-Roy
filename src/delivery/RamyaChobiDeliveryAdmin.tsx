@@ -129,6 +129,7 @@ function StatusPill({ value }: { value: string }) {
 
 export default function RamyaChobiDeliveryAdmin() {
   const [adminSection, setAdminSection] = useState('delivery');
+  const [portalSections, setPortalSections] = useState<Record<string, string>>({});
   const [deleteTarget, setDeleteTarget] = useState<DeliveryAdminPortal | null>(null);
   const [deleteName, setDeleteName] = useState('');
   const [deleting, setDeleting] = useState(false);
@@ -896,6 +897,7 @@ export default function RamyaChobiDeliveryAdmin() {
           </div>
           <div className="mt-5 space-y-4">
             {filteredPortals.map((portal) => {
+              const portalSection = portalSections[portal.id] || 'overview';
               const canActivate = portal.payment_status === 'FULLY_PAID' && portal.delivery_status !== 'FINAL_DELIVERED';
               return (
                 <div id={`portal-${portal.id}`} key={portal.id} className={`rounded-2xl border p-4 ${selectedPortalId === portal.id ? 'border-amber-400 ring-2 ring-amber-100' : 'border-stone-200'}`}>
@@ -919,12 +921,25 @@ export default function RamyaChobiDeliveryAdmin() {
                   </div>
 
                   <DeliveryPaymentShortcut portal={portal} onReview={() => {
-                    const ledger = document.getElementById(`payment-ledger-${portal.id}`);
-                    ledger?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    ledger?.focus({ preventScroll: true });
+                    setPortalSections(current => ({ ...current, [portal.id]: 'payments' }));
+                    requestAnimationFrame(() => {
+                      const ledger = document.getElementById(`payment-ledger-${portal.id}`);
+                      ledger?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                      ledger?.focus({ preventScroll: true });
+                    });
                   }} />
+                  <nav aria-label={`${portal.client_name} ডেলিভারির বিভাগ`} className="mt-4 flex flex-wrap gap-2 rounded-2xl bg-stone-100 p-2">
+                    {Object.entries({ overview: 'সারাংশ', files: '১. ছবি ও ভিডিও', payments: '২. পেমেন্ট', delivery: '৩. ডেলিভারি নিয়ন্ত্রণ' }).map(([key, label]) => <button key={key} type="button" aria-current={portalSection === key ? 'page' : undefined} onClick={() => setPortalSections(current => ({ ...current, [portal.id]: key }))} className={`rounded-xl px-4 py-2.5 text-sm font-bold focus-visible:outline-2 focus-visible:outline-emerald-600 ${portalSection === key ? 'bg-stone-950 text-white shadow-sm' : 'text-stone-600 hover:bg-white'}`}>{label}</button>)}
+                  </nav>
+                  {portalSection === 'overview' && <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                    {[
+                      { label: 'ছবি ও ভিডিও', value: `${(filesByPortal[portal.id] || []).length}টি ফাইল`, next: 'files' },
+                      { label: 'পেমেন্ট', value: Number(portal.package_price) <= 0 ? 'প্যাকেজের দাম সেট করুন' : Number(portal.remaining_due) > 0 ? `বাকি ${money(portal.remaining_due)}` : 'বকেয়া নেই', next: 'payments' },
+                      { label: 'ক্লায়েন্টের পেজ', value: portal.is_published ? 'প্রকাশিত' : 'এখনো ড্রাফট', next: 'delivery' },
+                    ].map(item => <button key={item.next} type="button" onClick={() => setPortalSections(current => ({ ...current, [portal.id]: item.next }))} className="rounded-2xl border border-stone-200 bg-white p-4 text-left hover:border-emerald-400 focus-visible:outline-2 focus-visible:outline-emerald-600"><span className="block text-xs font-semibold text-stone-500">{item.label}</span><strong className="mt-2 block text-sm">{item.value}</strong><span className="mt-3 block text-xs font-bold text-emerald-800">বিস্তারিত দেখুন →</span></button>)}
+                  </div>}
 
-                  <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                  <div hidden={portalSection !== 'overview'} className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
                     <div className="rounded-xl bg-stone-50 p-3"><span className="block text-stone-500">Final Delivery</span><strong>{fmt(portal.final_delivery_at)}</strong></div>
                     <div className="rounded-xl bg-stone-50 p-3"><span className="block text-stone-500">Free access ends</span><strong>{fmt(portal.free_access_expires_at)}</strong></div>
                     <div className="rounded-xl bg-stone-50 p-3"><span className="block text-stone-500">Temporary access</span><strong>{fmt(portal.access_expires_at)}</strong></div>
@@ -932,7 +947,7 @@ export default function RamyaChobiDeliveryAdmin() {
                     <div className="rounded-xl bg-stone-50 p-3"><span className="block text-stone-500">Late fee</span><strong>{Number((portal.late_fee as any)?.balance ?? (portal.late_fee as any)?.calculated_fee ?? 0) > 0 ? money((portal.late_fee as any)?.balance ?? (portal.late_fee as any)?.calculated_fee) : 'None'}</strong></div>
                   </div>
 
-                  <section className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                  <section hidden={portalSection !== 'files'} className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
                         <h3 className="font-semibold">Final Delivery Files</h3>
@@ -971,7 +986,7 @@ export default function RamyaChobiDeliveryAdmin() {
                     </div>
                   </section>
 
-                  <section id={`payment-ledger-${portal.id}`} tabIndex={-1} className="mt-4 rounded-2xl border border-stone-200 bg-stone-50 p-4 focus:outline-2 focus:outline-emerald-600">
+                  <section hidden={portalSection !== 'payments'} id={`payment-ledger-${portal.id}`} tabIndex={-1} className="mt-4 rounded-2xl border border-stone-200 bg-stone-50 p-4 focus:outline-2 focus:outline-emerald-600">
                     <div className="flex items-center justify-between gap-2"><h3 className="font-semibold">Payment ledger</h3><span className="text-xs text-stone-500">Verified payments count toward total paid</span></div>
                     <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                       <label className="block text-xs font-semibold text-stone-600"><span className="mb-1 block">Payment date</span><input type="date" value={ledgerDraft(portal.id).date} onChange={(e) => updateLedgerDraft(portal.id, { date: e.target.value })} className="w-full rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm" /></label>
@@ -994,6 +1009,7 @@ export default function RamyaChobiDeliveryAdmin() {
                     </div>
                   </section>
 
+                  <div hidden={portalSection !== 'delivery'}>
                   <section className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
                     <div><h3 className="text-sm font-bold">প্রকাশিত অ্যালবামের তালিকা</h3><p className="mt-1 text-xs text-stone-600">{portal.public_listed && portal.is_published && portal.preview_enabled !== false ? '/delivery পেজে সবার জন্য দেখানো হচ্ছে।' : 'প্রকাশ্য তালিকায় লুকানো আছে।'} শুধু ছবির প্রিভিউ দেখাবে।</p><p className="mt-1 text-xs text-stone-500">আগে Publish Delivery ও Preview চালু করুন।</p></div>
                     <button type="button" onClick={() => void setPublicListing(portal)} disabled={loading || (!portal.public_listed && (!portal.is_published || portal.preview_enabled === false))} className="rounded-xl bg-stone-950 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-40">{portal.public_listed ? 'লুকান' : 'দেখান'}</button>
@@ -1007,7 +1023,7 @@ export default function RamyaChobiDeliveryAdmin() {
 
                   <div className="mt-4 flex flex-wrap gap-2">
                     {portal.client_phone && <a href={portalWhatsapp(portal.whatsapp_number || portal.client_phone)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-3.5 py-2 text-sm font-bold text-white">WhatsApp</a>}
-                    <button type="button" onClick={() => { setDeleteTarget(portal); setDeleteName(''); setDeleteError(''); }} disabled={loading} className="rounded-xl bg-red-50 px-3.5 py-2 text-sm font-bold text-red-700">Delete Client Delivery</button>
+                    <details className="rounded-xl border border-red-100 p-2"><summary className="cursor-pointer px-2 text-sm font-semibold text-stone-600">অন্যান্য</summary><div className="mt-2"><button type="button" onClick={() => { setDeleteTarget(portal); setDeleteName(''); setDeleteError(''); }} disabled={loading} className="rounded-xl bg-red-50 px-3.5 py-2 text-sm font-bold text-red-700">Delete Client Delivery</button></div></details>
                     <button onClick={() => startPortalEdit(portal)} className="inline-flex items-center gap-2 rounded-xl bg-amber-100 px-3.5 py-2 text-sm font-bold text-amber-900">Edit Client</button>
                     <button onClick={() => previewClientPage(portal)} className="inline-flex items-center gap-2 rounded-xl border border-stone-300 px-3.5 py-2 text-sm font-bold"><ExternalLink className="h-4 w-4" /> Preview exact page</button>
                     <button onClick={() => setPublished(portal, !portal.is_published)} disabled={loading} className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-bold text-white ${portal.is_published ? 'bg-stone-700' : 'bg-emerald-700'}`}>
@@ -1047,6 +1063,8 @@ export default function RamyaChobiDeliveryAdmin() {
                     <button type="button" onClick={() => void setDeliveryDocumentPermission({ token, portalId: portal.id, allowed: portal.document_download_permission !== true }).then(() => load()).catch((error: any) => setNotice(error?.message || 'Could not update document permission.'))} disabled={loading} className={`rounded-xl px-3 py-2 text-xs font-bold ${portal.document_download_permission === true ? 'bg-emerald-100 text-emerald-800' : 'bg-stone-200 text-stone-700'}`}>
                       Document download: {portal.document_download_permission === true ? 'ON' : 'OFF'}
                     </button>
+                  </div>
+
                   </div>
 
                   {selectedPortalId === portal.id && Object.keys(portalEdit).length > 0 && (
