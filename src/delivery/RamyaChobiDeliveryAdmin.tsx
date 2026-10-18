@@ -458,7 +458,7 @@ export default function RamyaChobiDeliveryAdmin() {
     setNotice('');
     try {
       await reviewDeliveryPayment({ token, submissionId, decision });
-      setNotice(decision === 'VERIFY' ? 'Payment verified.' : 'Payment rejected.');
+      setNotice(decision === 'VERIFY' ? (submissions.find(s => s.id === submissionId)?.payment_type === 'RECOVERY' ? 'রিকভারি পেমেন্ট যাচাই হয়েছে। ফাইল নিশ্চিত করে ডাউনলোডের মেয়াদ আলাদাভাবে নবায়ন করুন।' : 'Payment verified.') : 'Payment rejected.');
       await load();
     } catch (error: any) {
       setNotice(error?.message || 'Could not review payment.');

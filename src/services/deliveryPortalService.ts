@@ -118,7 +118,7 @@ export type DeliveryAdminPortal = DeliveryPortalData & {
 export type DeliveryPaymentSubmission = {
   id: string;
   portal_id: string;
-  payment_type: 'PACKAGE' | 'ACCESS';
+  payment_type: 'PACKAGE' | 'ACCESS' | 'RECOVERY';
   payment_method: 'BKASH' | 'NAGAD' | 'DBBL' | 'ROCKET';
   proof_storage_path?: string | null;
   payer_phone: string;
