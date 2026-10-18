@@ -1,4 +1,4 @@
-import { getDriveAccessToken } from './_lib/driveAuth.js';
+import { getDriveAccessToken } from './driveAuth.js';
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export default async function handler(req:any,res:any) {
  res.setHeader('cache-control','private, no-store, max-age=0');

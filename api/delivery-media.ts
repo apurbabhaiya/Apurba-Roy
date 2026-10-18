@@ -1,6 +1,7 @@
 type VercelRequest = any;
 type VercelResponse = any;
 import { getDriveAccessToken } from './_lib/driveAuth.js';
+import publicDeliveryPhoto from './_lib/publicDeliveryPhoto.js';
 import { attachmentHeader } from './_lib/fileName.js';
 
 function json(res: VercelResponse, status: number, message: string) {
@@ -51,6 +52,7 @@ async function driveResponse(fileId: string, mode: 'PREVIEW' | 'ORIGINAL', range
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.query.albumId) return publicDeliveryPhoto(req,res);
   if (req.method !== 'GET') return json(res, 405, 'Only GET is supported.');
   const token = String(req.query.token || '').trim();
   const fileId = String(req.query.fileId || '').trim();

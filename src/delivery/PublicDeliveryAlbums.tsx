@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ArrowLeft, Images, RefreshCw } from 'lucide-react';
 import { supabase } from '../services/supabase';
 type Album = {id:string;title:string;event_date:string|null;photos:{id:string}[]};
-const photoUrl = (album:string,file:string) => `/api/public-delivery-photo?albumId=${encodeURIComponent(album)}&fileId=${encodeURIComponent(file)}`;
+const photoUrl = (album:string,file:string) => `/api/delivery-media?albumId=${encodeURIComponent(album)}&fileId=${encodeURIComponent(file)}`;
 export default function PublicDeliveryAlbums({albumId}:{albumId?:string}) {
  const [albums,setAlbums] = useState<Album[]>([]),[loading,setLoading] = useState(true),[error,setError] = useState('');
  async function load() {
