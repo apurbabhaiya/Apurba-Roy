@@ -54,6 +54,7 @@ import {
   DeliveryPaymentLedger,
 } from '../services/deliveryPortalService';
 import DeliveryDownloadSettings from './DeliveryDownloadSettings';
+import DeliveryPaymentShortcut from './DeliveryPaymentShortcut';
 import PortfolioManager from '../components/PortfolioManager';
 import DriveDeliveryPickerModal from '../components/DriveDeliveryPickerModal';
 import DriveConnectionCard from '../components/DriveConnectionCard';
@@ -917,6 +918,12 @@ export default function RamyaChobiDeliveryAdmin() {
                     </div>
                   </div>
 
+                  <DeliveryPaymentShortcut portal={portal} onReview={() => {
+                    const ledger = document.getElementById(`payment-ledger-${portal.id}`);
+                    ledger?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    ledger?.focus({ preventScroll: true });
+                  }} />
+
                   <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
                     <div className="rounded-xl bg-stone-50 p-3"><span className="block text-stone-500">Final Delivery</span><strong>{fmt(portal.final_delivery_at)}</strong></div>
                     <div className="rounded-xl bg-stone-50 p-3"><span className="block text-stone-500">Free access ends</span><strong>{fmt(portal.free_access_expires_at)}</strong></div>
@@ -964,7 +971,7 @@ export default function RamyaChobiDeliveryAdmin() {
                     </div>
                   </section>
 
-                  <section className="mt-4 rounded-2xl border border-stone-200 bg-stone-50 p-4">
+                  <section id={`payment-ledger-${portal.id}`} tabIndex={-1} className="mt-4 rounded-2xl border border-stone-200 bg-stone-50 p-4 focus:outline-2 focus:outline-emerald-600">
                     <div className="flex items-center justify-between gap-2"><h3 className="font-semibold">Payment ledger</h3><span className="text-xs text-stone-500">Verified payments count toward total paid</span></div>
                     <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                       <label className="block text-xs font-semibold text-stone-600"><span className="mb-1 block">Payment date</span><input type="date" value={ledgerDraft(portal.id).date} onChange={(e) => updateLedgerDraft(portal.id, { date: e.target.value })} className="w-full rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm" /></label>
