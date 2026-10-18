@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import DeliveryRecoveryNotice from './DeliveryRecoveryNotice';
 import { BadgeCheck, CalendarDays, Check, Copy, Download, FileText, Image as ImageIcon, LockKeyhole, MessageCircle, PlayCircle, ShieldCheck, Smartphone, WalletCards, X } from 'lucide-react';
 import { DeliveryFinalFile, DeliveryPortalData, getDeliveryPortal, getDeliveryPreviewPortal, submitDeliveryPayment, submitDeliveryReview } from '../services/deliveryPortalService';
 
@@ -225,6 +226,7 @@ export default function RamyaChobiDelivery({ token }: { token: string }) {
       </header>
 
       <div className="mx-auto max-w-6xl space-y-5 px-4 py-5 sm:px-8 sm:py-8">
+        <DeliveryRecoveryNotice portalId={data.id} clientToken={token} expiresAt={data.download_window_ends_at} title={data.event_name || data.client_name}/>
         {data.client_message && <div className="rounded-2xl border border-[#e8dfcf] bg-white p-4 text-sm leading-6"><strong>Message from RamyaChobi</strong><p className="mt-1 whitespace-pre-line text-stone-600">{data.client_message}</p></div>}
         <section className="grid gap-4 lg:grid-cols-[1.15fr_.85fr]">
           <div className="rounded-2xl border border-[#e5dfd3] bg-white p-5 shadow-sm sm:p-6">
