@@ -526,6 +526,7 @@ export default function RamyaChobiHome() {
       <footer className="border-t border-stone-200 bg-white px-5 py-8 text-center text-sm text-stone-500 xl:pr-72">
         <div className="font-semibold tracking-[0.16em] text-stone-900">RAMYACHOBI</div>
         <div className="mt-2">Photography · Cinematography · Private Client Experience</div>
+        <div className="mt-3 flex justify-center gap-5"><a href="/privacy.html" className="underline">Privacy Policy</a><a href="/data-deletion.html" className="underline">Data Deletion</a></div>
         <div className="mt-2">© 2026 RamyaChobi. All Rights Reserved.</div>
       </footer>
     </div>
