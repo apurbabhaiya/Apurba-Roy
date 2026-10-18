@@ -10,7 +10,7 @@ import RamyaChobiAbout from "./home/RamyaChobiAbout";
 import ClientAccessPage from "./home/ClientAccessPage";
 import PortfolioPage from "./home/PortfolioPage";
 import AlbumGalleryPage from "./home/AlbumGalleryPage";
-import GalleryFollowGatePage from "./home/GalleryFollowGatePage";
+import FacebookAccessGate from "./home/FacebookAccessGate";
 
 export default function RouterApp() {
   const path = window.location.pathname;
@@ -51,16 +51,18 @@ export default function RouterApp() {
                     : "RamyaChobi";
   }, [path]);
 
+  if (path === "/facebook-login") return <FacebookAccessGate callback />;
+
   if (path === "/") return <RamyaChobiHome />;
   if (path === "/about") return <RamyaChobiAbout />;
   if (path === "/packages") return <RamyaChobiPackages />;
   if (path === "/portfolio") return <PortfolioPage />;
   if (path === "/stories" || path === "/blog") return <PortfolioPage featuredOnly={false} />;
-  if (path === "/face-search" || path === "/client-gallery") return <AlbumGalleryPage />;
-  if (path === "/albums") return <AlbumGalleryPage />;
-  if (path.startsWith("/albums/")) return <GalleryFollowGatePage token={decodeURIComponent(path.split("/")[2] || "")} />;
-  if (path.startsWith("/client-gallery/")) return <AlbumGalleryPage token={decodeURIComponent(path.split("/")[2] || "")} />;
-  if (path.startsWith("/album/")) return <AlbumGalleryPage token={decodeURIComponent(path.replace(/^\/album\//, "").split("/")[0] || "")} />;
+  if (path === "/face-search" || path === "/client-gallery") return <FacebookAccessGate><AlbumGalleryPage /></FacebookAccessGate>;
+  if (path === "/albums") return <FacebookAccessGate><AlbumGalleryPage /></FacebookAccessGate>;
+  if (path.startsWith("/albums/")) return <FacebookAccessGate><AlbumGalleryPage token={decodeURIComponent(path.split("/")[2] || "")} /></FacebookAccessGate>;
+  if (path.startsWith("/client-gallery/")) return <FacebookAccessGate><AlbumGalleryPage token={decodeURIComponent(path.split("/")[2] || "")} /></FacebookAccessGate>;
+  if (path.startsWith("/album/")) return <FacebookAccessGate><AlbumGalleryPage token={decodeURIComponent(path.replace(/^\/album\//, "").split("/")[0] || "")} /></FacebookAccessGate>;
 
   if (path.startsWith("/booking")) return <BookingPortal />;
 
