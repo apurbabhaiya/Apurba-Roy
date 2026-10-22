@@ -207,7 +207,7 @@ export const FaceSearchComponent: React.FC<FaceSearchComponentProps> = ({
     } catch (err: any) {
       console.error('Face search error:', err);
       setErrorMessage(
-        'ফেস সার্চ সম্পন্ন করতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।'
+        err?.message || 'ফেস সার্চ সম্পন্ন করতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।'
       );
     } finally {
       setIsScanning(false);

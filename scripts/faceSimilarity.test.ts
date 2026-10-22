@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import { cosineSimilarity } from '../src/services/faceSimilarity';
+const a = Array(512).fill(0); a[0] = 1;
+const b = Array(512).fill(0); b[1] = 1;
+assert.equal(cosineSimilarity(a, a), 1);
+assert.equal(cosineSimilarity(a, b), 0);
+assert.equal(cosineSimilarity(a, a.map(x => -x)), -1);
+assert.equal(cosineSimilarity(a, a.map(x => x * 3)), 1);
+assert.throws(() => cosineSimilarity([], a));
+assert.throws(() => cosineSimilarity(a, Array(512).fill(0)));
+assert.throws(() => cosineSimilarity(a, Array(512).fill(NaN)));
+console.log('Face similarity checks passed');
