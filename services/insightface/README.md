@@ -36,6 +36,8 @@ Use one application worker and one service instance initially. Inference uses CP
 
 ## Configure Vercel
 
+The public `/api/face-encode` URL rewrites to a private branch of the existing `drive-preview` function. Its handler lives in `api/_lib/faceEncode.ts`, so the integration stays within the existing 12-function Hobby limit. Regular Drive preview requests keep their existing handler.
+
 Set server-only `FACE_SERVICE_URL` to the service HTTPS origin and `FACE_SERVICE_KEY` to the same key. The browser must never receive either secret. Configure `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` (or the existing `VITE_` publishable equivalents) to match the website authentication project. Redeploy the website branch.
 
 `VITE_FACE_COSINE_THRESHOLD=0.5` is a public build-time setting. The old `VITE_FACE_MATCH_THRESHOLD=84` setting is no longer used.

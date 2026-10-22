@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import handler from '../api/face-encode';
+import handler from '../api/_lib/faceEncode';
 
 process.env.FACE_SERVICE_URL = 'https://encoder.example';
 process.env.FACE_SERVICE_KEY = 's'.repeat(32);
