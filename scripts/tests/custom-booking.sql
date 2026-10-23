@@ -27,5 +27,21 @@ begin
  failed:=false;begin perform public.booking_admin_review_payment(token,request,true);exception when others then failed:=true;end;assert failed,'Cannot approve twice';
  failed:=false;begin perform public.submit_package_booking(jsonb_build_object('events',events),opts,1,(cfg->>'revision')::integer);exception when others then failed:=true;end;assert failed,'Tampered price rejected';
  failed:=false;begin perform public.submit_package_booking(jsonb_build_object('events',events),opts||'{"terms_half":false}',15000,(cfg->>'revision')::integer);exception when others then failed:=true;end;assert failed,'Payment terms required';
+
+ opts:=opts||'{"payment_method":"CASH","payment_proof":null}';
+ r:=public.submit_package_booking(jsonb_build_object('client_name','TEST CASH PLAN','phone','00000000000','events',events,'signature_data',repeat('x',50),'signature_name','TEST','consent',true),opts,15000,(cfg->>'revision')::integer);
+ b:=(r->>'id')::uuid;
+ assert (select count(*)=0 from public.booking_payment_requests where booking_id=b),'Cash intent is not a payment';
+ assert (select advance_paid=0 from public.booking_clients where id=b),'Cash intent is not paid';
+ opts:=opts||'{"payment_proof":{"method":"CASH","amount":2000}}';
+ r:=public.submit_package_booking(jsonb_build_object('client_name','TEST CASH RECEIPT','phone','00000000000','events',events,'signature_data',repeat('x',50),'signature_name','TEST','consent',true),opts,15000,(cfg->>'revision')::integer);
+ b:=(r->>'id')::uuid;
+ select id into request from public.booking_payment_requests where booking_id=b and method='CASH';
+ assert request is not null,'Cash accepts no client transaction ID';
+ assert (select count(*)=0 from public.booking_payments where booking_id=b),'Cash claim awaits verification';
+ perform public.booking_admin_review_payment(token,request,true);
+ assert (select sum(amount)=2000 from public.booking_payments where booking_id=b and method='CASH'),'Verified cash records one deposit';
+ cfg:=public.booking_custom_save_config(token,cfg||'{"cash_enabled":false}',(cfg->>'revision')::integer);
+ failed:=false;begin perform public.submit_package_booking(jsonb_build_object('events',events),opts,15000,(cfg->>'revision')::integer);exception when others then failed:=true;end;assert failed,'Admin can disable cash';
 end $$;
 rollback;
