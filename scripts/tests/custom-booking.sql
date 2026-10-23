@@ -1,10 +1,11 @@
 -- Run against the configured project. All test records and setting changes roll back.
 begin;
 do $$
-declare events jsonb;opts jsonb;q jsonb;r jsonb;b uuid;request uuid;token text:=gen_random_uuid()::text;cfg jsonb;failed boolean;
+declare form jsonb;events jsonb;opts jsonb;q jsonb;r jsonb;b uuid;request uuid;token text:=gen_random_uuid()::text;cfg jsonb;failed boolean;
 begin
  assert jsonb_array_length(public.booking_package_catalog_list())=18,'Catalog must contain all published packages';
  events:='[{"event_name":"হলুদ","event_date":"2099-11-01","start_time":"16:00","end_time":"20:00","photographers":1,"cinematographers":0,"drone":false,"special_photos":50}]';
+ form:=jsonb_build_object('client_name','TEST VALID FORM','phone','00000000000','events',events,'signature_data',repeat('x',50),'signature_name','TEST','consent',true);
  opts:='{"city":"ময়মনসিংহ","travel":{}}';
  q:=public.booking_custom_quote(events,opts);assert (q->>'total')::numeric=5200,'Coverage + editing + travel';
  q:=public.booking_custom_quote(events||events,opts);assert (q->>'travel')::numeric=200,'Same day travel must not duplicate';
@@ -25,23 +26,32 @@ begin
  perform public.booking_admin_review_payment(token,request,true);
  assert (select sum(amount)=2000 from public.booking_payments where booking_id=b),'Approval records exactly one deposit';
  failed:=false;begin perform public.booking_admin_review_payment(token,request,true);exception when others then failed:=true;end;assert failed,'Cannot approve twice';
- failed:=false;begin perform public.submit_package_booking(jsonb_build_object('events',events),opts,1,(cfg->>'revision')::integer);exception when others then failed:=true;end;assert failed,'Tampered price rejected';
- failed:=false;begin perform public.submit_package_booking(jsonb_build_object('events',events),opts||'{"terms_half":false}',15000,(cfg->>'revision')::integer);exception when others then failed:=true;end;assert failed,'Payment terms required';
+ failed:=false;begin perform public.submit_package_booking(form,opts,1,(cfg->>'revision')::integer);exception when others then failed:=true;end;assert failed,'Tampered price rejected';
+ failed:=false;begin perform public.submit_package_booking(form,opts||'{"terms_half":false}',15000,(cfg->>'revision')::integer);exception when others then failed:=true;end;assert failed,'Payment terms required';
 
  opts:=opts||'{"payment_method":"CASH","payment_proof":null}';
- r:=public.submit_package_booking(jsonb_build_object('client_name','TEST CASH PLAN','phone','00000000000','events',events,'signature_data',repeat('x',50),'signature_name','TEST','consent',true),opts,15000,(cfg->>'revision')::integer);
- b:=(r->>'id')::uuid;
- assert (select count(*)=0 from public.booking_payment_requests where booking_id=b),'Cash intent is not a payment';
- assert (select advance_paid=0 from public.booking_clients where id=b),'Cash intent is not paid';
- opts:=opts||'{"payment_proof":{"method":"CASH","amount":2000}}';
+ failed:=false;begin perform public.submit_package_booking(jsonb_build_object('client_name','TEST MISSING ADVANCE','phone','00000000000','events',events,'signature_data',repeat('x',50),'signature_name','TEST','consent',true),opts,15000,(cfg->>'revision')::integer);exception when others then failed:=true;end;assert failed,'Confirmed-booking requests require a payment';
+ opts:=opts||'{"payment_proof":{"method":"CASH","amount":2000,"transaction_id":"OFFICE-TEST-RECEIPT"}}';
+ failed:=false;begin perform public.submit_package_booking(form,opts||'{"payment_proof":{"method":"CASH","amount":2000}}',15000,(cfg->>'revision')::integer);exception when others then failed:=true;end;assert failed,'A cash office receipt is required';
+ failed:=false;begin perform public.submit_package_booking(form,opts||'{"payment_proof":{"method":"CASH","amount":1999,"transaction_id":"TOO-SMALL"}}',15000,(cfg->>'revision')::integer);exception when others then failed:=true;end;assert failed,'Deposit below 2000 is rejected';
  r:=public.submit_package_booking(jsonb_build_object('client_name','TEST CASH RECEIPT','phone','00000000000','events',events,'signature_data',repeat('x',50),'signature_name','TEST','consent',true),opts,15000,(cfg->>'revision')::integer);
  b:=(r->>'id')::uuid;
  select id into request from public.booking_payment_requests where booking_id=b and method='CASH';
- assert request is not null,'Cash accepts no client transaction ID';
+ assert request is not null,'Cash accepts an office receipt reference';
  assert (select count(*)=0 from public.booking_payments where booking_id=b),'Cash claim awaits verification';
+ failed:=false;begin perform public.booking_admin_update_booking(token,b,'confirmed',null);exception when others then failed:=true;end;assert failed,'Cannot confirm before receipt verification';
  perform public.booking_admin_review_payment(token,request,true);
+ assert public.booking_admin_update_booking(token,b,'confirmed',null),'Verified long-term deposit allows admin confirmation';
  assert (select sum(amount)=2000 from public.booking_payments where booking_id=b and method='CASH'),'Verified cash records one deposit';
  cfg:=public.booking_custom_save_config(token,cfg||'{"cash_enabled":false}',(cfg->>'revision')::integer);
- failed:=false;begin perform public.submit_package_booking(jsonb_build_object('events',events),opts,15000,(cfg->>'revision')::integer);exception when others then failed:=true;end;assert failed,'Admin can disable cash';
+ failed:=false;begin perform public.submit_package_booking(form,opts,15000,(cfg->>'revision')::integer);exception when others then failed:=true;end;assert failed,'Admin can disable cash';
+
+ r:=public.submit_booking_discussion('{"client_name":"TEST DISCUSSION","phone":"00000000000","notes":"Ask about package","consent":true}');
+ b:=(r->>'id')::uuid;
+ assert (select count(*)=1 from public.booking_discussions where id=b),'Discussion needs no package, date, signature or payment';
+ assert not exists(select 1 from public.booking_clients where id=b),'Discussion is not a booking';
+ assert public.booking_admin_update_discussion(token,b,'contacted',true),'Discussion can go to recoverable trash';
+ assert public.booking_admin_update_discussion(token,b,null,false),'Discussion can be recovered';
+ assert (select deleted_at is null and status='contacted' from public.booking_discussions where id=b),'Recovery preserves status';
 end $$;
 rollback;

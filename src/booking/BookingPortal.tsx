@@ -14,7 +14,7 @@ import {
   Trash2,
   WalletCards,
 } from "lucide-react";
-import { BookingPaymentReview, CustomBuilder, CustomPackageAdmin, useCustomConfig, eventTypes, type CustomOptions, type CustomQuote } from './CustomPackages';
+import { BookingDiscussionAdmin, BookingPaymentReview, CustomBuilder, CustomPackageAdmin, useCustomConfig, eventTypes, type CustomOptions, type CustomQuote } from './CustomPackages';
 import TeamConfirmation from "./TeamConfirmation";
 import FinanceCalendar from "./FinanceCalendar";
 import { jsPDF } from "jspdf";
@@ -1158,6 +1158,7 @@ function bookingPhoneHref(phone: string) {
 
 function AdminPanel() {
   const [showCustomSettings,setShowCustomSettings] = useState(false);
+  const [showDiscussions,setShowDiscussions] = useState(false);
   const [showTrash, setShowTrash] = useState(false);
   const [pendingTrash, setPendingTrash] = useState<Booking | null>(null);
   const [trashBusy, setTrashBusy] = useState(false);
@@ -1440,7 +1441,8 @@ function AdminPanel() {
             <p className="mt-1 text-xs text-slate-500">ক্লায়েন্ট বাছুন → হিসাব দেখুন → জমা বা খরচ যোগ করুন</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <button type="button" onClick={()=>setShowCustomSettings(v=>!v)} className="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-bold text-white">{showCustomSettings?'ক্লায়েন্ট হিসাবে ফিরুন':'কাস্টম প্যাকেজ / বুকিং সেটিংস'}</button>
+            <button type="button" onClick={()=>{setShowCustomSettings(v=>!v);setShowDiscussions(false)}} className="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-bold text-white">{showCustomSettings?'ক্লায়েন্ট হিসাবে ফিরুন':'কাস্টম প্যাকেজ / বুকিং সেটিংস'}</button>
+            <button type="button" onClick={()=>{setShowDiscussions(v=>!v);setShowCustomSettings(false)}} className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-bold">{showDiscussions?'ক্লায়েন্ট হিসাবে ফিরুন':'আলোচনার অনুরোধ'}</button>
             <button
               onClick={exportCsv}
               className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-sm font-bold"
@@ -1471,7 +1473,8 @@ function AdminPanel() {
       </header>
 
       {showCustomSettings && <div className="px-4 py-5"><CustomPackageAdmin token={token}/></div>}
-      <div hidden={showCustomSettings}>
+      {showDiscussions && <div className="px-4 py-5"><BookingDiscussionAdmin token={token}/></div>}
+      <div hidden={showCustomSettings||showDiscussions}>
       <div className="mx-auto grid max-w-[1500px] gap-4 px-4 py-5 xl:grid-cols-[1.1fr_1fr]">
         <section className="min-w-0 rounded-3xl bg-white shadow-sm">
           <div className="border-b border-slate-200 p-4">
