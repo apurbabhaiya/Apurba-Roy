@@ -1,3 +1,4 @@
+import AdminPushNotifications from './AdminPushNotifications';
 import MiniBooking from './MiniBooking';
 import FriendlyBooking from './FriendlyBooking';
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -1473,6 +1474,7 @@ function AdminPanel() {
         </div>
       </header>
 
+      <AdminPushNotifications token={token}/>
       {showCustomSettings && <div className="px-4 py-5"><CustomPackageAdmin token={token}/></div>}
       {showDiscussions && <div className="px-4 py-5"><BookingDiscussionAdmin token={token}/></div>}
       <div hidden={showCustomSettings||showDiscussions}>
