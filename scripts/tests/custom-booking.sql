@@ -59,7 +59,11 @@ begin
  opts:='{"mode":"mini","city":"ময়মনসিংহ","travel":{},"allow_publish":false,"full_advance_terms":true,"payment_method":"CASH","payment_proof":{"method":"CASH","amount":1200,"transaction_id":"MINI-FULL-RECEIPT"}}';
  q:=public.booking_mini_quote(events->0,opts);assert (q->>'total')::numeric=1200,'One-hour 1000 plus daily travel 200';
  assert (q->>'needs_review')::boolean=false,'One-hour package does not use the four-hour minimum';
- failed:=false;begin perform public.booking_mini_quote((events->0)||'{"end_time":"18:00"}',opts);exception when others then failed:=true;end;assert failed,'One-hour package rejects longer coverage';
+ q:=public.booking_mini_quote((events->0)||'{"end_time":"18:00"}',opts);assert (q->>'total')::numeric=2200,'Two hours use hourly pricing';
+ q:=public.booking_mini_quote((events->0)||'{"end_time":"18:00","special_photos":20}',opts||'{"city":"ঢাকা"}');assert (q->>'total')::numeric=4900,'Dhaka two hours plus 20 edits plus travel';
+ failed:=false;begin perform public.booking_mini_quote(events->0,opts||'{"city":"ঢাকা","travel":{"2099-11-01":200}}');exception when others then failed:=true;end;assert failed,'Dhaka travel minimum is 500';
+ q:=public.booking_mini_quote((events->0)||'{"start_time":"23:00","end_date":"2099-11-02","end_time":"01:00"}',opts||'{"city":"ঢাকা"}');assert (q->>'total')::numeric=5000,'Overnight Dhaka uses two daily travel charges';
+ failed:=false;begin perform public.booking_mini_quote((events->0)||'{"end_time":"17:30"}',opts);exception when others then failed:=true;end;assert failed,'Whole hours required';
  failed:=false;begin perform public.booking_mini_quote(events->0,opts||'{"city":"not allowed"}');exception when others then failed:=true;end;assert failed,'City mini package is city-restricted';
  form:=form||jsonb_build_object('events',events);
  failed:=false;begin perform public.submit_package_booking(form,opts||'{"payment_proof":{"method":"CASH","amount":1000,"transaction_id":"MINI-PARTIAL"}}',1200,(cfg->>'revision')::integer);exception when others then failed:=true;end;assert failed,'Mini requires full travel-inclusive payment';
