@@ -1,4 +1,5 @@
 import React, { useEffect } from "react";
+import RamyaChatWidget from "./components/RamyaChatWidget";
 import LegacyApp from "./App";
 import BookingPortal from "./booking/BookingPortal";
 import PublicDeliveryAlbums from "./delivery/PublicDeliveryAlbums";
@@ -53,9 +54,9 @@ export default function RouterApp() {
 
   if (path === "/facebook-login") return <FacebookAccessGate callback />;
 
-  if (path === "/") return <RamyaChobiHome />;
+  if (path === "/") return <><RamyaChobiHome /><RamyaChatWidget /></>;
   if (path === "/about") return <RamyaChobiAbout />;
-  if (path === "/packages") return <RamyaChobiPackages />;
+  if (path === "/packages") return <><RamyaChobiPackages /><RamyaChatWidget /></>;
   if (path === "/portfolio") return <PortfolioPage />;
   if (path === "/stories" || path === "/blog") return <PortfolioPage featuredOnly={false} />;
   if (path === "/face-search" || path === "/client-gallery") return <FacebookAccessGate><AlbumGalleryPage /></FacebookAccessGate>;
@@ -64,7 +65,7 @@ export default function RouterApp() {
   if (path.startsWith("/client-gallery/")) return <FacebookAccessGate><AlbumGalleryPage token={decodeURIComponent(path.split("/")[2] || "")} /></FacebookAccessGate>;
   if (path.startsWith("/album/")) return <FacebookAccessGate><AlbumGalleryPage token={decodeURIComponent(path.replace(/^\/album\//, "").split("/")[0] || "")} /></FacebookAccessGate>;
 
-  if (path.startsWith("/booking")) return <BookingPortal />;
+  if (path.startsWith("/booking")) return <><BookingPortal /><RamyaChatWidget /></>;
 
   if (path === "/delivery-admin" || path.startsWith("/delivery-admin/")) {
     return <RamyaChobiDeliveryAdmin />;
