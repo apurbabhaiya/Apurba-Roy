@@ -1,3 +1,4 @@
+import {useCustomConfig} from '../booking/CustomPackages';
 import React, { useMemo, useState } from 'react';
 import { ArrowRight, Check, ChevronDown, Sparkles } from 'lucide-react';
 
@@ -31,7 +32,7 @@ function TopNav() {
   );
 }
 
-function PackageCard({ item }: { item: PackageItem }) {
+function PackageCard({ item, selected, onSelect }: { item: PackageItem; selected: boolean; onSelect:()=>void }) {
   const [open, setOpen] = useState<string | null>('deliverables');
 
   const rows = [
@@ -41,7 +42,8 @@ function PackageCard({ item }: { item: PackageItem }) {
   ] as const;
 
   return (
-    <article className="relative flex min-h-[560px] flex-col overflow-hidden rounded-[1.75rem] border border-[#dfd1c7] bg-white p-6 shadow-[0_18px_60px_rgba(56,36,31,0.08)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_24px_70px_rgba(56,36,31,0.13)]">
+    <article role="group" aria-label={item.name} tabIndex={0} onKeyDown={e=>{if(e.target===e.currentTarget&&(e.key==='Enter'||e.key===' ')){e.preventDefault();onSelect()}}} onClick={e=>{if(!(e.target as HTMLElement).closest('a,button,summary'))onSelect()}} className={"relative flex min-h-[560px] flex-col overflow-hidden rounded-[1.75rem] border border-[#dfd1c7] bg-white p-6 shadow-[0_18px_60px_rgba(56,36,31,0.08)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_24px_70px_rgba(56,36,31,0.13)]"+(selected?" ring-2 ring-emerald-600":"")}>
+      <label className="mb-4 flex cursor-pointer items-center gap-2 text-sm font-bold text-emerald-800"><input type="radio" name="website-package" checked={selected} onChange={onSelect}/>{selected?'✓ নির্বাচিত':'এই প্যাকেজ নির্বাচন করুন'}</label>
       {item.badge && (
         <div className="absolute right-4 top-4 rounded-full bg-[#7b3f4a] px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white">
           {item.badge}
@@ -86,13 +88,15 @@ function PackageCard({ item }: { item: PackageItem }) {
         href={'/booking?package='+encodeURIComponent(packageId(item.name))}
         className="mt-auto inline-flex items-center justify-center gap-2 rounded-xl bg-[#2b1f1d] px-4 py-3.5 text-xs font-bold uppercase tracking-[0.14em] text-white transition hover:bg-[#7b3f4a]"
       >
-        Book Your Date <ArrowRight className="h-4 w-4" />
+        এই প্যাকেজে বুকিং করুন <ArrowRight className="h-4 w-4" />
       </a>
     </article>
   );
 }
 
 export default function RamyaChobiPackages() {
+  const {config}=useCustomConfig();
+  const [selectedPackage,setSelectedPackage]=useState('');
   const [category, setCategory] = useState<Category>('regular');
   const [sonatonSide, setSonatonSide] = useState<SonatonSide>('both');
 
@@ -128,6 +132,8 @@ export default function RamyaChobiPackages() {
         </section>
 
         <section className="mx-auto max-w-6xl px-5 py-12 sm:px-8 lg:px-10">
+          {config?.mini_enabled && <a href="/booking/city" className="mb-8 block rounded-3xl border-2 border-emerald-600 bg-emerald-50 p-6 text-emerald-950"><span className="text-xs font-bold">ছোট শুটের সহজ বুকিং</span><h2 className="mt-2 text-2xl font-black">১ ঘণ্টার সিটি ফটোশুট · {formatPrice(config.mini_price)}</h2><p className="mt-2 text-sm">একক, কাপল বা পরিবার · ট্রাভেল প্রতিদিন ৳২০০ থেকে · পুরো টাকা অগ্রিম</p><span className="mt-3 inline-block font-bold">✓ এই ছোট প্যাকেজটি নিন →</span></a>}
+          <p className="mb-4 text-center text-sm font-semibold">প্যাকেজের গোল ঘরে টিক দিন। নির্বাচিত প্যাকেজে সবুজ বর্ডার ও ✓ চিহ্ন দেখাবে।</p>
           <div className="mx-auto grid max-w-2xl grid-cols-3 rounded-2xl border border-[#ddcfc5] bg-white p-1.5 shadow-sm">
             {([
               ['regular', 'Regular'],
@@ -137,7 +143,7 @@ export default function RamyaChobiPackages() {
               <button
                 key={id}
                 type="button"
-                onClick={() => setCategory(id)}
+                onClick={() => {setCategory(id);setSelectedPackage('')}}
                 className={`rounded-xl px-3 py-3 text-xs font-bold uppercase tracking-[0.14em] transition ${category === id ? 'bg-[#7b3f4a] text-white shadow-sm' : 'text-[#74635c] hover:bg-[#f7f0ea]'}`}
               >
                 {label}
@@ -167,7 +173,7 @@ export default function RamyaChobiPackages() {
                   <button
                     key={id}
                     type="button"
-                    onClick={() => setSonatonSide(id)}
+                    onClick={() => {setSonatonSide(id);setSelectedPackage('')}}
                     className={`rounded-full border px-4 py-2.5 text-xs font-bold transition ${sonatonSide === id ? 'border-[#2b1f1d] bg-[#2b1f1d] text-white' : 'border-[#d8c8bd] bg-white text-[#6d5a53] hover:border-[#7b3f4a]'}`}
                   >
                     {label}
@@ -179,9 +185,10 @@ export default function RamyaChobiPackages() {
           )}
 
           <div className="mt-9 grid gap-5 md:grid-cols-3">
-            {currentPackages.map((item) => <PackageCard key={item.name} item={item} />)}
+            {currentPackages.map((item) => <PackageCard key={item.name} item={item} selected={selectedPackage===packageId(item.name)} onSelect={()=>setSelectedPackage(packageId(item.name))} />)}
           </div>
 
+          {selectedPackage && <div className="sticky bottom-3 z-30 mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-300 bg-white p-4 shadow-xl"><p className="text-sm font-bold">✓ নির্বাচিত: {currentPackages.find(p=>packageId(p.name)===selectedPackage)?.name}</p><a href={'/booking?package='+encodeURIComponent(selectedPackage)} className="rounded-xl bg-emerald-800 px-5 py-3 font-bold text-white">এই প্যাকেজে বুকিং করুন →</a></div>}
           <section className="mx-auto mt-20 max-w-4xl">
             <div className="flex items-end justify-between border-b border-[#ddcfc5] pb-4">
               <div>

@@ -53,5 +53,25 @@ begin
  assert public.booking_admin_update_discussion(token,b,'contacted',true),'Discussion can go to recoverable trash';
  assert public.booking_admin_update_discussion(token,b,null,false),'Discussion can be recovered';
  assert (select deleted_at is null and status='contacted' from public.booking_discussions where id=b),'Recovery preserves status';
+
+ cfg:=public.booking_custom_save_config(token,cfg||'{"cash_enabled":true}',(cfg->>'revision')::integer);
+ events:='[{"event_name":"City family photoshoot","event_date":"2099-11-01","start_time":"16:00","end_time":"17:00","photographers":1,"cinematographers":0,"drone":false}]';
+ opts:='{"mode":"mini","city":"ময়মনসিংহ","travel":{},"allow_publish":false,"full_advance_terms":true,"payment_method":"CASH","payment_proof":{"method":"CASH","amount":1200,"transaction_id":"MINI-FULL-RECEIPT"}}';
+ q:=public.booking_mini_quote(events->0,opts);assert (q->>'total')::numeric=1200,'One-hour 1000 plus daily travel 200';
+ assert (q->>'needs_review')::boolean=false,'One-hour package does not use the four-hour minimum';
+ failed:=false;begin perform public.booking_mini_quote((events->0)||'{"end_time":"18:00"}',opts);exception when others then failed:=true;end;assert failed,'One-hour package rejects longer coverage';
+ failed:=false;begin perform public.booking_mini_quote(events->0,opts||'{"city":"not allowed"}');exception when others then failed:=true;end;assert failed,'City mini package is city-restricted';
+ form:=form||jsonb_build_object('events',events);
+ failed:=false;begin perform public.submit_package_booking(form,opts||'{"payment_proof":{"method":"CASH","amount":1000,"transaction_id":"MINI-PARTIAL"}}',1200,(cfg->>'revision')::integer);exception when others then failed:=true;end;assert failed,'Mini requires full travel-inclusive payment';
+ r:=public.submit_package_booking(form,opts,1200,(cfg->>'revision')::integer);b:=(r->>'id')::uuid;
+ assert (r->'payment_plan'->>'initial')::numeric=1200,'Mini does not require a separate 2000 deposit';
+ assert (r->'payment_plan'->>'full_advance')::boolean,'Mini full-advance schedule';
+ assert (select client_extra_charge=0 from public.booking_clients where id=b),'Mini does not add legacy publication fee';
+ select id into request from public.booking_payment_requests where booking_id=b;
+ failed:=false;begin perform public.booking_admin_update_booking(token,b,'confirmed',null);exception when others then failed:=true;end;assert failed,'Mini needs verified full payment';
+ perform public.booking_admin_review_payment(token,request,true);
+ assert public.booking_admin_update_booking(token,b,'confirmed',null),'Verified 1200 fully confirms mini booking';
+ cfg:=public.booking_custom_save_config(token,cfg||'{"mini_enabled":false}',(cfg->>'revision')::integer);
+ failed:=false;begin perform public.booking_mini_quote(events->0,opts);exception when others then failed:=true;end;assert failed,'Admin can disable city mini package';
 end $$;
 rollback;
