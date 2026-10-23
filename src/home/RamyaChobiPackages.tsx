@@ -1,204 +1,8 @@
+import {useCustomConfig} from '../booking/CustomPackages';
 import React, { useMemo, useState } from 'react';
 import { ArrowRight, Check, ChevronDown, Sparkles } from 'lucide-react';
 
-type Category = 'regular' | 'outdoor' | 'sonaton';
-type SonatonSide = 'both' | 'bride' | 'groom' | 'wedding';
-
-type PackageItem = {
-  tier: string;
-  name: string;
-  price: number;
-  badge?: string;
-  coverage: string;
-  crew: string[];
-  deliverables: string[];
-  physical: string[];
-};
-
-const regularPackages: PackageItem[] = [
-  {
-    tier: 'Essential',
-    name: 'Regular Basic',
-    price: 15000,
-    coverage: '4 hours coverage',
-    crew: ['1 Photographer', '1 Cinematographer', 'Drone operator not included'],
-    deliverables: ['All usable edited photos', '1 Reel', '1 Full Video', '1 Trailer'],
-    physical: ['Photobook not included', 'Pendrive not included'],
-  },
-  {
-    tier: 'Best Value',
-    name: 'Regular Standard',
-    price: 23000,
-    badge: 'Most Popular',
-    coverage: '6 hours coverage',
-    crew: ['2 Photographers', '1 Cinematographer', 'Drone operator not included'],
-    deliverables: ['All usable edited photos', '1 Reel', '1 Full Video', '1 Trailer'],
-    physical: ['Photobook not included', 'Pendrive not included'],
-  },
-  {
-    tier: 'Signature',
-    name: 'Regular Storytelling',
-    price: 55000,
-    coverage: '6 hours coverage',
-    crew: ['1 Candid Photographer', '1 Senior Photographer', '2 Cinematographers'],
-    deliverables: ['All usable edited photos', '1 Reel', '1 Full Video', '1 Trailer'],
-    physical: ['Premium album options available', 'Pendrive available'],
-  },
-];
-
-const outdoorPackages: PackageItem[] = [
-  {
-    tier: 'Budget / Essential',
-    name: 'Outdoor Essentials',
-    price: 13000,
-    coverage: '2–4 hours outdoor coverage',
-    crew: ['1 Photographer', '1 Senior Cinematographer', 'Drone operator not included'],
-    deliverables: ['Approx. 100 selected edited photos', '1 Trailer'],
-    physical: ['Photobook not included', 'Pendrive not included'],
-  },
-  {
-    tier: 'Best Value',
-    name: 'Outdoor Cinematic',
-    price: 23000,
-    badge: 'Most Popular',
-    coverage: '4–6 hours outdoor coverage',
-    crew: ['1 Senior Photographer', '1 Senior Cinematographer', '1 Drone Operator'],
-    deliverables: ['All usable edited photos', '1 Full Video', '1 Trailer'],
-    physical: ['Photobook not included', 'Pendrive not included'],
-  },
-  {
-    tier: 'Premium / Signature',
-    name: 'Outdoor Signature',
-    price: 47000,
-    coverage: '6–8 hours outdoor coverage',
-    crew: ['1 Candid Photographer', '1 Senior Photographer', '1 Senior Cinematographer', '1 Drone Operator'],
-    deliverables: ['All usable edited photos', '1 Reel', '1 Full Video', '1 Trailer'],
-    physical: ['Exclusive photobook available', 'Pendrive available'],
-  },
-];
-
-const sonatonPackages: Record<SonatonSide, PackageItem[]> = {
-  both: [
-    {
-      tier: 'Signature',
-      name: 'Sonaton Both Side Signature',
-      price: 124000,
-      coverage: 'Bride + groom side traditional wedding coverage',
-      crew: ['1 Photographer + 1 Cinematographer on each side'],
-      deliverables: ['Pre-Wedding', 'Holud for Bride', 'Holud for Groom', 'Bride & Groom side rituals', 'Reception'],
-      physical: ['Standard Photobook', 'Pendrive'],
-    },
-    {
-      tier: 'Prestige',
-      name: 'Sonaton Both Side Prestige',
-      price: 184000,
-      badge: 'Most Popular',
-      coverage: 'Extended both-side multi-event coverage',
-      crew: ['2 Photographers', '1 Cinematographer', '1 Drone Operator on each side where applicable'],
-      deliverables: ['Pre-Wedding', 'Holud for Bride', 'Holud for Groom', 'Bride & Groom side rituals', 'Reception'],
-      physical: ['Standard Photobook', 'Pendrive'],
-    },
-    {
-      tier: 'Storytelling',
-      name: 'Sonaton Both Side Storytelling',
-      price: 339000,
-      coverage: 'Complete both-side wedding storytelling',
-      crew: ['2 Photographers', '1–2 Cinematographers', '1 Drone Operator on each side where applicable'],
-      deliverables: ['Engagement', 'Pre-Wedding', 'Mehendi', 'Colour Fest', 'Holud for Bride', 'Holud for Groom', 'Bride & Groom side rituals', 'Reception', 'Post-Wedding'],
-      physical: ['Premium Photobook', 'Pendrive'],
-    },
-  ],
-  bride: [
-    {
-      tier: 'Signature',
-      name: 'Sonaton Bride Side Signature',
-      price: 44000,
-      coverage: 'Bride-side focused traditional wedding coverage',
-      crew: ['1 Photographer', '1 Cinematographer'],
-      deliverables: ['Holud for Bride', 'Bride-side rituals', 'Wedding Night / Bidaay'],
-      physical: ['Photobook not included', 'Pendrive not included'],
-    },
-    {
-      tier: 'Prestige',
-      name: 'Sonaton Bride Side Prestige',
-      price: 89000,
-      badge: 'Most Popular',
-      coverage: 'Extended bride-side multi-event coverage',
-      crew: ['2 Photographers', '1 Cinematographer', '1 Drone Operator'],
-      deliverables: ['Holud for Bride', 'Bride-side rituals', 'Wedding Night / Bidaay'],
-      physical: ['Standard Photobook', 'Pendrive'],
-    },
-    {
-      tier: 'Storytelling',
-      name: 'Sonaton Bride Side Storytelling',
-      price: 219000,
-      coverage: 'Complete bride-side storytelling coverage',
-      crew: ['2 Photographers', '1–2 Cinematographers', '1 Drone Operator'],
-      deliverables: ['Pre-Wedding', 'Mehendi', 'Colour Fest', 'Holud for Bride', 'Bride-side rituals', 'Wedding Night / Bidaay'],
-      physical: ['Exclusive Photobook', 'Pendrive'],
-    },
-  ],
-  groom: [
-    {
-      tier: 'Signature',
-      name: 'Sonaton Groom Side Signature',
-      price: 63000,
-      coverage: 'Groom-side focused traditional wedding coverage',
-      crew: ['1 Photographer', '1 Cinematographer'],
-      deliverables: ['Holud for Groom', 'Groom-side rituals', 'Reception / Vat Kapor'],
-      physical: ['Photobook not included', 'Pendrive not included'],
-    },
-    {
-      tier: 'Prestige',
-      name: 'Sonaton Groom Side Prestige',
-      price: 134000,
-      badge: 'Most Popular',
-      coverage: 'Extended groom-side multi-event coverage',
-      crew: ['2 Photographers', '1 Cinematographer', '1 Drone Operator'],
-      deliverables: ['Holud for Groom', 'Groom-side rituals', 'Reception / Vat Kapor'],
-      physical: ['Standard Photobook', 'Pendrive'],
-    },
-    {
-      tier: 'Storytelling',
-      name: 'Sonaton Groom Side Storytelling',
-      price: 209000,
-      coverage: 'Complete groom-side storytelling coverage',
-      crew: ['2 Photographers', '2 Cinematographers', '1 Drone Operator'],
-      deliverables: ['Pre-Wedding', 'Holud for Groom', 'Groom-side rituals', 'Reception / Vat Kapor'],
-      physical: ['Exclusive Photobook', 'Pendrive'],
-    },
-  ],
-  wedding: [
-    {
-      tier: 'Signature',
-      name: 'Sonaton Wedding Day Signature',
-      price: 34000,
-      coverage: 'Wedding-day focused ceremonial coverage',
-      crew: ['1 Photographer', '1 Cinematographer'],
-      deliverables: ['Odhivash Outdoor', 'Home Rituals', 'Wedding Night'],
-      physical: ['Photobook not included', 'Pendrive not included'],
-    },
-    {
-      tier: 'Prestige',
-      name: 'Sonaton Wedding Day Prestige',
-      price: 55000,
-      badge: 'Most Popular',
-      coverage: 'Extended wedding-day coverage',
-      crew: ['2 Photographers', '1 Cinematographer', '1 Drone Operator'],
-      deliverables: ['Odhivash Outdoor', 'Home Rituals', 'Wedding Night'],
-      physical: ['Standard Photobook', 'Pendrive'],
-    },
-    {
-      tier: 'Storytelling',
-      name: 'Sonaton Wedding Day Storytelling',
-      price: 109000,
-      coverage: 'Premium wedding-day storytelling coverage',
-      crew: ['2 Photographers', '2 Cinematographers', '1 Drone Operator'],
-      deliverables: ['Pre-Wedding', 'Odhivash Outdoor', 'Home Rituals', 'Wedding Night'],
-      physical: ['Exclusive Photobook', 'Pendrive'],
-    },
-  ],
-};
+import {regularPackages,outdoorPackages,sonatonPackages,packageId,type Category,type SonatonSide,type PackageItem} from '../booking/packageCatalog';
 
 const sonatonNotes: Record<SonatonSide, string> = {
   both: 'Complete storytelling for celebrations where both bride and groom sides are covered as one connected wedding story.',
@@ -228,7 +32,7 @@ function TopNav() {
   );
 }
 
-function PackageCard({ item }: { item: PackageItem }) {
+function PackageCard({ item, selected, onSelect }: { item: PackageItem; selected: boolean; onSelect:()=>void }) {
   const [open, setOpen] = useState<string | null>('deliverables');
 
   const rows = [
@@ -238,7 +42,8 @@ function PackageCard({ item }: { item: PackageItem }) {
   ] as const;
 
   return (
-    <article className="relative flex min-h-[560px] flex-col overflow-hidden rounded-[1.75rem] border border-[#dfd1c7] bg-white p-6 shadow-[0_18px_60px_rgba(56,36,31,0.08)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_24px_70px_rgba(56,36,31,0.13)]">
+    <article role="group" aria-label={item.name} tabIndex={0} onKeyDown={e=>{if(e.target===e.currentTarget&&(e.key==='Enter'||e.key===' ')){e.preventDefault();onSelect()}}} onClick={e=>{if(!(e.target as HTMLElement).closest('a,button,summary'))onSelect()}} className={"relative flex min-h-[560px] flex-col overflow-hidden rounded-[1.75rem] border border-[#dfd1c7] bg-white p-6 shadow-[0_18px_60px_rgba(56,36,31,0.08)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_24px_70px_rgba(56,36,31,0.13)]"+(selected?" ring-2 ring-emerald-600":"")}>
+      <label className="mb-4 flex cursor-pointer items-center gap-2 text-sm font-bold text-emerald-800"><input type="radio" name="website-package" checked={selected} onChange={onSelect}/>{selected?'✓ নির্বাচিত':'এই প্যাকেজ নির্বাচন করুন'}</label>
       {item.badge && (
         <div className="absolute right-4 top-4 rounded-full bg-[#7b3f4a] px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white">
           {item.badge}
@@ -280,16 +85,18 @@ function PackageCard({ item }: { item: PackageItem }) {
       </div>
 
       <a
-        href="/booking"
+        href={'/booking?package='+encodeURIComponent(packageId(item.name))}
         className="mt-auto inline-flex items-center justify-center gap-2 rounded-xl bg-[#2b1f1d] px-4 py-3.5 text-xs font-bold uppercase tracking-[0.14em] text-white transition hover:bg-[#7b3f4a]"
       >
-        Book Your Date <ArrowRight className="h-4 w-4" />
+        এই প্যাকেজে বুকিং করুন <ArrowRight className="h-4 w-4" />
       </a>
     </article>
   );
 }
 
 export default function RamyaChobiPackages() {
+  const {config}=useCustomConfig();
+  const [selectedPackage,setSelectedPackage]=useState('');
   const [category, setCategory] = useState<Category>('regular');
   const [sonatonSide, setSonatonSide] = useState<SonatonSide>('both');
 
@@ -325,6 +132,8 @@ export default function RamyaChobiPackages() {
         </section>
 
         <section className="mx-auto max-w-6xl px-5 py-12 sm:px-8 lg:px-10">
+          {config?.mini_enabled && <a href="/booking/city" className="mb-8 block rounded-3xl border-2 border-emerald-600 bg-emerald-50 p-6 text-emerald-950"><span className="text-xs font-bold">ছোট শুটের সহজ বুকিং</span><h2 className="mt-2 text-2xl font-black">সিটি ফটোশুট · ঘণ্টায় {formatPrice(config.mini_price)} থেকে</h2><p className="mt-2 text-sm">একক, কাপল বা পরিবার · ঢাকা ঘণ্টায় ৳{config.mini_city_rates?.['ঢাকা']?.hourly_rate??2000}, ট্রাভেল ৳{config.mini_city_rates?.['ঢাকা']?.travel??500} / দিন · অন্য শহরে ট্রাভেল ৳২০০ থেকে · ঢাকায় অগ্রিম ৳২,০০০, ময়মনসিংহে ৳১,০০০ · বাকি শুটের দিন</p><span className="mt-3 inline-block font-bold">✓ এই ছোট প্যাকেজটি নিন →</span></a>}
+          <p className="mb-4 text-center text-sm font-semibold">প্যাকেজের গোল ঘরে টিক দিন। নির্বাচিত প্যাকেজে সবুজ বর্ডার ও ✓ চিহ্ন দেখাবে।</p>
           <div className="mx-auto grid max-w-2xl grid-cols-3 rounded-2xl border border-[#ddcfc5] bg-white p-1.5 shadow-sm">
             {([
               ['regular', 'Regular'],
@@ -334,7 +143,7 @@ export default function RamyaChobiPackages() {
               <button
                 key={id}
                 type="button"
-                onClick={() => setCategory(id)}
+                onClick={() => {setCategory(id);setSelectedPackage('')}}
                 className={`rounded-xl px-3 py-3 text-xs font-bold uppercase tracking-[0.14em] transition ${category === id ? 'bg-[#7b3f4a] text-white shadow-sm' : 'text-[#74635c] hover:bg-[#f7f0ea]'}`}
               >
                 {label}
@@ -364,7 +173,7 @@ export default function RamyaChobiPackages() {
                   <button
                     key={id}
                     type="button"
-                    onClick={() => setSonatonSide(id)}
+                    onClick={() => {setSonatonSide(id);setSelectedPackage('')}}
                     className={`rounded-full border px-4 py-2.5 text-xs font-bold transition ${sonatonSide === id ? 'border-[#2b1f1d] bg-[#2b1f1d] text-white' : 'border-[#d8c8bd] bg-white text-[#6d5a53] hover:border-[#7b3f4a]'}`}
                   >
                     {label}
@@ -376,9 +185,10 @@ export default function RamyaChobiPackages() {
           )}
 
           <div className="mt-9 grid gap-5 md:grid-cols-3">
-            {currentPackages.map((item) => <PackageCard key={item.name} item={item} />)}
+            {currentPackages.map((item) => <PackageCard key={item.name} item={item} selected={selectedPackage===packageId(item.name)} onSelect={()=>setSelectedPackage(packageId(item.name))} />)}
           </div>
 
+          {selectedPackage && <div className="sticky bottom-3 z-30 mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-300 bg-white p-4 shadow-xl"><p className="text-sm font-bold">✓ নির্বাচিত: {currentPackages.find(p=>packageId(p.name)===selectedPackage)?.name}</p><a href={'/booking?package='+encodeURIComponent(selectedPackage)} className="rounded-xl bg-emerald-800 px-5 py-3 font-bold text-white">এই প্যাকেজে বুকিং করুন →</a></div>}
           <section className="mx-auto mt-20 max-w-4xl">
             <div className="flex items-end justify-between border-b border-[#ddcfc5] pb-4">
               <div>

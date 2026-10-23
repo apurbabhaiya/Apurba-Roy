@@ -1,3 +1,5 @@
+import MiniBooking from './MiniBooking';
+import FriendlyBooking from './FriendlyBooking';
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   CalendarDays,
@@ -13,6 +15,7 @@ import {
   Trash2,
   WalletCards,
 } from "lucide-react";
+import { BookingDiscussionAdmin, BookingPaymentReview, CustomBuilder, CustomPackageAdmin, useCustomConfig, eventTypes, type CustomOptions, type CustomQuote } from './CustomPackages';
 import TeamConfirmation from "./TeamConfirmation";
 import FinanceCalendar from "./FinanceCalendar";
 import { jsPDF } from "jspdf";
@@ -20,7 +23,10 @@ import { supabase } from "../services/supabase";
 
 const db = supabase as any;
 
-type EventInput = {
+export type EventInput = {
+  end_date?: string;
+  special_photos?: number;
+  video_edit?: boolean;
   event_name: string;
   event_date: string;
   start_time: string;
@@ -34,7 +40,7 @@ type EventInput = {
   sort_order: number;
 };
 
-type FormData = {
+export type FormData = {
   client_name: string;
   phone: string;
   alt_phone: string;
@@ -61,6 +67,7 @@ type FormData = {
 };
 
 type Booking = {
+  contract_snapshot?: {custom_quote?: CustomQuote; payment_plan?: {city_deposit?:boolean;full_advance?:boolean;initial:number;half_total:number;half_due_date:string;event_date:string;total:number};booking_options?: {payment_proof?:unknown;payment_method?:string}};
   deleted_at?: string | null;
   id: string;
   reference_no: string;
@@ -157,7 +164,7 @@ function Field(props: {
   );
 }
 
-function SignaturePad(props: { onChange: (value: string) => void }) {
+export function SignaturePad(props: { onChange: (value: string) => void }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const drawing = useRef(false);
 
@@ -375,6 +382,12 @@ async function submitBooking(form: FormData) {
 }
 
 function ClientForm() {
+  const {config: customConfig, error: configError} = useCustomConfig();
+  const [useCustom, setUseCustom] = useState(false);
+  const [customOptions, setCustomOptions] = useState<CustomOptions>({travel:{}});
+  const [customQuote, setCustomQuote] = useState<CustomQuote|null>(null);
+  const customActive = useCustom && !!customConfig?.enabled;
+
   const [form, setForm] = useState<FormData>({
     client_name: "",
     phone: "",
@@ -405,7 +418,11 @@ function ClientForm() {
   // Persist the policy using the existing booking fields for admin and PDF compatibility.
   const bookingPayload: FormData = {
     ...form,
-    client_extra_charge: form.client_extra_charge + noPublishFee,
+    package_name: customActive ? 'Custom package - office verification required' : form.package_name,
+    package_amount: customActive ? (customQuote?.total || 0) : form.package_amount,
+    discount: customActive ? 0 : form.discount,
+    advance_paid: customActive ? 0 : form.advance_paid,
+    client_extra_charge: (customActive ? 0 : form.client_extra_charge) + noPublishFee,
     client_notes: (allowPublish
       ? "Publication policy: Allow Publish (free). Selected photos may be published on Ramya Chobi portfolio/page."
       : "Publication policy: No-Publish. No publish fee: BDT 10,000 (included in extra charge). Photos must not be published online.") + (form.client_notes ? "\n" + form.client_notes : ""),
@@ -454,9 +471,9 @@ function ClientForm() {
 
   const total = Math.max(
     0,
-    form.package_amount + form.client_extra_charge + noPublishFee - form.discount
+    bookingPayload.package_amount + bookingPayload.client_extra_charge - bookingPayload.discount
   );
-  const due = Math.max(0, total - form.advance_paid);
+  const due = Math.max(0, total - bookingPayload.advance_paid);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -481,7 +498,13 @@ function ClientForm() {
 
     setSaving(true);
     try {
-      const saved = await submitBooking(bookingPayload);
+      if (customActive && !customQuote) throw new Error('কাস্টম প্যাকেজের সঠিক হিসাব আসা পর্যন্ত অপেক্ষা করুন।');
+      let saved: {id:string;reference_no:string;created_at:string};
+      if(customActive && customQuote) {
+        const response = await db.rpc('submit_custom_booking', {p_payload:bookingPayload,p_options:{...customOptions,allow_publish:allowPublish},p_expected_total:customQuote.total,p_revision:customQuote.revision});
+        if(response.error) throw response.error;
+        saved=response.data;
+      } else saved=await submitBooking(bookingPayload);
       setSavedRef(saved.reference_no);
       downloadPdf(bookingPayload, saved.reference_no, 0);
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -528,10 +551,10 @@ function ClientForm() {
             Ramya Chobi
           </div>
           <h1 className="mt-2 text-3xl font-black sm:text-4xl">
-            Wedding & Event Booking Form
+            রম্যছবি · সহজ বুকিং
           </h1>
           <p className="mt-3 max-w-3xl text-slate-300">
-            Client information, events, package, payment, delivery and signature in one form.
+            প্রথমে নাম ও ফোন দিন → অনুষ্ঠান ও সময় বাছুন → প্যাকেজ দেখে সম্মতি দিন।
           </p>
           <div className="mt-4 flex flex-wrap gap-4 text-sm">
             <a
@@ -563,9 +586,9 @@ function ClientForm() {
         ) : null}
 
         <section className="rounded-3xl bg-white p-5 shadow-sm sm:p-7">
-          <h2 className="text-xl font-black">1. Client information</h2>
+          <h2 className="text-xl font-black">১. আপনার যোগাযোগ</h2>
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
-            <Field label="Client name *">
+            <Field label="আপনার নাম *">
               <input
                 required
                 className={inputClass}
@@ -575,7 +598,7 @@ function ClientForm() {
                 }}
               />
             </Field>
-            <Field label="Primary phone *">
+            <Field label="মোবাইল নম্বর *">
               <input
                 required
                 className={inputClass}
@@ -585,7 +608,7 @@ function ClientForm() {
                 }}
               />
             </Field>
-            <Field label="Alternative phone">
+            <details className="sm:col-span-2"><summary className="cursor-pointer font-bold text-slate-600">আরও তথ্য দিন (ঐচ্ছিক)</summary><div className="mt-3 grid gap-4 sm:grid-cols-2">            <Field label="বিকল্প ফোন">
               <input
                 className={inputClass}
                 value={form.alt_phone}
@@ -604,7 +627,7 @@ function ClientForm() {
                 }}
               />
             </Field>
-            <Field label="Bride name">
+            <Field label="কনের নাম">
               <input
                 className={inputClass}
                 value={form.bride_name}
@@ -613,7 +636,7 @@ function ClientForm() {
                 }}
               />
             </Field>
-            <Field label="Groom name">
+            <Field label="বরের নাম">
               <input
                 className={inputClass}
                 value={form.groom_name}
@@ -622,7 +645,7 @@ function ClientForm() {
                 }}
               />
             </Field>
-            <Field label="Guardian / family contact">
+            <Field label="পরিবারের যোগাযোগ">
               <input
                 className={inputClass}
                 value={form.guardian_name}
@@ -631,7 +654,7 @@ function ClientForm() {
                 }}
               />
             </Field>
-            <Field label="Address" className="sm:col-span-2">
+            <Field label="ঠিকানা" className="sm:col-span-2">
               <textarea
                 className={inputClass}
                 rows={2}
@@ -641,13 +664,14 @@ function ClientForm() {
                 }}
               />
             </Field>
+</div></details>
           </div>
         </section>
 
         <section className="rounded-3xl bg-white p-5 shadow-sm sm:p-7">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-xl font-black">2. Events</h2>
+              <h2 className="text-xl font-black">২. অনুষ্ঠান ও সময়</h2>
               <p className="mt-1 text-sm text-slate-500">
                 {form.events.length} event(s)
               </p>
@@ -658,7 +682,7 @@ function ClientForm() {
               className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white"
             >
               <Plus className="h-4 w-4" />
-              Add event
+              আরেকটি অনুষ্ঠান যোগ করুন
             </button>
           </div>
 
@@ -680,23 +704,16 @@ function ClientForm() {
                         className="inline-flex items-center gap-1 text-sm font-bold text-red-600"
                       >
                         <Trash2 className="h-4 w-4" />
-                        Remove
+                        বাদ দিন
                       </button>
                     ) : null}
                   </div>
                   <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    <Field label="Event name *">
-                      <input
-                        required
-                        className={inputClass}
-                        value={ev.event_name}
-                        placeholder="Holud, Wedding, Reception..."
-                        onChange={function (e) {
-                          setEvent(index, { event_name: e.target.value });
-                        }}
-                      />
+                    <Field label="ইভেন্টের ধরন *">
+                      <select required className={inputClass} value={eventTypes.includes(ev.event_name)?ev.event_name:(ev.event_name?'অন্যান্য':'')} onChange={e=>setEvent(index,{event_name:e.target.value})}><option value="">ইভেন্টের ধরন বাছুন</option>{eventTypes.map(name=><option key={name}>{name}</option>)}</select>
+                      {ev.event_name && !eventTypes.slice(0,-1).includes(ev.event_name) && <input aria-label="অন্য অনুষ্ঠানের নাম" className={inputClass+' mt-2'} placeholder="অনুষ্ঠানের নাম লিখুন" value={ev.event_name==='অন্যান্য'?'':ev.event_name} onChange={e=>setEvent(index,{event_name:e.target.value||'অন্যান্য'})}/>}
                     </Field>
-                    <Field label="Event date *">
+                    <Field label="তারিখ *">
                       <input
                         required
                         type="date"
@@ -707,7 +724,7 @@ function ClientForm() {
                         }}
                       />
                     </Field>
-                    <Field label="Venue">
+                    <Field label="ভেন্যু">
                       <input
                         className={inputClass}
                         value={ev.venue}
@@ -716,7 +733,7 @@ function ClientForm() {
                         }}
                       />
                     </Field>
-                    <Field label="Start time">
+                    <Field label="শুরুর সময়">
                       <input
                         type="time"
                         className={inputClass}
@@ -726,7 +743,7 @@ function ClientForm() {
                         }}
                       />
                     </Field>
-                    <Field label="End time">
+                    <Field label="শেষের সময়">
                       <input
                         type="time"
                         className={inputClass}
@@ -736,7 +753,7 @@ function ClientForm() {
                         }}
                       />
                     </Field>
-                    <Field label="Location / address">
+                    <Field label="লোকেশন / address">
                       <input
                         className={inputClass}
                         value={ev.location}
@@ -745,7 +762,7 @@ function ClientForm() {
                         }}
                       />
                     </Field>
-                    <Field label="Photographers">
+                    <Field label="ফটোগ্রাফার সংখ্যা">
                       <input
                         type="number"
                         min={0}
@@ -758,7 +775,7 @@ function ClientForm() {
                         }}
                       />
                     </Field>
-                    <Field label="Cinematographers">
+                    <Field label="সিনেমাটোগ্রাফার সংখ্যা">
                       <input
                         type="number"
                         min={0}
@@ -779,10 +796,10 @@ function ClientForm() {
                           setEvent(index, { drone: e.target.checked });
                         }}
                       />
-                      Drone coverage
+                      ড্রোন লাগবে
                     </label>
                     <Field
-                      label="Event notes"
+                      label="অনুষ্ঠানের নোট (ঐচ্ছিক)"
                       className="sm:col-span-2 lg:col-span-3"
                     >
                       <textarea
@@ -802,57 +819,65 @@ function ClientForm() {
         </section>
 
         <section className="rounded-3xl bg-white p-5 shadow-sm sm:p-7">
-          <h2 className="text-xl font-black">3. Package & accounts</h2>
+          <h2 className="text-xl font-black">৩. প্যাকেজ ও খরচ</h2>
+          {customConfig?.enabled && <label className="mt-4 flex cursor-pointer items-center gap-3 rounded-xl border border-emerald-300 bg-emerald-50 p-4 font-bold"><input type="checkbox" checked={useCustom} onChange={e=>setUseCustom(e.target.checked)}/>নিজের প্যাকেজ তৈরি করুন <span className="text-xs font-normal">সময় ও সার্ভিস বেছে খরচ দেখুন</span></label>}
+          {configError && <p className="mt-2 text-sm text-amber-800">{configError}</p>}
+          {customActive && customConfig && <CustomBuilder events={form.events} options={customOptions} onOptions={setCustomOptions} onEvent={setEvent} onQuote={setCustomQuote} config={customConfig}/>}
           <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Field label="Package name" className="sm:col-span-2">
+            <Field label="প্যাকেজের নাম" className="sm:col-span-2">
               <input
                 className={inputClass}
-                value={form.package_name}
+                readOnly={customActive}
+                value={customActive ? bookingPayload.package_name : form.package_name}
                 placeholder="Premium Wedding Package"
                 onChange={function (e) {
                   setValue("package_name", e.target.value);
                 }}
               />
             </Field>
-            <Field label="Package amount">
+            <Field label="প্যাকেজের মূল্য">
               <input
                 type="number"
                 min={0}
                 className={inputClass}
-                value={form.package_amount}
+                readOnly={customActive}
+                value={customActive ? bookingPayload.package_amount : form.package_amount}
                 onChange={function (e) {
                   setValue("package_amount", Number(e.target.value));
                 }}
               />
             </Field>
-            <Field label="Advance paid">
+            <Field label="অগ্রিম জমা (অফিস যাচাই করবে)">
               <input
                 type="number"
                 min={0}
                 className={inputClass}
-                value={form.advance_paid}
+                readOnly={customActive}
+                value={customActive ? bookingPayload.advance_paid : form.advance_paid}
                 onChange={function (e) {
                   setValue("advance_paid", Number(e.target.value));
                 }}
               />
             </Field>
-            <Field label="Extra client charge">
+            <Field label="অতিরিক্ত চার্জ">
               <input
                 type="number"
                 min={0}
                 className={inputClass}
-                value={form.client_extra_charge}
+                readOnly={customActive}
+                value={customActive ? bookingPayload.client_extra_charge : form.client_extra_charge}
                 onChange={function (e) {
                   setValue("client_extra_charge", Number(e.target.value));
                 }}
               />
             </Field>
-            <Field label="Discount">
+            <Field label="ছাড়">
               <input
                 type="number"
                 min={0}
                 className={inputClass}
-                value={form.discount}
+                readOnly={customActive}
+                value={customActive ? bookingPayload.discount : form.discount}
                 onChange={function (e) {
                   setValue("discount", Number(e.target.value));
                 }}
@@ -880,7 +905,7 @@ function ClientForm() {
           <div className="mt-5 grid gap-3 rounded-2xl bg-slate-950 p-5 text-white sm:grid-cols-3">
             <div>
               <div className="text-xs uppercase tracking-wider text-slate-400">
-                Contract total
+                মোট খরচ
               </div>
               <div className="mt-1 text-2xl font-black">{money(total)}</div>
             </div>
@@ -889,7 +914,7 @@ function ClientForm() {
                 Paid
               </div>
               <div className="mt-1 text-2xl font-black">
-                {money(form.advance_paid)}
+                {money(bookingPayload.advance_paid)}
               </div>
             </div>
             <div>
@@ -904,9 +929,9 @@ function ClientForm() {
         </section>
 
         <section className="rounded-3xl bg-white p-5 shadow-sm sm:p-7">
-          <h2 className="text-xl font-black">4. Deliverables & delivery</h2>
+          <h2 className="text-xl font-black">৪. ছবি, ভিডিও ও ডেলিভারি</h2>
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
-            <Field label="Photography details">
+            <Field label="ছবির বিস্তারিত">
               <textarea
                 className={inputClass}
                 rows={3}
@@ -916,7 +941,7 @@ function ClientForm() {
                 }}
               />
             </Field>
-            <Field label="Cinematography details">
+            <Field label="ভিডিওর বিস্তারিত">
               <textarea
                 className={inputClass}
                 rows={3}
@@ -926,7 +951,7 @@ function ClientForm() {
                 }}
               />
             </Field>
-            <Field label="Album details">
+            <Field label="অ্যালবামের বিস্তারিত">
               <textarea
                 className={inputClass}
                 rows={3}
@@ -975,9 +1000,9 @@ function ClientForm() {
         </section>
 
         <section className="rounded-3xl bg-white p-5 shadow-sm sm:p-7">
-          <h2 className="text-xl font-black">5. Client signature</h2>
+          <h2 className="text-xl font-black">৫. সম্মতি ও স্বাক্ষর</h2>
           <p className="mt-2 text-sm text-slate-500">
-            Sign after reviewing the dates, package, payment and delivery information.
+            তারিখ, প্যাকেজ ও শর্ত দেখে নিচে স্বাক্ষর করুন।
           </p>
           <div className="mt-5">
             <SignaturePad
@@ -987,7 +1012,7 @@ function ClientForm() {
             />
           </div>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <Field label="Signed by *">
+            <Field label="স্বাক্ষরকারীর নাম *">
               <input
                 required
                 className={inputClass}
@@ -1007,7 +1032,7 @@ function ClientForm() {
                 setValue("consent", e.target.checked);
               }}
             />
-            I confirm that the event schedule, package, payment and delivery terms entered above are correct.
+            অনুষ্ঠানের সময়, প্যাকেজ, মূল্য ও ডেলিভারির শর্ত পড়েছি এবং সম্মতি দিচ্ছি।
           </label>
         </section>
 
@@ -1020,7 +1045,7 @@ function ClientForm() {
           ) : (
             <Save className="h-5 w-5" />
           )}
-          {saving ? "Submitting..." : "Submit, sign & download PDF"}
+          {saving ? "পাঠানো হচ্ছে…" : "বুকিং অনুরোধ পাঠান"}
         </button>
       </form>
     </main>
@@ -1133,6 +1158,8 @@ function bookingPhoneHref(phone: string) {
 }
 
 function AdminPanel() {
+  const [showCustomSettings,setShowCustomSettings] = useState(false);
+  const [showDiscussions,setShowDiscussions] = useState(false);
   const [showTrash, setShowTrash] = useState(false);
   const [pendingTrash, setPendingTrash] = useState<Booking | null>(null);
   const [trashBusy, setTrashBusy] = useState(false);
@@ -1415,6 +1442,8 @@ function AdminPanel() {
             <p className="mt-1 text-xs text-slate-500">ক্লায়েন্ট বাছুন → হিসাব দেখুন → জমা বা খরচ যোগ করুন</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={()=>{setShowCustomSettings(v=>!v);setShowDiscussions(false)}} className="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-bold text-white">{showCustomSettings?'ক্লায়েন্ট হিসাবে ফিরুন':'কাস্টম প্যাকেজ / বুকিং সেটিংস'}</button>
+            <button type="button" onClick={()=>{setShowDiscussions(v=>!v);setShowCustomSettings(false)}} className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-bold">{showDiscussions?'ক্লায়েন্ট হিসাবে ফিরুন':'আলোচনার অনুরোধ'}</button>
             <button
               onClick={exportCsv}
               className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-sm font-bold"
@@ -1444,6 +1473,9 @@ function AdminPanel() {
         </div>
       </header>
 
+      {showCustomSettings && <div className="px-4 py-5"><CustomPackageAdmin token={token}/></div>}
+      {showDiscussions && <div className="px-4 py-5"><BookingDiscussionAdmin token={token}/></div>}
+      <div hidden={showCustomSettings||showDiscussions}>
       <div className="mx-auto grid max-w-[1500px] gap-4 px-4 py-5 xl:grid-cols-[1.1fr_1fr]">
         <section className="min-w-0 rounded-3xl bg-white shadow-sm">
           <div className="border-b border-slate-200 p-4">
@@ -1550,6 +1582,7 @@ function AdminPanel() {
         </aside>
       </div>
       {pendingTrash && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"><section role="dialog" aria-modal="true" aria-labelledby="trash-title" className="w-full max-w-md rounded-2xl bg-white p-6"><h2 id="trash-title" className="text-xl font-bold">বুকিং ট্র্যাশে নিতে চান?</h2><p className="mt-3">{pendingTrash.reference_no} · {pendingTrash.client_name}</p><p className="mt-2 text-sm">জমা, খরচ ও অনুষ্ঠানের তথ্য সংরক্ষিত থাকবে। ট্র্যাশ থেকে বুকিং ফিরিয়ে আনতে পারবেন। ডেলিভারির প্রবেশাধিকার আগের মতো থাকবে।</p><div className="mt-5 flex gap-3"><button autoFocus disabled={trashBusy} onClick={() => setPendingTrash(null)} className="rounded-xl border px-4 py-2">Cancel</button><button disabled={trashBusy} onClick={() => void changeTrash(pendingTrash, true)} className="rounded-xl bg-red-700 px-4 py-2 text-white">{trashBusy ? 'সরানো হচ্ছে…' : 'ট্র্যাশে নিন'}</button></div></section></div>}
+      </div>
     </main>
   );
 }
@@ -1749,7 +1782,8 @@ function BookingDetail(props: {
         {['overview','payments','costs','events','team','documents'].map(section => <button key={section} type="button" aria-current={detailSection === section ? 'page' : undefined} onClick={() => setDetailSection(section)} className={`rounded-xl px-3 py-2 text-sm font-bold capitalize focus-visible:outline-2 focus-visible:outline-amber-600 ${detailSection === section ? 'bg-slate-950 text-white' : 'text-slate-600 hover:bg-slate-100'}`}>{({overview:"সারাংশ",payments:"টাকা জমা",costs:"খরচ",events:"অনুষ্ঠান",team:"টিম কনফার্মেশন",documents:"কাগজপত্র"} as Record<string,string>)[section]}</button>)}
       </nav>
       <section hidden={detailSection !== 'overview'} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h3 className="font-black">হিসাবের বিস্তারিত</h3>
+        <h3 className="font-black">হিসাবের বিস্তারিত</h3>{booking.contract_snapshot?.payment_plan && <div className="mt-3 rounded-xl border p-3 text-sm"><b>সম্মত পেমেন্টের সময়সূচি</b><p>ক্লায়েন্টের নির্বাচিত মাধ্যম: {booking.contract_snapshot.booking_options?.payment_method||'দেওয়া হয়নি'}</p><p>প্রাথমিক অগ্রিম: {money(booking.contract_snapshot.payment_plan.initial)}</p><p>{booking.contract_snapshot.payment_plan.half_due_date}{booking.contract_snapshot.payment_plan.city_deposit?' শুটের দিন পর্যন্ত প্রি-বুকিং অগ্রিম: ':booking.contract_snapshot.payment_plan.full_advance?' সম্পূর্ণ অগ্রিম: ':'-এর মধ্যে মোট ৫০%: '}{money(booking.contract_snapshot.payment_plan.half_total)}</p><p>{booking.contract_snapshot.payment_plan.full_advance?'পুরো বিল অগ্রিম, শুটের দিন: ':'ইভেন্টের দিনে বাকি বিল: '}{booking.contract_snapshot.payment_plan.event_date}</p></div>}
+        {booking.contract_snapshot?.custom_quote && <div className="mt-3 rounded-xl bg-emerald-50 p-3 text-sm"><b>কাস্টম প্যাকেজ · রেট সংস্করণ {booking.contract_snapshot.custom_quote.revision}</b>{booking.contract_snapshot.custom_quote.lines.map((line,i)=><p key={i}>{line.event_name} · {line.minutes/60} ঘণ্টা: {money(line.amount)}</p>)}<p>ট্রাভেল: {money(booking.contract_snapshot.custom_quote.travel)}</p>{booking.contract_snapshot.custom_quote.needs_review&&<p className="font-bold text-amber-800">চার ঘণ্টার কম বুকিং: লোকেশন ও ব্যতিক্রমের অনুমোদন যাচাই করুন।</p>}</div>}
         <dl className="mt-4 space-y-3 text-sm">
           {[
             ['প্যাকেজের দাম',Number(booking.package_amount || 0)],
@@ -1952,7 +1986,7 @@ function BookingDetail(props: {
         >
           জমা সংরক্ষণ করুন
         </button>
-        <h3 className="mt-5 border-t border-slate-100 pt-4 text-sm font-bold">জমার ইতিহাস</h3>
+        <div className="mt-4"><BookingPaymentReview token={props.token} bookingId={booking.id} onChanged={props.onChanged}/></div><h3 className="mt-5 border-t border-slate-100 pt-4 text-sm font-bold">জমার ইতিহাস</h3>
         <div className="mt-2 flex justify-between rounded-xl bg-emerald-50 p-3 text-sm"><span>অগ্রিম জমা <small className="block text-slate-500">লেনদেনের তারিখ সংরক্ষিত নেই</small></span><strong>{money(Number(booking.advance_paid || 0))}</strong></div>
         {bookingPayments.length ? (
           <div className="mt-4 space-y-2 text-sm">
@@ -2092,5 +2126,5 @@ function BookingDetail(props: {
 
 export default function BookingPortal() {
   const isAdmin = window.location.pathname.startsWith("/booking/admin");
-  return isAdmin ? <AdminPanel /> : <ClientForm />;
+  return isAdmin ? <AdminPanel /> : window.location.pathname==='/booking/city' ? <MiniBooking /> : new URLSearchParams(window.location.search).has('legacy') ? <ClientForm /> : <FriendlyBooking />;
 }
