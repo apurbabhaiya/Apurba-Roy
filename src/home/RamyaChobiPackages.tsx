@@ -132,7 +132,7 @@ export default function RamyaChobiPackages() {
         </section>
 
         <section className="mx-auto max-w-6xl px-5 py-12 sm:px-8 lg:px-10">
-          {config?.mini_enabled && <a href="/booking/city" className="mb-8 block rounded-3xl border-2 border-emerald-600 bg-emerald-50 p-6 text-emerald-950"><span className="text-xs font-bold">ছোট শুটের সহজ বুকিং</span><h2 className="mt-2 text-2xl font-black">সিটি ফটোশুট · ঘণ্টায় {formatPrice(config.mini_price)} থেকে</h2><p className="mt-2 text-sm">একক, কাপল বা পরিবার · ঢাকা ঘণ্টায় ৳{config.mini_city_rates?.['ঢাকা']?.hourly_rate??2000}, ট্রাভেল ৳{config.mini_city_rates?.['ঢাকা']?.travel??500} / দিন · অন্য শহরে ট্রাভেল ৳২০০ থেকে · পুরো টাকা অগ্রিম</p><span className="mt-3 inline-block font-bold">✓ এই ছোট প্যাকেজটি নিন →</span></a>}
+          {config?.mini_enabled && <a href="/booking/city" className="mb-8 block rounded-3xl border-2 border-emerald-600 bg-emerald-50 p-6 text-emerald-950"><span className="text-xs font-bold">ছোট শুটের সহজ বুকিং</span><h2 className="mt-2 text-2xl font-black">সিটি ফটোশুট · ঘণ্টায় {formatPrice(config.mini_price)} থেকে</h2><p className="mt-2 text-sm">একক, কাপল বা পরিবার · ঢাকা ঘণ্টায় ৳{config.mini_city_rates?.['ঢাকা']?.hourly_rate??2000}, ট্রাভেল ৳{config.mini_city_rates?.['ঢাকা']?.travel??500} / দিন · অন্য শহরে ট্রাভেল ৳২০০ থেকে · ঢাকায় অগ্রিম ৳২,০০০, ময়মনসিংহে ৳১,০০০ · বাকি শুটের দিন</p><span className="mt-3 inline-block font-bold">✓ এই ছোট প্যাকেজটি নিন →</span></a>}
           <p className="mb-4 text-center text-sm font-semibold">প্যাকেজের গোল ঘরে টিক দিন। নির্বাচিত প্যাকেজে সবুজ বর্ডার ও ✓ চিহ্ন দেখাবে।</p>
           <div className="mx-auto grid max-w-2xl grid-cols-3 rounded-2xl border border-[#ddcfc5] bg-white p-1.5 shadow-sm">
             {([
