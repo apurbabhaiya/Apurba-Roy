@@ -10,6 +10,26 @@ export default function RamyaChatWidget() {
     { role: 'assistant', text: 'স্বাগতম! 📸 Ramya Chobi-এর প্যাকেজ, বুকিং ও ফটোগ্রাফি নিয়ে প্রশ্ন করুন।' },
   ]);
   const [busy, setBusy] = useState(false);
+  const [listening, setListening] = useState(false);
+  function startVoice() {
+    const browser = window as any;
+    const Recognition = browser.SpeechRecognition || browser.webkitSpeechRecognition;
+    if (!Recognition) {
+      setMessages(previous => [...previous, { role: 'assistant', text: 'এই ব্রাউজারে ভয়েস ইনপুট সমর্থিত নয়। লিখে প্রশ্ন করুন।' }]);
+      return;
+    }
+    const recognition = new Recognition();
+    recognition.lang = 'bn-BD';
+    recognition.interimResults = false;
+    recognition.onresult = (event: any) => {
+      setInput(String(event.results?.[0]?.[0]?.transcript || ''));
+      setListening(false);
+    };
+    recognition.onerror = () => setListening(false);
+    recognition.onend = () => setListening(false);
+    setListening(true);
+    recognition.start();
+  }
 
   async function send(value = input) {
     const question = value.trim();
@@ -42,8 +62,13 @@ export default function RamyaChatWidget() {
         {busy && <p>উত্তর তৈরি হচ্ছে...</p>}
       </div>
       <div style={{ padding: 8, display: 'flex', gap: 4, flexWrap: 'wrap' }}>{suggestions.map(s => <button key={s} onClick={() => void send(s)} disabled={busy} style={{ fontSize: 11, padding: 6, borderRadius: 20, border: '1px solid #ddd', background: '#fff' }}>{s}</button>)}</div>
+      <div style={{ padding: '4px 12px', display: 'flex', gap: 12, fontSize: 12 }}>
+        <a href="https://wa.me/8801776044951" target="_blank" rel="noopener noreferrer">WhatsApp Support</a>
+        <a href="tel:+8801776044951">📞 01776044951</a>
+      </div>
       <form onSubmit={event => { event.preventDefault(); void send(); }} style={{ padding: 10, display: 'flex', gap: 8 }}>
         <input aria-label="Your question" value={input} onChange={event => setInput(event.target.value)} placeholder="বাংলা বা English-এ লিখুন" style={{ flex: 1, minWidth: 0, padding: 9, border: '1px solid #ddd', borderRadius: 8 }} />
+        <button type="button" aria-label="Voice input" onClick={startVoice} disabled={busy || listening} title="বাংলায় কথা বলুন" style={{ border: '1px solid #ddd', borderRadius: 8, padding: '0 10px' }}>{listening ? 'শুনছি…' : '🎙️'}</button>
         <button type="submit" disabled={busy || !input.trim()} style={{ background: '#192b43', color: '#fff', border: 0, borderRadius: 8, padding: '0 14px' }}>পাঠান</button>
       </form>
     </section>}
