@@ -747,7 +747,10 @@ export default function RamyaChobiDeliveryAdmin() {
               {section}{section === 'payments' && counts.requests > 0 ? ` (${counts.requests})` : ''}
             </button>
           ))}
-          <a href="/booking/admin" className="rounded-xl bg-stone-100 px-4 py-2.5 text-sm font-semibold text-stone-700 hover:bg-amber-100">Booking</a>
+          <a href="/booking/admin" className="flex min-h-11 items-center rounded-xl bg-emerald-800 px-4 py-2.5 text-sm font-semibold text-white">ক্লায়েন্ট ও হিসাব</a>
+          <a href="/booking/admin?section=settings" className="flex min-h-11 items-center rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-900">বুকিং / ডিসকাউন্ট</a>
+          <a href="/booking/admin?section=chat" className="flex min-h-11 items-center rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-900">চ্যাটের উত্তর</a>
+          <a href="/booking/admin?section=discussions" className="flex min-h-11 items-center rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-900">আলোচনার অনুরোধ</a>
           <a href="/photo-selection" className="rounded-xl bg-stone-100 px-4 py-2.5 text-sm font-semibold text-stone-700 hover:bg-amber-100">Photo Selection</a>
         </div>
       </nav>

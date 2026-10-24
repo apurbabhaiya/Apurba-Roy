@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../services/supabase';
 
 type ChatFaq = {
@@ -20,18 +20,21 @@ export default function ChatbotAdmin({ token }: { token: string }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState('');
+  const [search,setSearch]=useState('');
+  const formRef=useRef<HTMLFormElement>(null);
+  const visibleFaqs=faqs.filter(faq=>`${faq.question} ${faq.keywords.join(' ')} ${faq.answer}`.normalize('NFC').toLocaleLowerCase().includes(search.normalize('NFC').toLocaleLowerCase()));
 
   const load = useCallback(async () => {
     setLoading(true);
-    setNotice('');
     try {
       const { data, error } = await supabase.rpc('booking_admin_chatbot_config', {
         p_token: token,
         p_action: 'get',
       });
       if (error) throw error;
-      setEnabled(data?.auto_reply_enabled !== false);
-      setFaqs(Array.isArray(data?.faqs) ? data.faqs : []);
+      const config=data as {auto_reply_enabled?:boolean;faqs?:ChatFaq[]}|null;
+      setEnabled(config?.auto_reply_enabled !== false);
+      setFaqs(Array.isArray(config?.faqs) ? config.faqs : []);
     } catch (error: any) {
       setNotice(error?.message || 'চ্যাটবোর্ডের সেটিংস লোড হয়নি।');
     } finally {
@@ -69,6 +72,8 @@ export default function ChatbotAdmin({ token }: { token: string }) {
       is_active: faq.is_active,
     });
     setNotice('');
+    formRef.current?.scrollIntoView({behavior:'smooth',block:'start'});
+    formRef.current?.querySelector('input')?.focus({preventScroll:true});
   }
 
   function resetForm() {
@@ -148,11 +153,11 @@ export default function ChatbotAdmin({ token }: { token: string }) {
   }
 
   return (
-    <section className="mx-auto max-w-5xl space-y-5">
+    <section className="mx-auto max-w-5xl space-y-4" style={{overflowWrap:'anywhere'}}>
       <header className="rounded-2xl bg-white p-5 shadow-sm">
-        <p className="text-xs font-bold uppercase tracking-widest text-emerald-800">Chatboard</p>
-        <h2 className="mt-1 text-2xl font-black">চ্যাটবোর্ড অটো-রিপ্লাই</h2>
-        <p className="mt-2 text-sm text-slate-600">প্রশ্নের keyword মিললে বট আপনার লেখা উত্তর দেবে। প্যাকেজের লাইভ দাম ও বুকিংয়ের হিসাব ক্যালকুলেটর থেকেই আসবে।</p>
+        <p className="text-xs font-bold uppercase tracking-widest text-emerald-800">CHAT CONTROL</p>
+        <h2 className="mt-1 text-2xl font-black">চ্যাটের উত্তর নিয়ন্ত্রণ</h2>
+        <p className="mt-2 text-sm text-slate-600">প্রশ্নের keyword মিললে বট আপনার লেখা উত্তর দেবে। প্যাকেজের লাইভ দাম ও বুকিংয়ের হিসাব ক্যালকুলেটর থেকেই আসবে। নিচে প্রশ্ন ও উত্তর লিখুন, তারপর সংরক্ষণ করুন।</p>
         <label className="mt-4 flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 p-3">
           <input type="checkbox" checked={enabled} disabled={saving} onChange={event => void updateAutoReply(event.target.checked)} className="h-5 w-5 accent-emerald-700" />
           <span><strong>আমার FAQ-গুলোর অটো-রিপ্লাই চালু</strong><small className="block text-slate-500">বন্ধ করলে এই প্যানেলে যোগ করা উত্তরগুলো ব্যবহার হবে না।</small></span>
@@ -161,16 +166,16 @@ export default function ChatbotAdmin({ token }: { token: string }) {
 
       {notice && <p role="status" className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-900">{notice}</p>}
 
-      <form onSubmit={saveFaq} className="space-y-4 rounded-2xl bg-white p-5 shadow-sm">
+      <form ref={formRef} onSubmit={saveFaq} className="scroll-mt-24 space-y-4 rounded-2xl border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
         <h3 className="text-lg font-black">{editingId ? 'প্রশ্ন ও উত্তর সম্পাদনা' : 'নতুন অটো-রিপ্লাই যোগ করুন'}</h3>
         <label className="block text-sm font-bold">গ্রাহক কী প্রশ্ন করতে পারে?
-          <input required minLength={3} maxLength={250} value={form.question} onChange={event => setForm(current => ({ ...current, question: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-300 p-3 font-normal" placeholder="যেমন: ছবির ডেলিভারি পেতে কত দিন লাগে?" />
+          <input required minLength={3} maxLength={250} value={form.question} onChange={event => setForm(current => ({ ...current, question: event.target.value }))} className="mt-1 min-h-12 w-full rounded-xl border border-slate-300 p-3 text-base font-normal focus-visible:outline-2 focus-visible:outline-emerald-700" placeholder="যেমন: ছবির ডেলিভারি পেতে কত দিন লাগে?" />
         </label>
-        <label className="block text-sm font-bold">মিল খোঁজার keyword, কমা দিয়ে আলাদা করুন
-          <input required maxLength={1000} value={form.keywords} onChange={event => setForm(current => ({ ...current, keywords: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-300 p-3 font-normal" placeholder="ডেলিভারি, ছবি কবে পাব, কত দিন" />
+        <label className="block text-sm font-bold">কোন শব্দে এই উত্তর দেখাবে? (কমা দিয়ে লিখুন)
+          <input required maxLength={1000} value={form.keywords} onChange={event => setForm(current => ({ ...current, keywords: event.target.value }))} className="mt-1 min-h-12 w-full rounded-xl border border-slate-300 p-3 text-base font-normal focus-visible:outline-2 focus-visible:outline-emerald-700" placeholder="ডেলিভারি, ছবি কবে পাব, কত দিন" />
         </label>
         <label className="block text-sm font-bold">বটের উত্তর
-          <textarea required minLength={1} maxLength={2000} rows={4} value={form.answer} onChange={event => setForm(current => ({ ...current, answer: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-300 p-3 font-normal" placeholder="গ্রাহককে যে উত্তরটি দেখাতে চান সেটি লিখুন" />
+          <textarea required minLength={1} maxLength={2000} rows={4} value={form.answer} onChange={event => setForm(current => ({ ...current, answer: event.target.value }))} className="mt-1 min-h-12 w-full rounded-xl border border-slate-300 p-3 text-base font-normal focus-visible:outline-2 focus-visible:outline-emerald-700" placeholder="গ্রাহককে যে উত্তরটি দেখাতে চান সেটি লিখুন" />
         </label>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.is_active} onChange={event => setForm(current => ({ ...current, is_active: event.target.checked }))} className="h-4 w-4 accent-emerald-700" /> এই উত্তরটি চালু থাকবে</label>
         <div className="flex flex-wrap gap-2">
@@ -180,8 +185,10 @@ export default function ChatbotAdmin({ token }: { token: string }) {
       </form>
 
       <section className="space-y-3">
-        <div className="flex items-center justify-between"><h3 className="text-lg font-black">সেট করা প্রশ্ন ও উত্তর</h3><button type="button" onClick={() => void load()} disabled={loading || saving} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold">Refresh</button></div>
-        {loading ? <p className="rounded-xl bg-white p-5 text-slate-600">লোড হচ্ছে…</p> : faqs.length === 0 ? <p className="rounded-xl bg-white p-5 text-slate-600">এখনো কোনো FAQ যোগ হয়নি। উপরের ফর্মে প্রশ্ন, keyword ও উত্তর লিখুন।</p> : faqs.map(faq => (
+        <div className="flex items-center justify-between"><h3 className="text-lg font-black">সেট করা প্রশ্ন ও উত্তর</h3><button type="button" onClick={() => void load()} disabled={loading || saving} className="min-h-11 rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold">রিফ্রেশ</button></div>
+        <div className="grid grid-cols-3 gap-2 text-center text-xs"><p className="rounded-xl bg-white p-3">মোট <b className="mt-1 block text-lg">{faqs.length}</b></p><p className="rounded-xl bg-emerald-50 p-3">চালু <b className="mt-1 block text-lg">{faqs.filter(f=>f.is_active).length}</b></p><p className="rounded-xl bg-stone-200 p-3">বন্ধ <b className="mt-1 block text-lg">{faqs.filter(f=>!f.is_active).length}</b></p></div>
+        <label className="block text-sm font-bold">আগের প্রশ্ন ও উত্তর খুঁজুন<input type="search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="প্রশ্ন বা শব্দ লিখুন" className="mt-1 min-h-12 w-full rounded-xl border border-stone-300 bg-white p-3 text-base font-normal"/></label>
+        {loading ? <p className="rounded-xl bg-white p-5 text-slate-600">লোড হচ্ছে…</p> : faqs.length === 0 ? <p className="rounded-xl bg-white p-5 text-slate-600">এখনো কোনো FAQ যোগ হয়নি। উপরের ফর্মে প্রশ্ন, keyword ও উত্তর লিখুন।</p> : visibleFaqs.length===0 ? <p role="status" className="rounded-xl bg-white p-4 text-sm">এই শব্দে কোনো উত্তর নেই। অন্য শব্দ দিয়ে খুঁজুন।</p> : visibleFaqs.map(faq => (
           <article key={faq.id} className="rounded-2xl bg-white p-4 shadow-sm">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
@@ -192,9 +199,9 @@ export default function ChatbotAdmin({ token }: { token: string }) {
               <span className={faq.is_active ? 'rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-900' : 'rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600'}>{faq.is_active ? 'চালু' : 'বন্ধ'}</span>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
-              <button type="button" disabled={saving} onClick={() => startEdit(faq)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold">সম্পাদনা</button>
-              <button type="button" disabled={saving} onClick={() => void toggleFaq(faq)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold">{faq.is_active ? 'বন্ধ করুন' : 'চালু করুন'}</button>
-              <button type="button" disabled={saving} onClick={() => void deleteFaq(faq)} className="rounded-lg border border-rose-200 px-3 py-2 text-sm font-bold text-rose-800">মুছুন</button>
+              <button type="button" disabled={saving} onClick={() => startEdit(faq)} className="min-h-11 rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold">সম্পাদনা</button>
+              <button type="button" disabled={saving} onClick={() => void toggleFaq(faq)} className="min-h-11 rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold">{faq.is_active ? 'বন্ধ করুন' : 'চালু করুন'}</button>
+              <button type="button" disabled={saving} onClick={() => void deleteFaq(faq)} className="min-h-11 rounded-lg border border-rose-200 px-3 py-2 text-sm font-bold text-rose-800">মুছুন</button>
             </div>
           </article>
         ))}
