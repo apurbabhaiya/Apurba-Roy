@@ -51,7 +51,7 @@ function limited(req: Request) {
   return false;
 }
 
-async function rpc(name: string) {
+async function rpc(name: string, args: Record<string, unknown> = {}) {
   const url = Deno.env.get("SUPABASE_URL");
   const key = Deno.env.get("SUPABASE_ANON_KEY");
   if (!url || !key) return null;
@@ -59,7 +59,7 @@ async function rpc(name: string) {
     const response = await fetch(url.replace(/\/$/, "") + "/rest/v1/rpc/" + name, {
       method: "POST",
       headers: { apikey: key, authorization: "Bearer " + key, "content-type": "application/json" },
-      body: "{}",
+      body: JSON.stringify(args),
       signal: AbortSignal.timeout(3500),
     });
     return response.ok ? await response.json() : null;
@@ -149,6 +149,21 @@ function packageList(catalog: PackageInfo[]) {
   return groups.map(([name, items]) => `${name}: ${items.map(p => `${p.name} ${taka(Number(p.price))}`).join(" · ")}`).join("\n");
 }
 
+function configuredFAQ(message: string, config: any) {
+  if (config?.auto_reply_enabled !== true || !Array.isArray(config?.faqs)) return null;
+  const text = normalize(message);
+  const matches = config.faqs
+    .filter((faq: any) => faq && faq.is_active !== false && typeof faq.answer === "string")
+    .map((faq: any) => ({
+      answer: faq.answer,
+      keywords: Array.isArray(faq.keywords) ? faq.keywords.map(normalize).filter((key: string) => key.length >= 2) : [],
+    }))
+    .map((faq: any) => ({ ...faq, score: faq.keywords.filter((key: string) => text.includes(key)).sort((a: string, b: string) => b.length - a.length)[0]?.length || 0 }))
+    .filter((faq: any) => faq.score > 0)
+    .sort((a: any, b: any) => b.score - a.score);
+  return matches[0]?.answer || null;
+}
+
 function answerFAQ(message: string, catalog: PackageInfo[]) {
   const text = normalize(message);
   if (/প্যাকেজ|package|দাম|দর|price|খরচ|কত টাকা/.test(text)) {
@@ -197,8 +212,8 @@ Deno.serve(async (req: Request) => {
   try { body = await req.json(); } catch { return json({ error: "Invalid JSON" }, 400, origin); }
   const message = typeof body?.message === "string" ? body.message.trim() : "";
   if (!message || message.length > 1200) return json({ error: "১–১২০০ অক্ষরের প্রশ্ন লিখুন।" }, 400, origin);
-  const [catalogRaw, config] = await Promise.all([rpc("booking_package_catalog_list"), rpc("booking_custom_config")]);
+  const [catalogRaw, config, chatConfig] = await Promise.all([rpc("booking_package_catalog_list"), rpc("booking_custom_config"), rpc("public_chatbot_config")]);
   const catalog = Array.isArray(catalogRaw) ? catalogRaw as PackageInfo[] : [];
   const exact = quoteReply(message, catalog, config);
-  return json({ reply: exact?.reply || answerFAQ(message, catalog) }, 200, origin);
+  return json({ reply: exact?.reply || configuredFAQ(message, chatConfig) || answerFAQ(message, catalog) }, 200, origin);
 });
