@@ -496,6 +496,23 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      booking_admin_chatbot_config: {
+        Args: {
+          p_token: string
+          p_action: string
+          p_id?: string | null
+          p_question?: string | null
+          p_keywords?: string[]
+          p_answer?: string | null
+          p_is_active?: boolean
+          p_auto_reply_enabled?: boolean | null
+        }
+        Returns: Json
+      }
+      public_chatbot_config: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       claim_gallery_access: { Args: { p_identifier: string }; Returns: string }
       client_request_zip: {
         Args: {
