@@ -8,9 +8,9 @@
   font-family: inherit;
 }
 
-/* Keep the chat clear of the mobile site's fixed bottom navigation. */
+/* Keep the chat just above the mobile bottom navigation in the marked area. */
 @media (max-width: 767px) {
   .ramya-chat-widget-dock {
-    bottom: calc(144px + env(safe-area-inset-bottom));
+    bottom: calc(28px + env(safe-area-inset-bottom));
   }
 }
