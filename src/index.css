@@ -2,15 +2,57 @@
 
 .ramya-chat-widget-dock {
   position: fixed;
-  left: max(16px, env(safe-area-inset-left));
+  right: max(16px, env(safe-area-inset-right));
   bottom: max(16px, env(safe-area-inset-bottom));
   z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  max-width: calc(100vw - 32px);
   font-family: inherit;
 }
-
-/* Keep the chat just above the mobile bottom navigation in the marked area. */
+.ramya-chat-widget-dock button:focus-visible,
+.ramya-chat-widget-dock a:focus-visible {
+  outline: 3px solid #b28748;
+  outline-offset: 3px;
+}
+.ramya-chat-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 260px;
+  max-width: calc(100vw - 32px);
+  margin-bottom: 10px;
+  padding: 10px 8px 10px 14px;
+  border: 1px solid #d8d9c9;
+  border-radius: 16px;
+  background: #fffdf2;
+  color: #193e32;
+  box-shadow: 0 4px 18px #0001;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.ramya-chat-hint p { margin: 0; flex: 1; }
+.ramya-chat-hint button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  margin-top: -6px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #193e32;
+  font-size: 22px;
+  cursor: pointer;
+}
+/* Reserve space for the public mobile bottom navigation and safe area. */
 @media (max-width: 767px) {
   .ramya-chat-widget-dock {
-    bottom: calc(28px + env(safe-area-inset-bottom));
+    bottom: calc(84px + env(safe-area-inset-bottom));
+  }
+  .ramya-chat-panel {
+    max-height: calc(100dvh - 164px - env(safe-area-inset-bottom));
   }
 }
