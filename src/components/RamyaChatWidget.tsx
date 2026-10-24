@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '../services/supabase';
 
 type Message = { role: 'assistant' | 'user'; text: string };
 const suggestions = ['প্যাকেজের দাম কত?', '২টি অতিরিক্ত অনুষ্ঠানের বিল', 'ডিসকাউন্ট কীভাবে পাব?'];
@@ -41,11 +42,7 @@ export default function RamyaChatWidget() {
     recognition.onerror = () => setListening(false);
     recognition.onend = () => setListening(false);
     setListening(true);
-    try {
-      recognition.start();
-    } catch {
-      setListening(false);
-    }
+    try { recognition.start(); } catch { setListening(false); }
   }
 
   function speak(text: string) {
@@ -70,9 +67,9 @@ export default function RamyaChatWidget() {
     setInput('');
     setBusy(true);
     try {
-      const response = await fetch('/api/chat', {
+      const response = await fetch(SUPABASE_URL + '/functions/v1/public-chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', apikey: SUPABASE_PUBLISHABLE_KEY },
         body: JSON.stringify({ message: question }),
       });
       const data = await response.json().catch(() => ({}));
