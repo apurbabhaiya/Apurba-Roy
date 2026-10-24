@@ -13,7 +13,7 @@ import PortfolioPage from "./home/PortfolioPage";
 import AlbumGalleryPage from "./home/AlbumGalleryPage";
 import FacebookAccessGate from "./home/FacebookAccessGate";
 
-const withChat = (page: React.ReactNode) => <>{page}<RamyaChatWidget /></>;
+const withChat = (page: React.ReactNode) => /^(\/booking\/admin|\/delivery-admin|\/studio)(\/|$)/.test(window.location.pathname) ? <>{page}</> : <>{page}<RamyaChatWidget /></>;
 
 export default function RouterApp() {
   const path = window.location.pathname;

@@ -546,7 +546,7 @@ function ClientForm() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-100 text-slate-900">
+    <main className="min-h-screen bg-[#f8f6ef] pb-8 text-slate-900">
       <header className="bg-slate-950 px-4 py-8 text-white">
         <div className="mx-auto max-w-5xl">
           <div className="text-sm font-semibold uppercase tracking-[0.24em] text-amber-300">
@@ -1160,9 +1160,9 @@ function bookingPhoneHref(phone: string) {
 }
 
 function AdminPanel() {
-  const [showCustomSettings,setShowCustomSettings] = useState(false);
-  const [showDiscussions,setShowDiscussions] = useState(false);
-  const [showChatbot,setShowChatbot] = useState(false);
+  const [showCustomSettings,setShowCustomSettings] = useState(new URLSearchParams(window.location.search).get('section')==='settings');
+  const [showDiscussions,setShowDiscussions] = useState(new URLSearchParams(window.location.search).get('section')==='discussions');
+  const [showChatbot,setShowChatbot] = useState(new URLSearchParams(window.location.search).get('section')==='chat');
   const [showTrash, setShowTrash] = useState(false);
   const [pendingTrash, setPendingTrash] = useState<Booking | null>(null);
   const [trashBusy, setTrashBusy] = useState(false);
@@ -1394,7 +1394,7 @@ function AdminPanel() {
             Ramya Chobi
           </div>
           <h1 className="mt-2 text-3xl font-black text-slate-900">
-            Admin Client Sheet
+            ক্লায়েন্ট ও হিসাবের অ্যাডমিন
           </h1>
           <p className="mt-3 text-slate-600">
             Enter the private admin access code. Google OAuth is not required.
@@ -1421,7 +1421,7 @@ function AdminPanel() {
             ) : (
               <LogIn className="h-4 w-4" />
             )}
-            Open admin panel
+            অ্যাডমিন প্যানেল খুলুন
           </button>
           {notice ? (
             <div className="mt-4 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700">
@@ -1434,50 +1434,25 @@ function AdminPanel() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-100 text-slate-900">
-      <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex max-w-[1500px] flex-wrap items-center justify-between gap-3 px-4 py-4">
-          <div>
-            <div className="text-xs font-bold uppercase tracking-[0.22em] text-slate-500">
-              Ramya Chobi
-            </div>
-            <h1 className="text-xl font-black">ক্লায়েন্ট ও হিসাব</h1>
-            <p className="mt-1 text-xs text-slate-500">ক্লায়েন্ট বাছুন → হিসাব দেখুন → জমা বা খরচ যোগ করুন</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button type="button" onClick={()=>{setShowCustomSettings(v=>!v);setShowDiscussions(false);setShowChatbot(false)}} className="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-bold text-white">{showCustomSettings?'ক্লায়েন্ট হিসাবে ফিরুন':'কাস্টম প্যাকেজ / বুকিং সেটিংস'}</button>
-            <button type="button" onClick={()=>{setShowDiscussions(v=>!v);setShowCustomSettings(false);setShowChatbot(false)}} className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-bold">{showDiscussions?'ক্লায়েন্ট হিসাবে ফিরুন':'আলোচনার অনুরোধ'}</button>
-            <button type="button" onClick={()=>{setShowChatbot(v=>!v);setShowCustomSettings(false);setShowDiscussions(false)}} className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-bold">{showChatbot?'ক্লায়েন্ট হিসাবে ফিরুন':'চ্যাটবোর্ড অটো-রিপ্লাই'}</button>
-            <button
-              onClick={exportCsv}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-sm font-bold"
-            >
-              <Download className="h-4 w-4" />
-              CSV
-            </button>
-            <button
-              onClick={function () {
-                void load();
-              }}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-sm font-bold"
-            >
-              <RefreshCw
-                className={"h-4 w-4 " + (loading ? "animate-spin" : "")}
-              />
-              Refresh
-            </button>
-            <button
-              onClick={signOut}
-              className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-3.5 py-2 text-sm font-bold text-white"
-            >
-              <LogOut className="h-4 w-4" />
-              Sign out
-            </button>
-          </div>
+    <main className="min-h-screen bg-[#f8f6ef] pb-8 text-slate-900">
+      <header className="sticky top-0 z-20 border-b border-emerald-900/10 bg-[#f8f6ef]/95 backdrop-blur">
+        <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-3 px-4 py-3">
+          <div><p className="text-[10px] font-bold tracking-widest text-emerald-800">RAMYACHOBI · ADMIN</p><h1 className="mt-1 text-xl font-black">অ্যাডমিন কন্ট্রোল</h1></div>
+          <a href="/delivery-admin" className="flex min-h-11 items-center rounded-xl border border-stone-300 bg-white px-3 text-sm font-bold">মূল প্যানেল ↗</a>
         </div>
       </header>
-
-      <AdminPushNotifications token={token}/>
+      <div className="mx-auto max-w-[1500px] px-4 pt-4">
+        <nav aria-label="অ্যাডমিন বিভাগ" className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {([
+            {id:'clients',title:'ক্লায়েন্ট ও হিসাব',hint:'বুকিং, জমা ও খরচ',active:!showCustomSettings&&!showDiscussions&&!showChatbot},
+            {id:'settings',title:'বুকিং ও ডিসকাউন্ট',hint:'রেট, ছাড় ও পেমেন্ট',active:showCustomSettings},
+            {id:'discussions',title:'আলোচনার অনুরোধ',hint:'গ্রাহকের সঙ্গে যোগাযোগ',active:showDiscussions},
+            {id:'chat',title:'চ্যাটের উত্তর',hint:'অটো-রিপ্লাই নিয়ন্ত্রণ',active:showChatbot},
+          ]).map(item=><button key={item.id} type="button" aria-pressed={item.active} onClick={()=>{setShowCustomSettings(item.id==='settings');setShowDiscussions(item.id==='discussions');setShowChatbot(item.id==='chat');const url=new URL(window.location.href);url.searchParams.set('section',item.id);window.history.replaceState(null,'',url);}} className={'min-h-20 rounded-2xl border p-3 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 '+(item.active?'border-emerald-800 bg-[#193e32] text-white':'border-stone-200 bg-white text-stone-900')}><strong className="block text-sm">{item.title}</strong><small className={'mt-1 block text-xs '+(item.active?'text-emerald-100':'text-stone-500')}>{item.hint}</small></button>)}
+        </nav>
+        <details className="mt-3 rounded-xl border border-stone-200 bg-white px-3"><summary className="min-h-11 cursor-pointer py-3 text-sm font-bold">আরও টুলস · CSV, রিফ্রেশ ও সাইন আউট</summary><div className="flex flex-wrap gap-2 pb-3"><button type="button" onClick={exportCsv} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-stone-300 px-3 text-sm font-bold"><Download className="h-4 w-4"/>CSV ডাউনলোড</button><button type="button" onClick={()=>void load()} disabled={loading} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-stone-300 px-3 text-sm font-bold disabled:opacity-50"><RefreshCw className={'h-4 w-4 '+(loading?'animate-spin':'')}/>রিফ্রেশ</button><button type="button" onClick={signOut} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-stone-900 px-3 text-sm font-bold text-white"><LogOut className="h-4 w-4"/>সাইন আউট</button></div></details>
+      </div>
+      <details className="mx-auto mt-3 max-w-[1500px] px-4"><summary className="min-h-11 cursor-pointer rounded-xl border border-stone-200 bg-white px-3 py-3 text-sm font-bold">এই ফোনের নোটিফিকেশন সেটিংস</summary><AdminPushNotifications token={token}/></details>
       {showCustomSettings && <div className="px-4 py-5"><CustomPackageAdmin token={token}/></div>}
       {showDiscussions && <div className="px-4 py-5"><BookingDiscussionAdmin token={token}/></div>}
       {showChatbot && <div className="px-4 py-5"><ChatbotAdmin token={token}/></div>}
