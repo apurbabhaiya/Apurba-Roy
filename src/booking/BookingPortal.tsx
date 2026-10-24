@@ -1,4 +1,5 @@
 import AdminPushNotifications from './AdminPushNotifications';
+import ChatbotAdmin from './ChatbotAdmin';
 import MiniBooking from './MiniBooking';
 import FriendlyBooking from './FriendlyBooking';
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -1161,6 +1162,7 @@ function bookingPhoneHref(phone: string) {
 function AdminPanel() {
   const [showCustomSettings,setShowCustomSettings] = useState(false);
   const [showDiscussions,setShowDiscussions] = useState(false);
+  const [showChatbot,setShowChatbot] = useState(false);
   const [showTrash, setShowTrash] = useState(false);
   const [pendingTrash, setPendingTrash] = useState<Booking | null>(null);
   const [trashBusy, setTrashBusy] = useState(false);
@@ -1443,8 +1445,9 @@ function AdminPanel() {
             <p className="mt-1 text-xs text-slate-500">ক্লায়েন্ট বাছুন → হিসাব দেখুন → জমা বা খরচ যোগ করুন</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <button type="button" onClick={()=>{setShowCustomSettings(v=>!v);setShowDiscussions(false)}} className="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-bold text-white">{showCustomSettings?'ক্লায়েন্ট হিসাবে ফিরুন':'কাস্টম প্যাকেজ / বুকিং সেটিংস'}</button>
-            <button type="button" onClick={()=>{setShowDiscussions(v=>!v);setShowCustomSettings(false)}} className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-bold">{showDiscussions?'ক্লায়েন্ট হিসাবে ফিরুন':'আলোচনার অনুরোধ'}</button>
+            <button type="button" onClick={()=>{setShowCustomSettings(v=>!v);setShowDiscussions(false);setShowChatbot(false)}} className="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-bold text-white">{showCustomSettings?'ক্লায়েন্ট হিসাবে ফিরুন':'কাস্টম প্যাকেজ / বুকিং সেটিংস'}</button>
+            <button type="button" onClick={()=>{setShowDiscussions(v=>!v);setShowCustomSettings(false);setShowChatbot(false)}} className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-bold">{showDiscussions?'ক্লায়েন্ট হিসাবে ফিরুন':'আলোচনার অনুরোধ'}</button>
+            <button type="button" onClick={()=>{setShowChatbot(v=>!v);setShowCustomSettings(false);setShowDiscussions(false)}} className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-bold">{showChatbot?'ক্লায়েন্ট হিসাবে ফিরুন':'চ্যাটবোর্ড অটো-রিপ্লাই'}</button>
             <button
               onClick={exportCsv}
               className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-sm font-bold"
@@ -1477,7 +1480,8 @@ function AdminPanel() {
       <AdminPushNotifications token={token}/>
       {showCustomSettings && <div className="px-4 py-5"><CustomPackageAdmin token={token}/></div>}
       {showDiscussions && <div className="px-4 py-5"><BookingDiscussionAdmin token={token}/></div>}
-      <div hidden={showCustomSettings||showDiscussions}>
+      {showChatbot && <div className="px-4 py-5"><ChatbotAdmin token={token}/></div>}
+      <div hidden={showCustomSettings||showDiscussions||showChatbot}>
       <div className="mx-auto grid max-w-[1500px] gap-4 px-4 py-5 xl:grid-cols-[1.1fr_1fr]">
         <section className="min-w-0 rounded-3xl bg-white shadow-sm">
           <div className="border-b border-slate-200 p-4">

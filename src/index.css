@@ -1,1 +1,16 @@
 @import "tailwindcss";
+
+.ramya-chat-widget-dock {
+  position: fixed;
+  left: max(16px, env(safe-area-inset-left));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 10000;
+  font-family: inherit;
+}
+
+/* Keep the chat just above the mobile bottom navigation in the marked area. */
+@media (max-width: 767px) {
+  .ramya-chat-widget-dock {
+    bottom: calc(28px + env(safe-area-inset-bottom));
+  }
+}

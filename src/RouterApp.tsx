@@ -1,4 +1,5 @@
 import React, { useEffect } from "react";
+import RamyaChatWidget from "./components/RamyaChatWidget";
 import LegacyApp from "./App";
 import BookingPortal from "./booking/BookingPortal";
 import PublicDeliveryAlbums from "./delivery/PublicDeliveryAlbums";
@@ -11,6 +12,8 @@ import ClientAccessPage from "./home/ClientAccessPage";
 import PortfolioPage from "./home/PortfolioPage";
 import AlbumGalleryPage from "./home/AlbumGalleryPage";
 import FacebookAccessGate from "./home/FacebookAccessGate";
+
+const withChat = (page: React.ReactNode) => <>{page}<RamyaChatWidget /></>;
 
 export default function RouterApp() {
   const path = window.location.pathname;
@@ -51,46 +54,31 @@ export default function RouterApp() {
                     : "RamyaChobi";
   }, [path]);
 
+  const page = (() => {
   if (path === "/facebook-login") return <FacebookAccessGate callback />;
 
-  if (path === "/") return <RamyaChobiHome />;
-  if (path === "/about") return <RamyaChobiAbout />;
-  if (path === "/packages") return <RamyaChobiPackages />;
-  if (path === "/portfolio") return <PortfolioPage />;
-  if (path === "/stories" || path === "/blog") return <PortfolioPage featuredOnly={false} />;
+  if (path === "/") return (<RamyaChobiHome />);
+  if (path === "/about") return (<RamyaChobiAbout />);
+  if (path === "/packages") return (<RamyaChobiPackages />);
+  if (path === "/portfolio") return (<PortfolioPage />);
+  if (path === "/stories" || path === "/blog") return (<PortfolioPage featuredOnly={false} />);
   if (path === "/face-search" || path === "/client-gallery") return <FacebookAccessGate><AlbumGalleryPage /></FacebookAccessGate>;
   if (path === "/albums") return <FacebookAccessGate><AlbumGalleryPage /></FacebookAccessGate>;
   if (path.startsWith("/albums/")) return <FacebookAccessGate><AlbumGalleryPage token={decodeURIComponent(path.split("/")[2] || "")} /></FacebookAccessGate>;
   if (path.startsWith("/client-gallery/")) return <FacebookAccessGate><AlbumGalleryPage token={decodeURIComponent(path.split("/")[2] || "")} /></FacebookAccessGate>;
   if (path.startsWith("/album/")) return <FacebookAccessGate><AlbumGalleryPage token={decodeURIComponent(path.replace(/^\/album\//, "").split("/")[0] || "")} /></FacebookAccessGate>;
 
-  if (path.startsWith("/booking")) return <BookingPortal />;
+  if (path.startsWith("/booking")) return (<BookingPortal />);
 
-  if (path === "/delivery-admin" || path.startsWith("/delivery-admin/")) {
-    return <RamyaChobiDeliveryAdmin />;
-  }
-
-  if (
-    path === "/photo-selection" ||
-    path.startsWith("/photo-selection/") ||
-    path.startsWith("/gallery/") ||
-    path.startsWith("/select/") ||
-    path === "/studio" ||
-    path.startsWith("/studio/")
-  ) {
-    return <LegacyApp />;
-  }
-
+  if (path.startsWith("/delivery-admin")) return <RamyaChobiDeliveryAdmin />;
+  if (path.startsWith("/photo-selection") || path.startsWith("/gallery/") || path.startsWith("/select/") || path === "/studio" || path.startsWith("/studio/")) return <LegacyApp />;
   if (path.startsWith("/delivery/album/")) return <PublicDeliveryAlbums albumId={path.split("/")[3] || ""} />;
-
   if (path.startsWith("/delivery/")) {
     const token = decodeURIComponent(path.replace(/^\/delivery\//, "").split("/")[0] || "");
     return <RamyaChobiDelivery token={token} />;
   }
-
-  if (path === "/delivery") {
-    return <PublicDeliveryAlbums />;
-  }
-
-  return <RamyaChobiHome />;
+  if (path === "/delivery") return (<PublicDeliveryAlbums />);
+  return (<RamyaChobiHome />);
+  })();
+  return withChat(page);
 }
