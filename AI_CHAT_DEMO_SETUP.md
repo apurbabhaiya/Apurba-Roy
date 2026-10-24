@@ -1,28 +1,24 @@
-# Ramya Chobi AI Chat — Demo Setup
+# Ramya Chobi AI Chat
 
-Branch: `feat/ai-live-chat-demo`. This branch is not production.
+Branch: `feat/ai-live-chat-demo`.
 
-## Implemented
-- `src/components/RamyaChatWidget.tsx`: floating text chat UI, not mounted in RouterApp yet.
-- `api/chat.ts`: server-side Gemini chat endpoint with conservative pricing policy. API is not verified deployed.
+## Included
+- Floating support chat on public home, about, packages, booking, portfolio and stories pages.
+- Gemini responses grounded in the site's fixed package catalog and approved public service information.
+- Deterministic fixed-package quotes using the current admin-controlled discount setting and the booking form's per-event rules.
+- Bengali browser speech input and optional spoken answers when the visitor's browser supports them.
+- WhatsApp and phone links for human support.
 
-## Required before testing
-1. Set `GEMINI_API_KEY` as a server-only environment variable in Vercel Preview; never use `VITE_` for the secret.
-2. Verify the project can compile the serverless handler. If TypeScript complains about `@vercel/node` types, install that package or replace the type imports with compatible local types.
-3. Mount `RamyaChatWidget` once in the public layout or RouterApp (avoid embedding it in private admin pages).
-4. Add request throttling and abuse controls before exposing the API publicly.
-5. Read package prices, approved discounts, extra-event counts and payment terms from the existing booking source of truth. Do not use AI-generated numeric values.
-6. Implement voice transcription with explicit mic permission, audio limits, and a privacy notice. Voice is not yet implemented.
-7. Implement an authenticated admin inbox, conversation persistence, RLS policies and a real human handoff flow. Not yet implemented.
-8. Test mobile UX, Bengali/Banglish, price arithmetic, unauthorized data access, error cases and accessibility.
-9. Publish only after preview QA and explicit approval.
+## Required to enable AI answers
+Set `GEMINI_API_KEY` as a server-only Vercel environment variable for the preview and production targets. Never prefix it with `VITE_` or include it in browser code. The current project has no Gemini key configured, so until an administrator adds one, the chat can still provide deterministic package quotes but general questions will show a fallback reply.
 
-## Pricing contract
-`gross = basePackagePrice * (1 + extraEventCount)`
-`discount = gross * approvedDiscountPercent / 100`
-`payable = gross - discount`
-`balance = payable - confirmedAdvance`
-Use the booking calculator's rounding and rules as the authoritative implementation, rather than duplicating formulas in AI.
+## Limits
+- Voice input uses the browser's Web Speech API. Availability depends on browser support and microphone permission. The recognized transcript is submitted only after the visitor taps Send.
+- Spoken answers use the browser's speech synthesis voices; Bengali voice availability depends on the device.
+- The widget does not store conversations and does not connect to a staffed inbox. Customers can contact the team through WhatsApp or phone.
+- Custom package and hourly city-shoot quotes require event, city, date, time, team and travel inputs. The bot directs those cases to the interactive booking calculator rather than guessing.
+- Booking dates and availability, payment verification and final confirmation are handled by the office, never inferred by the bot.
+- The in-memory API rate limiter is best-effort per serverless instance; configure Vercel Firewall rules for stronger production abuse protection.
 
-## Security
-Never pass service-role keys or Gemini keys to the browser. Do not expose booking or client data to public anonymous chat. Store conversations only with a defined retention policy.
+## Privacy
+Microphone activation is visitor-controlled. Speech recognition is supplied by the browser and may process audio through its speech provider; only the resulting text is sent by the app to the chat endpoint. The app does not persist chat transcripts.
