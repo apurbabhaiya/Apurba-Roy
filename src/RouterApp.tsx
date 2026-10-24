@@ -54,20 +54,21 @@ export default function RouterApp() {
                     : "RamyaChobi";
   }, [path]);
 
+  const page = (() => {
   if (path === "/facebook-login") return <FacebookAccessGate callback />;
 
-  if (path === "/") return withChat(<RamyaChobiHome />);
-  if (path === "/about") return withChat(<RamyaChobiAbout />);
-  if (path === "/packages") return withChat(<RamyaChobiPackages />);
-  if (path === "/portfolio") return withChat(<PortfolioPage />);
-  if (path === "/stories" || path === "/blog") return withChat(<PortfolioPage featuredOnly={false} />);
+  if (path === "/") return (<RamyaChobiHome />);
+  if (path === "/about") return (<RamyaChobiAbout />);
+  if (path === "/packages") return (<RamyaChobiPackages />);
+  if (path === "/portfolio") return (<PortfolioPage />);
+  if (path === "/stories" || path === "/blog") return (<PortfolioPage featuredOnly={false} />);
   if (path === "/face-search" || path === "/client-gallery") return <FacebookAccessGate><AlbumGalleryPage /></FacebookAccessGate>;
   if (path === "/albums") return <FacebookAccessGate><AlbumGalleryPage /></FacebookAccessGate>;
   if (path.startsWith("/albums/")) return <FacebookAccessGate><AlbumGalleryPage token={decodeURIComponent(path.split("/")[2] || "")} /></FacebookAccessGate>;
   if (path.startsWith("/client-gallery/")) return <FacebookAccessGate><AlbumGalleryPage token={decodeURIComponent(path.split("/")[2] || "")} /></FacebookAccessGate>;
   if (path.startsWith("/album/")) return <FacebookAccessGate><AlbumGalleryPage token={decodeURIComponent(path.replace(/^\/album\//, "").split("/")[0] || "")} /></FacebookAccessGate>;
 
-  if (path.startsWith("/booking")) return withChat(<BookingPortal />);
+  if (path.startsWith("/booking")) return (<BookingPortal />);
 
   if (path.startsWith("/delivery-admin")) return <RamyaChobiDeliveryAdmin />;
   if (path.startsWith("/photo-selection") || path.startsWith("/gallery/") || path.startsWith("/select/") || path === "/studio" || path.startsWith("/studio/")) return <LegacyApp />;
@@ -76,6 +77,8 @@ export default function RouterApp() {
     const token = decodeURIComponent(path.replace(/^\/delivery\//, "").split("/")[0] || "");
     return <RamyaChobiDelivery token={token} />;
   }
-  if (path === "/delivery") return withChat(<PublicDeliveryAlbums />);
-  return withChat(<RamyaChobiHome />);
+  if (path === "/delivery") return (<PublicDeliveryAlbums />);
+  return (<RamyaChobiHome />);
+  })();
+  return withChat(page);
 }
