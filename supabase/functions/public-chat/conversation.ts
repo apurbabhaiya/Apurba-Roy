@@ -13,7 +13,7 @@ export function salesReply(message:string,history:string[],config:any,chat:any):
  const kindTurn=turns.find(t=>/হিন্দু|সনাতন|hindu|sonaton|মুসলিম|muslim/.test(t))||'';
  const kind=/হিন্দু|সনাতন|hindu|sonaton/.test(kindTurn)?'হিন্দু':/মুসলিম|muslim/.test(kindTurn)?'মুসলিম':'';
  const hasDate=/\d{1,4}[\/-]\d{1,2}[\/-]\d{1,4}|জানুয়ারি|ফেব্রুয়ারি|মার্চ|এপ্রিল|মে মাস|জুন|জুলাই|আগস্ট|সেপ্টেম্বর|অক্টোবর|নভেম্বর|ডিসেম্বর|january|february|march|april|june|july|august|september|october|november|december/.test(all);
- const next=()=>!city?'আয়োজন কোন শহরে হবে?':!hasDate?'অনুষ্ঠানের তারিখ কবে?':'কোন কোন অনুষ্ঠান এবং কতক্ষণ কভারেজ লাগবে?';
+ const next=()=>!city?'আয়োজন কোন শহরে হবে?':!hasDate?'অনুষ্ঠানের তারিখ কবে?':'প্রতিটি অনুষ্ঠানের শুরু ও শেষের সময় কী?';
  const answer=(reply:string,links= [booking]):Reply=>({reply,links});
  const offer=(type:string)=>chat?.auto_reply_enabled===true?(chat.faqs as Faq[]||[]).find(f=>f.is_active!==false&&f.question===`ময়মনসিংহ ${type} বিয়ে · প্রাথমিক কোটেশন`)?.answer:null;
  if(/ডেলিভারি|delivery|কবে পাব|raw|র ফাইল|cancel|বাতিল|refund|রিফান্ড|date change|তারিখ বদল|তারিখ পরিবর্তন/.test(current))return null;
@@ -46,6 +46,7 @@ export function salesReply(message:string,history:string[],config:any,chat:any):
   const customOffer=city==='ময়মনসিংহ'?offer(kind):null;
   return answer(customOffer?`${customOffer}\n${next()}`:`${city}-এ ${kind} বিয়ের সময়, অনুষ্ঠান ও টিম অনুযায়ী কোটেশন হবে। ${next()}`,[discussion,{label:'নির্ধারিত প্যাকেজ দেখুন',href:'/packages'}]);
  }
+ if(!kind&&/প্যাকেজ|package|package price|দাম কত/.test(current))return answer('বিয়ে, হলুদ, আউটডোর বা ঘণ্টাভিত্তিক শুটের আলাদা অপশন আছে। কী ধরনের আয়োজন হবে?',[{label:'সব প্যাকেজ',href:'/packages'},booking]);
  if(/শুধু.*ফটো|only.*photo|photography only|ফটোগ্রাফি.*লাগবে/.test(current))return answer('শুধু ফটোগ্রাফি নেওয়া যাবে 📸 কয় ঘণ্টার কভারেজ লাগবে?',[discussion]);
  if(/ড্রোন|drone/.test(current))return answer('ড্রোনের প্রাথমিক অ্যাড-অন কোটেশন ৳৩,০০০। চূড়ান্ত রেট, অনুমতি ও প্রাপ্যতা লোকেশন দেখে অফিস নিশ্চিত করবে। কোন লোকেশনে হবে?',[discussion]);
  if(/ভিডিও|video|cinematic|সিনেমাটিক/.test(current))return answer('ফুল ভিডিও ও ট্রেলার নেওয়া যায় 🎥 কী কী থাকবে তা নির্বাচিত প্যাকেজে দেখুন। শুধু ভিডিও নাকি ছবি ও ভিডিও দুটো চান?',[{label:'ছবি ও ভিডিও প্যাকেজ',href:'/packages'},discussion]);
