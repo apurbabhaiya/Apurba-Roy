@@ -1,5 +1,12 @@
-import { allPackages, packageId } from "../../../src/booking/packageCatalog.ts";
-import { calculateChatQuote } from "../../../src/booking/chatQuote.ts";
+type PackageInfo = {
+  id: string;
+  name: string;
+  price: number;
+  coverage?: string;
+  crew?: string[];
+  deliverables?: string[];
+  physical?: string[];
+};
 
 const allowedOrigins = [
   "https://ramyachobi-client.vercel.app",
@@ -44,21 +51,18 @@ function limited(req: Request) {
   return false;
 }
 
-async function getDiscountPercent(): Promise<number | null> {
+async function rpc(name: string) {
   const url = Deno.env.get("SUPABASE_URL");
   const key = Deno.env.get("SUPABASE_ANON_KEY");
   if (!url || !key) return null;
   try {
-    const response = await fetch(url.replace(/\/$/, "") + "/rest/v1/rpc/booking_custom_config", {
+    const response = await fetch(url.replace(/\/$/, "") + "/rest/v1/rpc/" + name, {
       method: "POST",
       headers: { apikey: key, authorization: "Bearer " + key, "content-type": "application/json" },
       body: "{}",
       signal: AbortSignal.timeout(3500),
     });
-    if (!response.ok) return null;
-    const config: any = await response.json();
-    const value = Number(config?.fixed_discount_percent);
-    return Number.isFinite(value) && value >= 0 && value <= 99 ? value : null;
+    return response.ok ? await response.json() : null;
   } catch {
     return null;
   }
@@ -68,7 +72,7 @@ function normalize(value: string) {
   return value.toLocaleLowerCase().replace(/[\s_-]+/g, " ").trim();
 }
 
-function findPackage(message: string) {
+function findPackage(message: string, catalog: PackageInfo[]) {
   const text = normalize(message);
   const aliases: Record<string, string[]> = {
     "regular-basic": ["রেগুলার বেসিক", "basic package"],
@@ -90,8 +94,8 @@ function findPackage(message: string) {
     "sonaton-wedding-day-prestige": ["সনাতন বিয়ের দিন প্রেস্টিজ"],
     "sonaton-wedding-day-storytelling": ["সনাতন বিয়ের দিন স্টোরিটেলিং"],
   };
-  return allPackages.find(item => {
-    const candidates = [normalize(item.name), ...(aliases[packageId(item.name)] || []).map(normalize)];
+  return catalog.find(item => {
+    const candidates = [normalize(item.name), ...(aliases[item.id] || []).map(normalize)];
     return candidates.some(candidate => candidate && text.includes(candidate));
   }) || null;
 }
@@ -112,42 +116,43 @@ function taka(value: number) {
   return "৳" + value.toLocaleString("en-BD", { maximumFractionDigits: 2 });
 }
 
-async function quoteReply(message: string) {
-  const selected = findPackage(message);
+function quoteReply(message: string, catalog: PackageInfo[], config: any) {
+  const selected = findPackage(message, catalog);
   if (!selected || !wantsPrice(message)) return null;
   const requestedEvents = eventCount(message);
-  const percent = await getDiscountPercent();
+  const percentValue = Number(config?.fixed_discount_percent);
+  const percent = Number.isFinite(percentValue) && percentValue >= 0 && percentValue <= 99 ? percentValue : null;
+  const chargedEvents = perEventIds.has(selected.id) ? requestedEvents : 1;
+  const gross = Number(selected.price) * chargedEvents;
   if (percent === null) {
-    const multiply = perEventIds.has(packageId(selected.name)) ? requestedEvents : 1;
-    const base = selected.price * multiply;
     return {
-      reply: `${selected.name} প্যাকেজের হিসাব: ${taka(selected.price)}${multiply > 1 ? ` × ${multiply} অনুষ্ঠান = ${taka(base)}` : ""}। বর্তমান অফিস-অনুমোদিত ডিসকাউন্ট যাচাই করা যাচ্ছে না, তাই ছাড়-সহ মোট বলছি না। লাইভ হিসাব দেখুন: /booking`,
+      reply: `${selected.name} প্যাকেজের হিসাব: ${taka(Number(selected.price))}${chargedEvents > 1 ? ` × ${chargedEvents} অনুষ্ঠান = ${taka(gross)}` : ""}। বর্তমান অফিস-অনুমোদিত ডিসকাউন্ট যাচাই করা যাচ্ছে না, তাই ছাড়-সহ মোট বলছি না। লাইভ হিসাব দেখুন: /booking`,
     };
   }
-  const quote = calculateChatQuote({ packageName: selected.name, eventCount: requestedEvents, approvedDiscountPercent: percent });
-  const base = quote.chargedEvents > 1
-    ? `${taka(quote.basePrice)} × ${quote.chargedEvents} অনুষ্ঠান = ${taka(quote.gross)}`
-    : taka(quote.gross);
-  const note = quote.note ? " এই প্যাকেজে তালিকাভুক্ত ইভেন্টগুলো অন্তর্ভুক্ত, তাই অতিরিক্ত ইভেন্ট দিয়ে দাম গুণ করা হয়নি।" : "";
+  const discount = Math.round(gross * percent) / 100;
+  const payable = Math.round((gross - discount) * 100) / 100;
+  const base = chargedEvents > 1 ? `${taka(Number(selected.price))} × ${chargedEvents} অনুষ্ঠান = ${taka(gross)}` : taka(gross);
+  const note = chargedEvents === 1 && requestedEvents > 1
+    ? " এই প্যাকেজে তালিকাভুক্ত ইভেন্টগুলো অন্তর্ভুক্ত, তাই অতিরিক্ত ইভেন্ট দিয়ে দাম গুণ করা হয়নি।"
+    : "";
   return {
-    reply: `${quote.packageName}: ${base}। অফিস-নির্ধারিত ছাড় ${quote.approvedDiscountPercent}% = ${taka(quote.discount)}। ছাড়ের পর প্যাকেজ মোট ${taka(quote.payable)}।${note} ছবি পোর্টফোলিওতে প্রকাশের অনুমতি না দিলে বুকিং ফর্মে ৳১০,০০০ অতিরিক্ত হতে পারে। তারিখ ও বুকিং অফিস যাচাই করে নিশ্চিত করবে। পূর্ণ হিসাব: /booking`,
+    reply: `${selected.name}: ${base}। অফিস-নির্ধারিত ছাড় ${percent}% = ${taka(discount)}। ছাড়ের পর প্যাকেজ মোট ${taka(payable)}।${note} ছবি পোর্টফোলিওতে প্রকাশের অনুমতি না দিলে বুকিং ফর্মে ৳১০,০০০ অতিরিক্ত হতে পারে। তারিখ ও বুকিং অফিস যাচাই করে নিশ্চিত করবে। পূর্ণ হিসাব: /booking`,
   };
 }
 
-const takaForPackage = (price: number) => "৳" + price.toLocaleString("en-BD", { maximumFractionDigits: 2 });
-function packageList() {
+function packageList(catalog: PackageInfo[]) {
   const groups = [
-    ["রেগুলার", allPackages.filter(p => p.name.startsWith("Regular"))],
-    ["আউটডোর", allPackages.filter(p => p.name.startsWith("Outdoor"))],
-    ["সনাতন বিয়ে", allPackages.filter(p => p.name.startsWith("Sonaton"))],
+    ["রেগুলার", catalog.filter(p => p.id.startsWith("regular-"))],
+    ["আউটডোর", catalog.filter(p => p.id.startsWith("outdoor-"))],
+    ["সনাতন বিয়ে", catalog.filter(p => p.id.startsWith("sonaton-"))],
   ] as const;
-  return groups.map(([name, items]) => `${name}: ${items.map(p => `${p.name} ${takaForPackage(p.price)}`).join(" · ")}`).join("\n");
+  return groups.map(([name, items]) => `${name}: ${items.map(p => `${p.name} ${taka(Number(p.price))}`).join(" · ")}`).join("\n");
 }
 
-function answerFAQ(message: string) {
+function answerFAQ(message: string, catalog: PackageInfo[]) {
   const text = normalize(message);
   if (/প্যাকেজ|package|দাম|দর|price|খরচ|কত টাকা/.test(text)) {
-    return `প্যাকেজের ধরন ও সাইটে প্রকাশিত দাম:\n${packageList()}\nআপনার আয়োজনের সঠিক হিসাব, ইভেন্ট সংখ্যা ও বর্তমান ছাড় দেখতে /booking খুলুন। কাস্টম ও ঘণ্টাভিত্তিক সিটি শুটের হিসাব ইনপুট অনুযায়ী বদলায়।`;
+    return `প্যাকেজের ধরন ও সাইটে প্রকাশিত দাম:\n${catalog.length ? packageList(catalog) : "সব প্যাকেজ /packages-এ দেখুন।"}\nআপনার আয়োজনের সঠিক হিসাব, ইভেন্ট সংখ্যা ও বর্তমান ছাড় দেখতে /booking খুলুন। কাস্টম ও ঘণ্টাভিত্তিক সিটি শুটের হিসাব ইনপুট অনুযায়ী বদলায়।`;
   }
   if (/বুক|booking|reserve|তারিখ|date|availability|ফাঁকা আছে/.test(text)) {
     return "বুকিং /booking থেকে প্যাকেজ বা কাস্টম আয়োজন বেছে তারিখ, সময় ও লোকেশন দিয়ে হিসাব দেখুন। বুকিংয়ের আবেদন জমা দিলেই তারিখ নিশ্চিত হয় না; অফিস প্রাপ্যতা, শর্ত ও পেমেন্ট যাচাই করে নিশ্চিত করবে।";
@@ -172,27 +177,26 @@ function answerFAQ(message: string) {
 
 Deno.serve(async (req: Request) => {
   const origin = req.headers.get("origin");
-  if (origin && !originAllowed(origin)) return json({ error: "Origin not allowed" }, 403, origin);
+  if (origin && !originAllowed(origin)) return json({ error: "Origin not allowed" }, 403, null);
   if (req.method === "OPTIONS") {
-    const response = new Response(null, { status: 204, headers: {
+    const headers = new Headers({
       "Access-Control-Allow-Origin": origin || "*",
       "Access-Control-Allow-Headers": "apikey, content-type, x-client-info",
       "Access-Control-Allow-Methods": "POST, OPTIONS",
       "Access-Control-Max-Age": "86400",
       "Vary": "Origin",
-    }});
-    return response;
+    });
+    return new Response(null, { status: 204, headers });
   }
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405, origin);
+  if (!req.headers.get("apikey")) return json({ error: "API key required" }, 401, origin);
   if (limited(req)) return json({ reply: "এক মিনিট পরে আবার চেষ্টা করুন।" }, 429, origin);
   let body: any;
   try { body = await req.json(); } catch { return json({ error: "Invalid JSON" }, 400, origin); }
   const message = typeof body?.message === "string" ? body.message.trim() : "";
   if (!message || message.length > 1200) return json({ error: "১–১২০০ অক্ষরের প্রশ্ন লিখুন।" }, 400, origin);
-  try {
-    const exact = await quoteReply(message);
-    return json({ reply: exact?.reply || answerFAQ(message) }, 200, origin);
-  } catch {
-    return json({ reply: "এই মুহূর্তে ছাড়-সহ হিসাব পাওয়া যাচ্ছে না। /booking-এ লাইভ হিসাব দেখুন অথবা WhatsApp-এ অফিসের সঙ্গে কথা বলুন: https://wa.me/8801776044951" }, 200, origin);
-  }
+  const [catalogRaw, config] = await Promise.all([rpc("booking_package_catalog_list"), rpc("booking_custom_config")]);
+  const catalog = Array.isArray(catalogRaw) ? catalogRaw as PackageInfo[] : [];
+  const exact = quoteReply(message, catalog, config);
+  return json({ reply: exact?.reply || answerFAQ(message, catalog) }, 200, origin);
 });
