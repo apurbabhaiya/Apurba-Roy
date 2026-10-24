@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { db } from '../services/supabase';
+import { supabase } from '../services/supabase';
 
 type ChatFaq = {
   id: string;
@@ -25,7 +25,7 @@ export default function ChatbotAdmin({ token }: { token: string }) {
     setLoading(true);
     setNotice('');
     try {
-      const { data, error } = await db.rpc('booking_admin_chatbot_config', {
+      const { data, error } = await supabase.rpc('booking_admin_chatbot_config', {
         p_token: token,
         p_action: 'get',
       });
@@ -45,7 +45,7 @@ export default function ChatbotAdmin({ token }: { token: string }) {
     setSaving(true);
     setNotice('');
     try {
-      const { error } = await db.rpc('booking_admin_chatbot_config', {
+      const { error } = await supabase.rpc('booking_admin_chatbot_config', {
         p_token: token,
         p_action: 'settings',
         p_auto_reply_enabled: next,
@@ -83,7 +83,7 @@ export default function ChatbotAdmin({ token }: { token: string }) {
     setSaving(true);
     setNotice('');
     try {
-      const { error } = await db.rpc('booking_admin_chatbot_config', {
+      const { error } = await supabase.rpc('booking_admin_chatbot_config', {
         p_token: token,
         p_action: 'save',
         p_id: editingId,
@@ -107,7 +107,7 @@ export default function ChatbotAdmin({ token }: { token: string }) {
     setSaving(true);
     setNotice('');
     try {
-      const { error } = await db.rpc('booking_admin_chatbot_config', {
+      const { error } = await supabase.rpc('booking_admin_chatbot_config', {
         p_token: token,
         p_action: 'save',
         p_id: faq.id,
@@ -131,7 +131,7 @@ export default function ChatbotAdmin({ token }: { token: string }) {
     setSaving(true);
     setNotice('');
     try {
-      const { error } = await db.rpc('booking_admin_chatbot_config', {
+      const { error } = await supabase.rpc('booking_admin_chatbot_config', {
         p_token: token,
         p_action: 'delete',
         p_id: faq.id,
