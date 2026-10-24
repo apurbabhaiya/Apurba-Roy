@@ -82,7 +82,7 @@ export default function RamyaChatWidget() {
     }
   }
 
-  return <div style={{ position: 'fixed', left: 'max(16px, env(safe-area-inset-left))', bottom: 'max(16px, env(safe-area-inset-bottom))', zIndex: 10000, fontFamily: 'inherit' }}>
+  return <div className="ramya-chat-widget-dock">
     {open && <section aria-label="রম্যছবি চ্যাট সহায়তা" style={{ width: 'min(370px, calc(100vw - 32px))', height: 'min(540px, calc(100dvh - 100px))', background: '#fff', color: '#172033', borderRadius: 18, boxShadow: '0 12px 48px #0003', display: 'flex', flexDirection: 'column', overflow: 'hidden', marginBottom: 12 }}>
       <header style={{ padding: 14, background: '#193e32', color: '#fff', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
         <span aria-hidden="true">📸</span><span style={{ flex: 1 }}>রম্যছবি চ্যাট সহায়তা<small style={{ display: 'block', fontSize: 11, fontWeight: 400, opacity: .8 }}>স্বয়ংক্রিয় উত্তর · বাংলা / English</small></span>
