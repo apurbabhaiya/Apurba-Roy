@@ -1,3 +1,4 @@
+import TeamAdmin from '../team/TeamAdmin';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   BadgeCheck,
@@ -128,7 +129,7 @@ function StatusPill({ value }: { value: string }) {
 }
 
 export default function RamyaChobiDeliveryAdmin() {
-  const [adminSection, setAdminSection] = useState('delivery');
+  const [adminSection, setAdminSection] = useState(new URLSearchParams(location.search).get('section')==='team'?'team':'delivery');
   const [portalSections, setPortalSections] = useState<Record<string, string>>({});
   const [paymentFocusId, setPaymentFocusId] = useState('');
   useEffect(() => {
@@ -740,11 +741,11 @@ export default function RamyaChobiDeliveryAdmin() {
 
       <nav aria-label="Admin navigation" className="border-b border-stone-200 bg-white px-5 py-3">
         <div className="mx-auto flex max-w-7xl flex-wrap gap-2">
-          {(['dashboard', 'delivery', 'payments', 'portfolio', 'settings'] as const).map((section) => (
+          {(['dashboard', 'delivery', 'payments', 'portfolio', 'team', 'settings'] as const).map((section) => (
             <button key={section} type="button" aria-current={adminSection === section ? 'page' : undefined}
               onClick={() => setAdminSection(section)}
               className={`rounded-xl px-4 py-2.5 text-sm font-semibold capitalize focus-visible:outline-2 focus-visible:outline-amber-600 ${adminSection === section ? 'bg-stone-950 text-white' : 'bg-stone-100 text-stone-700 hover:bg-amber-100'}`}>
-              {section}{section === 'payments' && counts.requests > 0 ? ` (${counts.requests})` : ''}
+              {section==='team'?'টিম / প্রোফাইল':section}{section === 'payments' && counts.requests > 0 ? ` (${counts.requests})` : ''}
             </button>
           ))}
           <a href="/booking/admin" className="flex min-h-11 items-center rounded-xl bg-emerald-800 px-4 py-2.5 text-sm font-semibold text-white">ক্লায়েন্ট ও হিসাব</a>
@@ -760,6 +761,7 @@ export default function RamyaChobiDeliveryAdmin() {
           <div className="rounded-2xl border border-stone-200 bg-white p-4 text-sm font-medium shadow-sm">{notice}</div>
         )}
 
+        {adminSection === 'team' && <TeamAdmin token={token}/>}
         {adminSection === 'settings' && <section className="space-y-4" aria-label="Connection settings"><h2 className="text-xl font-semibold">Settings</h2><DriveConnectionCard adminToken={token} /></section>}
 
         {adminSection === 'dashboard' && (

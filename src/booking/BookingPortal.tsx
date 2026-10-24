@@ -1436,9 +1436,9 @@ function AdminPanel() {
   return (
     <main className="min-h-screen bg-[#f8f6ef] pb-8 text-slate-900">
       <header className="sticky top-0 z-20 border-b border-emerald-900/10 bg-[#f8f6ef]/95 backdrop-blur">
-        <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-3 px-4 py-3">
+        <div className="mx-auto flex max-w-[1500px] flex-wrap items-center justify-between gap-3 px-4 py-3">
           <div><p className="text-[10px] font-bold tracking-widest text-emerald-800">RAMYACHOBI · ADMIN</p><h1 className="mt-1 text-xl font-black">অ্যাডমিন কন্ট্রোল</h1></div>
-          <a href="/delivery-admin" className="flex min-h-11 items-center rounded-xl border border-stone-300 bg-white px-3 text-sm font-bold">মূল প্যানেল ↗</a>
+          <a href="/delivery-admin" className="flex min-h-11 items-center rounded-xl border border-stone-300 bg-white px-3 text-sm font-bold">মূল প্যানেল ↗</a><a href="/delivery-admin?section=team" className="flex min-h-11 items-center rounded-xl border border-stone-300 bg-white px-3 text-sm font-bold">টিম / প্রোফাইল</a>
         </div>
       </header>
       <div className="mx-auto max-w-[1500px] px-4 pt-4">
