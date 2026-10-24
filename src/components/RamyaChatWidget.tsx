@@ -73,27 +73,22 @@ export default function RamyaChatWidget() {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: question, history: history.slice(-8) }),
+        body: JSON.stringify({ message: question }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data?.reply || 'Chat unavailable');
       setMessages(previous => [...previous, { role: 'assistant', text: String(data.reply || 'দুঃখিত, এই মুহূর্তে উত্তর পাওয়া যাচ্ছে না।') }]);
-    } catch (error) {
-      setMessages(previous => [...previous, {
-        role: 'assistant',
-        text: error instanceof Error && error.message !== 'Chat unavailable'
-          ? error.message
-          : 'এই মুহূর্তে উত্তর পাওয়া যাচ্ছে না। /booking-এ হিসাব দেখুন, অথবা WhatsApp-এ কথা বলুন।',
-      }]);
+    } catch {
+      setMessages(previous => [...previous, { role: 'assistant', text: 'এই মুহূর্তে উত্তর পাওয়া যাচ্ছে না। /booking-এ হিসাব দেখুন অথবা WhatsApp-এ কথা বলুন।' }]);
     } finally {
       setBusy(false);
     }
   }
 
   return <div style={{ position: 'fixed', right: 16, bottom: 16, zIndex: 10000, fontFamily: 'inherit' }}>
-    {open && <section aria-label="রম্যছবি লাইভ চ্যাট" style={{ width: 'min(370px, calc(100vw - 32px))', height: 'min(540px, calc(100dvh - 100px))', background: '#fff', color: '#172033', borderRadius: 18, boxShadow: '0 12px 48px #0003', display: 'flex', flexDirection: 'column', overflow: 'hidden', marginBottom: 12 }}>
+    {open && <section aria-label="রম্যছবি চ্যাট সহায়তা" style={{ width: 'min(370px, calc(100vw - 32px))', height: 'min(540px, calc(100dvh - 100px))', background: '#fff', color: '#172033', borderRadius: 18, boxShadow: '0 12px 48px #0003', display: 'flex', flexDirection: 'column', overflow: 'hidden', marginBottom: 12 }}>
       <header style={{ padding: 14, background: '#193e32', color: '#fff', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span aria-hidden="true">📸</span><span style={{ flex: 1 }}>রম্যছবি লাইভ সহায়তা<small style={{ display: 'block', fontSize: 11, fontWeight: 400, opacity: .8 }}>AI সহকারী · বাংলা / English</small></span>
+        <span aria-hidden="true">📸</span><span style={{ flex: 1 }}>রম্যছবি চ্যাট সহায়তা<small style={{ display: 'block', fontSize: 11, fontWeight: 400, opacity: .8 }}>স্বয়ংক্রিয় উত্তর · বাংলা / English</small></span>
         <button type="button" onClick={() => setOpen(false)} aria-label="চ্যাট বন্ধ করুন" style={{ color: 'white', background: 'none', border: 0, cursor: 'pointer', fontSize: 18 }}>×</button>
       </header>
       <div aria-live="polite" aria-relevant="additions text" style={{ flex: 1, overflowY: 'auto', padding: 12 }}>
@@ -105,7 +100,7 @@ export default function RamyaChatWidget() {
         <div ref={endRef} />
       </div>
       <div style={{ padding: '4px 10px 8px', display: 'flex', gap: 5, flexWrap: 'wrap' }}>{suggestions.map(s => <button type="button" key={s} onClick={() => void send(s)} disabled={busy} style={{ fontSize: 11, padding: '7px 9px', borderRadius: 20, border: '1px solid #ddd', background: '#fff' }}>{s}</button>)}</div>
-      <p style={{ margin: '0 12px 6px', fontSize: 10, color: '#6c6c66', lineHeight: 1.4 }}>মাইক্রোফোন চাপলে কথার লিখিত রূপ তৈরি হবে। পাঠালে প্রশ্নটি AI-তে যাবে। চ্যাট সংরক্ষণ করা হয় না।</p>
+      <p style={{ margin: '0 12px 6px', fontSize: 10, color: '#6c6c66', lineHeight: 1.4 }}>মাইক্রোফোন চাপলে ব্রাউজারের ভয়েস সেবা কথার লিখিত রূপ তৈরি করতে পারে। পাঠালে সেই লেখা এই সাইটে পাঠানো হয়। চ্যাট সংরক্ষণ করা হয় না।</p>
       <div style={{ padding: '4px 12px 8px', display: 'flex', gap: 12, fontSize: 12 }}>
         <a href="https://wa.me/8801776044951" target="_blank" rel="noopener noreferrer">মানুষের সহায়তা · WhatsApp</a>
         <a href="tel:+8801776044951">📞 01776044951</a>
@@ -116,6 +111,6 @@ export default function RamyaChatWidget() {
         <button type="submit" disabled={busy || !input.trim()} style={{ background: '#193e32', color: '#fff', border: 0, borderRadius: 8, padding: '0 12px', fontWeight: 700 }}>পাঠান</button>
       </form>
     </section>}
-    <button type="button" onClick={() => setOpen(previous => !previous)} aria-expanded={open} style={{ background: '#193e32', color: 'white', border: 0, borderRadius: 32, padding: '14px 19px', boxShadow: '0 4px 16px #0003', cursor: 'pointer', fontWeight: 700 }}>💬 {open ? 'বন্ধ করুন' : 'লাইভ চ্যাট'}</button>
+    <button type="button" onClick={() => setOpen(previous => !previous)} aria-expanded={open} style={{ background: '#193e32', color: 'white', border: 0, borderRadius: 32, padding: '14px 19px', boxShadow: '0 4px 16px #0003', cursor: 'pointer', fontWeight: 700 }}>💬 {open ? 'বন্ধ করুন' : 'চ্যাট সহায়তা'}</button>
   </div>;
 }
