@@ -18,7 +18,7 @@ export default function FriendlyBooking(){
  const [events,setEvents]=useState<EventInput[]>([blank(0)]),[options,setOptions]=useState<CustomOptions>({travel:{},city:''}),[quote,setQuote]=useState<CustomQuote|null>(null),[step,setStep]=useState(1);
  const [client,setClient]=useState({name:'',phone:'',email:'',bride:'',groom:'',address:'',note:''}),[notes,setNotes]=useState<string[]>([]),[allowPublish,setAllowPublish]=useState(true),[terms,setTerms]=useState([false,false,false]);
  const [hasPayment,setHasPayment]=useState(false),[proof,setProof]=useState({method:'',amount:'',transaction_id:'',payer_phone:''}),[signature,setSignature]=useState(''),[signatureName,setSignatureName]=useState(''),[consent,setConsent]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(''),[saved,setSaved]=useState<any>(null);
- const [intent,setIntent]=useState<'choose'|'discussion'|'confirm'>('confirm');
+ const [intent,setIntent]=useState<'choose'|'discussion'|'confirm'>(()=>new URLSearchParams(window.location.search).get('intent')==='discussion'?'discussion':'confirm');
  const [discussionConsent,setDiscussionConsent]=useState(false),[discussionRef,setDiscussionRef]=useState('');
  const [discountRequested,setDiscountRequested]=useState(false);
 
