@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '../services/supabase';
 
-type Message = { role: 'assistant' | 'user'; text: string };
-const suggestions = ['প্যাকেজের দাম কত?', '২টি অতিরিক্ত অনুষ্ঠানের বিল', 'ডিসকাউন্ট কীভাবে পাব?'];
+type Message = { role: 'assistant' | 'user'; text: string;links?:{label:string;href:string}[] };
+const suggestions = ['হিন্দু বিয়ে', 'মুসলিম বিয়ে', '১ ঘণ্টার ক্যাজুয়াল ফটোশুট'];
 
 export default function RamyaChatWidget() {
   const [open, setOpen] = useState(false);
@@ -70,11 +70,11 @@ export default function RamyaChatWidget() {
       const response = await fetch(SUPABASE_URL + '/functions/v1/public-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', apikey: SUPABASE_PUBLISHABLE_KEY },
-        body: JSON.stringify({ message: question }),
+        body: JSON.stringify({ message: question,history:messages.filter(m=>m.role==='user').slice(-8).map(m=>m.text) }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data?.reply || 'Chat unavailable');
-      setMessages(previous => [...previous, { role: 'assistant', text: String(data.reply || 'দুঃখিত, এই মুহূর্তে উত্তর পাওয়া যাচ্ছে না।') }]);
+      setMessages(previous => [...previous, { role: 'assistant', text: String(data.reply || 'দুঃখিত, এই মুহূর্তে উত্তর পাওয়া যাচ্ছে না।'),links:Array.isArray(data.links)?data.links.filter((v:any)=>typeof v.label==='string'&&['/booking','/booking?intent=discussion','/booking/city','/packages','/portfolio','/stories'].includes(v.href)):[] }]);
     } catch {
       setMessages(previous => [...previous, { role: 'assistant', text: 'এই মুহূর্তে উত্তর পাওয়া যাচ্ছে না। /booking-এ হিসাব দেখুন অথবা WhatsApp-এ কথা বলুন।' }]);
     } finally {
@@ -91,6 +91,7 @@ export default function RamyaChatWidget() {
       <div aria-live="polite" aria-relevant="additions text" style={{ flex: 1, overflowY: 'auto', padding: 12 }}>
         {messages.map((message, index) => <div key={index} style={{ background: message.role === 'user' ? '#e3eee7' : '#f4f2ec', margin: '8px 0', marginLeft: message.role === 'user' ? 36 : 0, marginRight: message.role === 'assistant' ? 30 : 0, padding: 11, borderRadius: 12, whiteSpace: 'pre-wrap', lineHeight: 1.55, fontSize: 14 }}>
           {message.text}
+          {message.links?.length ? <div className="mt-3 flex flex-wrap gap-2">{message.links.map(link=><a key={link.href} href={link.href} className="inline-flex min-h-11 items-center rounded-xl border border-emerald-800 bg-white px-3 py-2 text-sm font-bold text-emerald-900">{link.label} →</a>)}</div>:null}
           {message.role === 'assistant' && <button type="button" onClick={() => speak(message.text)} aria-label="উত্তরটি শুনুন" title="উত্তরটি শুনুন" style={{ display: 'block', marginTop: 8, border: 0, background: 'transparent', color: '#193e32', padding: 0, cursor: 'pointer', fontSize: 12 }}>🔊 {speaking ? 'আবার শুনুন' : 'উত্তর শুনুন'}</button>}
         </div>)}
         {busy && <p role="status" style={{ fontSize: 13, color: '#666' }}>উত্তর তৈরি হচ্ছে…</p>}

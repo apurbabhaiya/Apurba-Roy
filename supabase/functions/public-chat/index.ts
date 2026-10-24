@@ -1,3 +1,4 @@
+import {salesReply} from './conversation.ts';
 type PackageInfo = {
   id: string;
   name: string;
@@ -104,7 +105,7 @@ function eventCount(message: string) {
   const match = message.match(/([0-9০-৯]{1,2})\s*(?:টি|টা)?\s*(?:(?:অতিরিক্ত|extra)\s*)?(?:অনুষ্ঠান|ইভেন্ট|event|events)/i);
   if (!match) return 1;
   const digits = match[1].replace(/[০-৯]/g, digit => String("০১২৩৪৫৬৭৮৯".indexOf(digit)));
-  const count = Number(digits);
+  const count = Number(digits) + (/অতিরিক্ত|extra/i.test(match[0]) ? 1 : 0);
   return Number.isInteger(count) && count >= 1 && count <= 20 ? count : 1;
 }
 
@@ -214,6 +215,9 @@ Deno.serve(async (req: Request) => {
   if (!message || message.length > 1200) return json({ error: "১–১২০০ অক্ষরের প্রশ্ন লিখুন।" }, 400, origin);
   const [catalogRaw, config, chatConfig] = await Promise.all([rpc("booking_package_catalog_list"), rpc("booking_custom_config"), rpc("public_chatbot_config")]);
   const catalog = Array.isArray(catalogRaw) ? catalogRaw as PackageInfo[] : [];
+  const history=Array.isArray(body.history)?body.history.filter((v:unknown)=>typeof v==='string').slice(-8).map((v:string)=>v.slice(0,1200)):[];
+  const sales=salesReply(message,history,config,chatConfig);
+  if(sales)return json(sales,200,origin);
   const exact = quoteReply(message, catalog, config);
-  return json({ reply: exact?.reply || configuredFAQ(message, chatConfig) || answerFAQ(message, catalog) }, 200, origin);
+  return json({ reply: exact?.reply || configuredFAQ(message, chatConfig) || answerFAQ(message, catalog),links:[{label:'প্যাকেজ দেখুন',href:'/packages'},{label:'বুকিং / অগ্রিমের হিসাব',href:'/booking'},{label:'অফিসে আলোচনা',href:'/booking?intent=discussion'}] }, 200, origin);
 });
