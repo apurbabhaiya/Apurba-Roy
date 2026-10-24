@@ -6,6 +6,8 @@ const suggestions = ['হিন্দু বিয়ে', 'মুসলিম ব�
 
 export default function RamyaChatWidget() {
   const [open, setOpen] = useState(false);
+  const [showHint,setShowHint]=useState(()=>{try{return sessionStorage.getItem('ramya-chat-hint-dismissed')!=='1'}catch{return true}});
+  function dismissHint(){setShowHint(false);try{sessionStorage.setItem('ramya-chat-hint-dismissed','1')}catch{}}
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([
     { role: 'assistant', text: 'স্বাগতম! 📸 প্যাকেজ, বুকিং, হিসাব ও ফটোগ্রাফি নিয়ে বাংলায় বা English-এ প্রশ্ন করুন।' },
@@ -83,7 +85,8 @@ export default function RamyaChatWidget() {
   }
 
   return <div className="ramya-chat-widget-dock">
-    {open && <section aria-label="রম্যছবি চ্যাট সহায়তা" style={{ width: 'min(370px, calc(100vw - 32px))', height: 'min(540px, calc(100dvh - 100px))', background: '#fff', color: '#172033', borderRadius: 18, boxShadow: '0 12px 48px #0003', display: 'flex', flexDirection: 'column', overflow: 'hidden', marginBottom: 12 }}>
+    {!open&&showHint&&<aside className="ramya-chat-hint" aria-label="চ্যাট সহায়তার পরামর্শ"><p>প্যাকেজ বা বাজেট বুঝতে সাহায্য লাগবে?</p><button type="button" onClick={dismissHint} aria-label="সহায়তার বার্তা বন্ধ করুন">×</button></aside>}
+    {open && <section id="ramya-chat-panel" className="ramya-chat-panel" aria-label="রম্যছবি চ্যাট সহায়তা" style={{ width: 'min(370px, calc(100vw - 32px))', height: 'min(540px, calc(100dvh - 100px))', background: '#fff', color: '#172033', borderRadius: 18, boxShadow: '0 12px 48px #0003', display: 'flex', flexDirection: 'column', overflow: 'hidden', marginBottom: 12 }}>
       <header style={{ padding: 14, background: '#193e32', color: '#fff', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
         <span aria-hidden="true">📸</span><span style={{ flex: 1 }}>রম্যছবি চ্যাট সহায়তা<small style={{ display: 'block', fontSize: 11, fontWeight: 400, opacity: .8 }}>স্বয়ংক্রিয় উত্তর · বাংলা / English</small></span>
         <button type="button" onClick={() => setOpen(false)} aria-label="চ্যাট বন্ধ করুন" style={{ color: 'white', background: 'none', border: 0, cursor: 'pointer', fontSize: 18 }}>×</button>
@@ -109,6 +112,6 @@ export default function RamyaChatWidget() {
         <button type="submit" disabled={busy || !input.trim()} style={{ background: '#193e32', color: '#fff', border: 0, borderRadius: 8, padding: '0 12px', fontWeight: 700 }}>পাঠান</button>
       </form>
     </section>}
-    <button type="button" onClick={() => setOpen(previous => !previous)} aria-expanded={open} style={{ background: '#193e32', color: 'white', border: 0, borderRadius: 32, padding: '14px 19px', boxShadow: '0 4px 16px #0003', cursor: 'pointer', fontWeight: 700 }}>💬 {open ? 'বন্ধ করুন' : 'চ্যাট সহায়তা'}</button>
+    <button type="button" onClick={() => {dismissHint();setOpen(previous => !previous)}} aria-controls="ramya-chat-panel" aria-expanded={open} style={{ background: '#193e32', color: 'white', border: 0, borderRadius: 32, padding: '14px 19px', minHeight: 48, boxShadow: '0 4px 16px #0003', cursor: 'pointer', fontWeight: 700 }}>💬 {open ? 'বন্ধ করুন' : 'প্রশ্ন আছে? বলুন'}</button>
   </div>;
 }
