@@ -118,18 +118,18 @@ export default function SpinResultSubmission() {
                 <div className="relative mx-auto aspect-square w-full rounded-full bg-[#3a080c] p-2 shadow-[0_12px_30px_rgba(70,8,12,.25)]">
                   <svg viewBox="0 0 400 400" role="img" aria-label="RamyaChobi Spin and Win wheel" className="h-full w-full overflow-visible rounded-full" style={{ transform: `rotate(${rotation}deg)`, transition: spinning ? 'transform 6.5s cubic-bezier(.12,.78,.12,1)' : 'none' }}>
                     <circle cx="200" cy="200" r="196" fill="#5a1510" stroke="#e8bd58" strokeWidth="7"/>
+                    {spinPrizes.map((prize, index) => (
+                      <path key={`slice-${prize}`} d={wheelPath(index)} fill={index % 2 === 0 ? '#a90d18' : '#fff8df'} stroke="#efcf79" strokeWidth="2.5"/>
+                    ))}
                     {spinPrizes.map((prize, index) => {
                       const middle = -90 + (index + 0.5) * segmentAngle;
                       const labelRotation = middle + 90 + (middle > 90 && middle < 270 ? 180 : 0);
                       const lines = prizeLines[prize] || [prize];
-                      const startY = 68 - ((lines.length - 1) * 5);
-                      return <g key={prize}>
-                        <path d={wheelPath(index)} fill={index % 2 === 0 ? '#a90d18' : '#fff8df'} stroke="#efcf79" strokeWidth="2.5"/>
-                        <g transform={`rotate(${labelRotation} 200 200)`}>
-                          <text x="200" y={startY} textAnchor="middle" fill={index % 2 === 0 ? '#fff8df' : '#94101a'} fontSize={prize === 'CHOCOLATE' ? '9' : '10'} fontWeight="900" letterSpacing=".2">
-                            {lines.map((line, lineIndex) => <tspan key={line} x="200" dy={lineIndex === 0 ? 0 : 13}>{line}</tspan>)}
-                          </text>
-                        </g>
+                      const startY = 68 - ((lines.length - 1) * 5.5);
+                      return <g key={`label-${prize}`} transform={`rotate(${labelRotation} 200 200)`}>
+                        <text x="200" y={startY} textAnchor="middle" fill={index % 2 === 0 ? '#fff8df' : '#94101a'} fontSize={prize === 'CHOCOLATE' ? '9' : '10'} fontWeight="900" letterSpacing=".1">
+                          {lines.map((line, lineIndex) => <tspan key={line} x="200" dy={lineIndex === 0 ? 0 : 11} textLength={line.length > 7 ? 52 : undefined} lengthAdjust="spacingAndGlyphs">{line}</tspan>)}
+                        </text>
                       </g>;
                     })}
                     <circle cx="200" cy="200" r="32" fill="#d29a2e" stroke="#ffedb0" strokeWidth="5"/>
