@@ -39,6 +39,7 @@ export default function SpinResultSubmission() {
   const [error, setError] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [campaign, setCampaign] = useState<SpinGameConfig>(defaultSpinGameConfig);
+  const [wheelImageSrc, setWheelImageSrc] = useState('');
   const [pointsAwarded, setPointsAwarded] = useState(0);
   const [pointsBalance, setPointsBalance] = useState(0);
   const [claimName, setClaimName] = useState('');
@@ -48,6 +49,13 @@ export default function SpinResultSubmission() {
 
   useEffect(() => {
     getSpinGamePublicConfig().then(setCampaign).catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    fetch('/spin-wheel-english.webp.b64')
+      .then(response => { if (!response.ok) throw new Error('Wheel art unavailable'); return response.text(); })
+      .then(base64 => setWheelImageSrc(`data:image/webp;base64,${base64.trim()}`))
+      .catch(() => undefined);
   }, []);
 
   const prizes = [...campaign.pointRewards.map(value => `POINTS ${value}`), '5% OFF', '1 FREE EDIT', '1 FREE PRINT', 'TRY AGAIN'];
@@ -166,6 +174,7 @@ export default function SpinResultSubmission() {
                     <circle cx="200" cy="200" r="32" fill="#d29a2e" stroke="#ffedb0" strokeWidth="5"/>
                     <circle cx="200" cy="200" r="13" fill="#f9e7ae"/>
                   </svg>
+                  {wheelImageSrc && <img src={wheelImageSrc} alt="Spin & Win prize wheel with points, free print, free edit, and 5% off rewards" className="absolute inset-2 h-[calc(100%-1rem)] w-[calc(100%-1rem)] rounded-full object-cover" style={{ transform: `rotate(${rotation}deg)`, transition: spinning ? 'transform 6.5s cubic-bezier(.12,.78,.12,1)' : 'none' }}/>}
                   <div aria-hidden="true" className="absolute left-1/2 top-0 z-10 -translate-x-1/2 -translate-y-1"><div className="h-0 w-0 border-x-[15px] border-t-[30px] border-x-transparent border-t-[#f3c95f] drop-shadow-md"/></div>
                 </div>
                 <button type="button" onClick={startSpin} disabled={spinning || Boolean(result)} className="mt-4 min-h-12 w-full rounded-xl border border-[#d6ad58] bg-[#193e32] px-5 py-3 text-base font-black text-[#fff1bd] shadow-sm disabled:cursor-not-allowed disabled:opacity-70">{spinning ? 'চাকা ঘুরছে…' : result ? 'স্পিন সম্পন্ন' : 'স্পিন করুন'}</button>
