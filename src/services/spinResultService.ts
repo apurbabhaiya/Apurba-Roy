@@ -29,22 +29,28 @@ export const spinPrizes = [
   'CHOCOLATE',
 ] as const;
 
+export async function createSpinDraw(): Promise<{ id: string; prize: string }> {
+  const { data, error } = await db.rpc('spin_result_draw_start');
+  if (error) throw error;
+  return data as { id: string; prize: string };
+}
+
 export async function submitSpinResult(input: {
   customerName: string;
   phone: string;
   address: string;
-  spinResult: string;
+  spinDrawId: string;
   campaignLink?: string;
 }) {
   const { data, error } = await db.rpc('submit_spin_result', {
     p_customer_name: input.customerName,
     p_phone: input.phone,
     p_address: input.address,
-    p_spin_result: input.spinResult,
+    p_spin_draw_id: input.spinDrawId,
     p_campaign_link: input.campaignLink || '',
   });
   if (error) throw error;
-  return data as { id: string; status: 'pending' };
+  return data as { id: string; status: 'pending'; spin_result: string };
 }
 
 export async function getSpinResultAdminSnapshot(adminToken: string): Promise<SpinSubmission[]> {
