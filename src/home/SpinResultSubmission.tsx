@@ -4,7 +4,7 @@ import { createSpinDraw, spinPrizes, submitSpinResult } from '../services/spinRe
 
 const segmentAngle = 360 / spinPrizes.length;
 const prizeLines: Record<string, string[]> = {
-  '15 MIN FREE PHOTOSHOOT': ['15 MIN', 'FREE', 'PHOTOSHOOT'],
+  '15 MIN FREE PHOTOSHOOT': ['15 MIN', 'FREE', 'PHOTO', 'SHOOT'],
   'GIFT 1': ['GIFT 1'],
   '20% OFF': ['20%', 'OFF'],
   'GIFT 2': ['GIFT 2'],
@@ -14,7 +14,7 @@ const prizeLines: Record<string, string[]> = {
   '25% OFF': ['25%', 'OFF'],
   '2% OFF': ['2%', 'OFF'],
   '8% OFF': ['8%', 'OFF'],
-  'CHOCOLATE': ['CHOCOLATE'],
+  'CHOCOLATE': ['CHOCO', 'LATE'],
 };
 const fieldClass = 'mt-1 min-h-12 w-full min-w-0 rounded-xl border border-stone-300 bg-white px-3 py-3 text-base text-[#19382e] outline-none focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/15';
 
@@ -122,11 +122,11 @@ export default function SpinResultSubmission() {
                       const middle = -90 + (index + 0.5) * segmentAngle;
                       const labelRotation = middle + 90 + (middle > 90 && middle < 270 ? 180 : 0);
                       const lines = prizeLines[prize] || [prize];
-                      const startY = 86 - ((lines.length - 1) * 6);
+                      const startY = 68 - ((lines.length - 1) * 5);
                       return <g key={prize}>
                         <path d={wheelPath(index)} fill={index % 2 === 0 ? '#a90d18' : '#fff8df'} stroke="#efcf79" strokeWidth="2.5"/>
                         <g transform={`rotate(${labelRotation} 200 200)`}>
-                          <text x="200" y={startY} textAnchor="middle" fill={index % 2 === 0 ? '#fff8df' : '#94101a'} fontSize={prize === 'CHOCOLATE' ? '10' : '12'} fontWeight="900" letterSpacing=".2">
+                          <text x="200" y={startY} textAnchor="middle" fill={index % 2 === 0 ? '#fff8df' : '#94101a'} fontSize={prize === 'CHOCOLATE' ? '9' : '10'} fontWeight="900" letterSpacing=".2">
                             {lines.map((line, lineIndex) => <tspan key={line} x="200" dy={lineIndex === 0 ? 0 : 13}>{line}</tspan>)}
                           </text>
                         </g>
