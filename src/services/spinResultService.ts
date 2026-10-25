@@ -29,8 +29,8 @@ export const spinPrizes = [
   'CHOCOLATE',
 ] as const;
 
-export async function createSpinDraw(): Promise<{ id: string; prize: string }> {
-  const { data, error } = await db.rpc('spin_result_draw_start');
+export async function createSpinDraw(phone: string): Promise<{ id: string; prize: string }> {
+  const { data, error } = await db.rpc('spin_result_draw_start', { p_phone: phone });
   if (error) throw error;
   return data as { id: string; prize: string };
 }
