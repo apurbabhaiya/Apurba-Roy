@@ -2,6 +2,10 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
+      "source": "/api/face-encode",
+      "destination": "/api/drive-preview?operation=face-encode"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
