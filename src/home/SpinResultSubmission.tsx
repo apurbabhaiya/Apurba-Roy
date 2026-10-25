@@ -28,7 +28,6 @@ export default function SpinResultSubmission() {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
-  const [link, setLink] = useState('');
   const [result, setResult] = useState('');
   const [resultRevealed, setResultRevealed] = useState(false);
   const [drawId, setDrawId] = useState('');
@@ -102,7 +101,7 @@ export default function SpinResultSubmission() {
     setBusy(true);
     setError('');
     try {
-      await submitSpinResult({ customerName: name.trim(), phone: phone.trim(), address: address.trim(), spinDrawId: drawId, campaignLink: link.trim() });
+
       setSubmitted(true);
     } catch (err: any) {
       setError(err?.message || 'ফলাফল জমা হয়নি। আবার চেষ্টা করুন।');
@@ -199,7 +198,7 @@ export default function SpinResultSubmission() {
                 
                 <label className="text-sm font-bold">ঠিকানা<textarea required autoComplete="street-address" maxLength={500} rows={3} className={fieldClass+' min-h-24 resize-y'} value={address} onChange={(e) => setAddress(e.target.value)}/></label>
                 <div className="text-sm font-bold">স্পিনে পাওয়া ফলাফল<div className={fieldClass+' flex items-center bg-stone-50 font-black text-emerald-900'} aria-live="polite">{result ? (resultRevealed ? result : 'ফলাফল দেখতে উপরের বাটনে চাপুন') : 'স্পিনের পর ফলাফল এখানে বসবে'}</div></div>
-                <label className="text-sm font-bold">স্পিন / পোস্টের লিংক <span className="font-normal text-stone-500">(ঐচ্ছিক)</span><input type="url" maxLength={500} className={fieldClass} value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://..."/></label>
+
                 <button type="submit" disabled={busy || spinning || !result || !resultRevealed || !drawId || !eligible} className="mt-1 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#193e32] px-4 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{busy?<Loader2 className="h-4 w-4 animate-spin"/>:<Send className="h-4 w-4"/>}{busy?'জমা হচ্ছে…':'ফলাফল জমা দিন'}</button>
               </form>
             </>
