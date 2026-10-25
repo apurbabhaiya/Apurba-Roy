@@ -1446,7 +1446,7 @@ function AdminPanel() {
         </div>
       </header>
       <div className="mx-auto max-w-[1500px] px-4 pt-4">
-        <nav aria-label="অ্যাডমিন বিভাগ" className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+        <nav aria-label="অ্যাডমিন বিভাগ" className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
           {([
             {id:'clients',title:'ক্লায়েন্ট ও হিসাব',hint:'বুকিং, জমা ও খরচ',active:!showCustomSettings&&!showDiscussions&&!showChatbot&&!showTeam&&!showSpin},
             {id:'settings',title:'বুকিং ও ডিসকাউন্ট',hint:'রেট, ছাড় ও পেমেন্ট',active:showCustomSettings},
