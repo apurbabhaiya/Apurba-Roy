@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ArrowLeft, CheckCircle2, Loader2, Send, TicketCheck } from 'lucide-react';
-import { spinPrizes, submitSpinResult } from '../services/spinResultService';
+import { createSpinDraw, spinPrizes, submitSpinResult } from '../services/spinResultService';
 
 const segmentAngle = 360 / spinPrizes.length;
 const prizeLines: Record<string, string[]> = {
@@ -37,6 +37,7 @@ export default function SpinResultSubmission() {
   const [address, setAddress] = useState('');
   const [link, setLink] = useState('');
   const [result, setResult] = useState('');
+  const [drawId, setDrawId] = useState('');
   const [rotation, setRotation] = useState(0);
   const [spinning, setSpinning] = useState(false);
   const [eligible, setEligible] = useState(false);
@@ -44,7 +45,7 @@ export default function SpinResultSubmission() {
   const [error, setError] = useState('');
   const [submitted, setSubmitted] = useState(false);
 
-  function startSpin() {
+  async function startSpin() {
     if (spinning || result) return;
     if (!eligible) {
       setError('স্পিনের আগে প্রথম ২০টি Facebook পোস্টে Like ও Comment করার বিষয়টি নিশ্চিত করুন।');
@@ -52,26 +53,33 @@ export default function SpinResultSubmission() {
     }
     setError('');
     setSpinning(true);
-    const prizeIndex = Math.floor(Math.random() * spinPrizes.length);
-    const prize = spinPrizes[prizeIndex];
-    const middle = -90 + (prizeIndex + 0.5) * segmentAngle;
-    const targetOffset = ((-90 - middle) % 360 + 360) % 360;
-    const currentOffset = ((rotation % 360) + 360) % 360;
-    const extraTurn = ((targetOffset - currentOffset) % 360 + 360) % 360;
-    setRotation(rotation + 360 * 8 + extraTurn);
-    window.setTimeout(() => {
-      setResult(prize);
+    try {
+      const draw = await createSpinDraw();
+      const prizeIndex = spinPrizes.indexOf(draw.prize as (typeof spinPrizes)[number]);
+      if (prizeIndex < 0) throw new Error('স্পিনের ফলাফল পাওয়া যায়নি। আবার চেষ্টা করুন।');
+      setDrawId(draw.id);
+      const middle = -90 + (prizeIndex + 0.5) * segmentAngle;
+      const targetOffset = ((-90 - middle) % 360 + 360) % 360;
+      const currentOffset = ((rotation % 360) + 360) % 360;
+      const extraTurn = ((targetOffset - currentOffset) % 360 + 360) % 360;
+      setRotation(rotation + 360 * 8 + extraTurn);
+      window.setTimeout(() => {
+        setResult(draw.prize);
+        setSpinning(false);
+      }, 6600);
+    } catch (err: any) {
       setSpinning(false);
-    }, 6600);
+      setError(err?.message || 'স্পিন শুরু হয়নি। আবার চেষ্টা করুন।');
+    }
   }
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy || !result) return;
+    if (busy || !result || !drawId) return;
     setBusy(true);
     setError('');
     try {
-      await submitSpinResult({ customerName: name.trim(), phone: phone.trim(), address: address.trim(), spinResult: result, campaignLink: link.trim() });
+      await submitSpinResult({ customerName: name.trim(), phone: phone.trim(), address: address.trim(), spinDrawId: drawId, campaignLink: link.trim() });
       setSubmitted(true);
     } catch (err: any) {
       setError(err?.message || 'ফলাফল জমা হয়নি। আবার চেষ্টা করুন।');
@@ -138,7 +146,7 @@ export default function SpinResultSubmission() {
                 <div className="text-sm font-bold">স্পিনে পাওয়া ফলাফল<div className={fieldClass+' flex items-center bg-stone-50 font-black text-emerald-900'} aria-live="polite">{result || 'স্পিনের পর ফলাফল এখানে বসবে'}</div></div>
                 <label className="text-sm font-bold">স্পিন / পোস্টের লিংক <span className="font-normal text-stone-500">(ঐচ্ছিক)</span><input type="url" maxLength={500} className={fieldClass} value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://..."/></label>
                 {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-800">{error}</p>}
-                <button type="submit" disabled={busy || spinning || !result || !eligible} className="mt-1 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#193e32] px-4 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{busy?<Loader2 className="h-4 w-4 animate-spin"/>:<Send className="h-4 w-4"/>}{busy?'জমা হচ্ছে…':'ফলাফল জমা দিন'}</button>
+                <button type="submit" disabled={busy || spinning || !result || !drawId || !eligible} className="mt-1 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#193e32] px-4 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{busy?<Loader2 className="h-4 w-4 animate-spin"/>:<Send className="h-4 w-4"/>}{busy?'জমা হচ্ছে…':'ফলাফল জমা দিন'}</button>
               </form>
             </>
           )}
