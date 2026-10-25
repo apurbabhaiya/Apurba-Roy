@@ -47,14 +47,18 @@ export default function SpinResultSubmission() {
 
   async function startSpin() {
     if (spinning || result) return;
+    if (!phone.trim()) {
+      setError('স্পিনের আগে মোবাইল নম্বর লিখুন।');
+      return;
+    }
     if (!eligible) {
-      setError('স্পিনের আগে প্রথম ২০টি Facebook পোস্টে Like ও Comment করার বিষয়টি নিশ্চিত করুন।');
+      setError('স্পিনের আগে Facebook পোস্টের শর্তটি নিশ্চিত করুন।');
       return;
     }
     setError('');
     setSpinning(true);
     try {
-      const draw = await createSpinDraw();
+      const draw = await createSpinDraw(phone.trim());
       const prizeIndex = spinPrizes.indexOf(draw.prize as (typeof spinPrizes)[number]);
       if (prizeIndex < 0) throw new Error('স্পিনের ফলাফল পাওয়া যায়নি। আবার চেষ্টা করুন।');
       setDrawId(draw.id);
@@ -107,6 +111,9 @@ export default function SpinResultSubmission() {
               <h1 className="mt-2 text-2xl font-black sm:text-3xl">স্পিন করুন, ফলাফল জমা দিন</h1>
               <p className="mt-2 text-sm leading-7 text-stone-600">প্রথম ২০টি RamyaChobi Facebook পোস্টে Like ও Comment করা গ্রাহকের জন্য পুরস্কার প্রযোজ্য। অ্যাডমিন যাচাই করে আপনার সঙ্গে যোগাযোগ করবে।</p>
 
+              <label className="mt-5 block text-sm font-bold">স্পিনের জন্য মোবাইল নম্বর<input required type="tel" inputMode="tel" autoComplete="tel" maxLength={30} className={fieldClass} value={phone} onChange={(e) => { setPhone(e.target.value); setError(''); }} placeholder="01XXXXXXXXX"/><span className="mt-1 block text-xs font-normal leading-5 text-stone-500">একই নম্বরে ৭ দিনে একবার স্পিন করা যাবে।</span></label>
+              <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl bg-[#f8f6ef] p-3 text-sm leading-6"><input type="checkbox" checked={eligible} onChange={e => { setEligible(e.target.checked); setError(''); }} className="mt-1 h-4 w-4 shrink-0 accent-emerald-800"/><span>আমি প্রথম ২০টি RamyaChobi Facebook পোস্টে Like ও Comment করেছি।</span></label>
+
               <div className="mx-auto mt-6 w-full max-w-[390px]">
                 <div className="relative mx-auto aspect-square w-full rounded-full bg-[#3a080c] p-2 shadow-[0_12px_30px_rgba(70,8,12,.25)]">
                   <svg viewBox="0 0 400 400" role="img" aria-label="RamyaChobi Spin and Win wheel" className="h-full w-full overflow-visible rounded-full" style={{ transform: `rotate(${rotation}deg)`, transition: spinning ? 'transform 6.5s cubic-bezier(.12,.78,.12,1)' : 'none' }}>
@@ -131,21 +138,19 @@ export default function SpinResultSubmission() {
                   <div aria-hidden="true" className="absolute left-1/2 top-0 z-10 -translate-x-1/2 -translate-y-1"><div className="h-0 w-0 border-x-[15px] border-t-[30px] border-x-transparent border-t-[#f3c95f] drop-shadow-md"/></div>
                 </div>
                 <button type="button" onClick={startSpin} disabled={spinning || Boolean(result)} className="mt-4 min-h-12 w-full rounded-xl border border-[#d6ad58] bg-[#193e32] px-5 py-3 text-base font-black text-[#fff1bd] shadow-sm disabled:cursor-not-allowed disabled:opacity-70">{spinning ? 'চাকা ঘুরছে…' : result ? 'স্পিন সম্পন্ন' : 'SPIN NOW · স্পিন করুন'}</button>
+                {error && <p role="alert" className="mt-3 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-800">{error}</p>}
                 <div aria-live="polite" className="mt-3 min-h-14 rounded-xl border border-[#19382e]/15 bg-[#f8f6ef] px-4 py-3 text-center">
                   <p className="text-xs font-semibold text-stone-500">আপনার স্পিনের ফলাফল</p>
                   <p className="mt-1 break-words text-base font-black text-emerald-900">{result || (spinning ? 'ফলাফল আসছে…' : 'স্পিন করলে ফলাফল এখানে নিজে থেকে দেখাবে')}</p>
                 </div>
               </div>
 
-              <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-xl bg-[#f8f6ef] p-3 text-sm leading-6"><input type="checkbox" checked={eligible} onChange={e => { setEligible(e.target.checked); setError(''); }} className="mt-1 h-4 w-4 shrink-0 accent-emerald-800"/><span>আমি প্রথম ২০টি RamyaChobi Facebook পোস্টে Like ও Comment করেছি।</span></label>
-
               <form onSubmit={(event) => void onSubmit(event)} className="mt-5 grid gap-4">
                 <label className="text-sm font-bold">আপনার নাম<input required autoComplete="name" maxLength={120} className={fieldClass} value={name} onChange={(e) => setName(e.target.value)}/></label>
-                <label className="text-sm font-bold">মোবাইল নম্বর<input required type="tel" inputMode="tel" autoComplete="tel" maxLength={30} className={fieldClass} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="01XXXXXXXXX"/></label>
+                
                 <label className="text-sm font-bold">ঠিকানা<textarea required autoComplete="street-address" maxLength={500} rows={3} className={fieldClass+' min-h-24 resize-y'} value={address} onChange={(e) => setAddress(e.target.value)}/></label>
                 <div className="text-sm font-bold">স্পিনে পাওয়া ফলাফল<div className={fieldClass+' flex items-center bg-stone-50 font-black text-emerald-900'} aria-live="polite">{result || 'স্পিনের পর ফলাফল এখানে বসবে'}</div></div>
                 <label className="text-sm font-bold">স্পিন / পোস্টের লিংক <span className="font-normal text-stone-500">(ঐচ্ছিক)</span><input type="url" maxLength={500} className={fieldClass} value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://..."/></label>
-                {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-800">{error}</p>}
                 <button type="submit" disabled={busy || spinning || !result || !drawId || !eligible} className="mt-1 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#193e32] px-4 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{busy?<Loader2 className="h-4 w-4 animate-spin"/>:<Send className="h-4 w-4"/>}{busy?'জমা হচ্ছে…':'ফলাফল জমা দিন'}</button>
               </form>
             </>
