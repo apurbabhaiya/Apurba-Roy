@@ -155,6 +155,11 @@ export default function SpinResultSubmission() {
               </form>
             </>
           )}
+          <aside className="mt-6 rounded-2xl border border-[#19382e]/10 bg-[#f8f6ef] p-4 text-center">
+            <p className="text-[11px] font-bold uppercase tracking-[.14em] text-stone-500">স্পনসরড বিজ্ঞাপন</p>
+            <p className="mt-1 text-sm leading-6 text-stone-600">বিজ্ঞাপনের অফার দেখতে নিচের বাটনে চাপুন।</p>
+            <a href="https://www.profitableratecpmnetwork.com/sejiqs7gh?key=3ced38f7fd6c41fd721c0ffa30fe4cf7" target="_blank" rel="sponsored noopener noreferrer" className="mt-3 inline-flex min-h-11 items-center justify-center rounded-xl bg-[#193e32] px-5 py-2.5 text-sm font-bold text-white">স্পনসর অফার দেখুন ↗</a>
+          </aside>
         </section>
       </div>
     </main>
