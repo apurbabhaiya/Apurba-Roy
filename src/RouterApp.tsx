@@ -12,6 +12,7 @@ import ClientAccessPage from "./home/ClientAccessPage";
 import PortfolioPage from "./home/PortfolioPage";
 import AlbumGalleryPage from "./home/AlbumGalleryPage";
 import FacebookAccessGate from "./home/FacebookAccessGate";
+import SpinResultSubmission from "./home/SpinResultSubmission";
 
 const withChat = (page: React.ReactNode) => /^(\/booking\/admin|\/delivery-admin|\/studio)(\/|$)/.test(window.location.pathname) ? <>{page}</> : <>{page}<RamyaChatWidget /></>;
 
@@ -58,6 +59,7 @@ export default function RouterApp() {
   if (path === "/facebook-login") return <FacebookAccessGate callback />;
 
   if (path === "/") return (<RamyaChobiHome />);
+  if (path === "/spin-result") return <SpinResultSubmission />;
   if (path === "/about") return (<RamyaChobiAbout />);
   if (path === "/packages") return (<RamyaChobiPackages />);
   if (path === "/portfolio") return (<PortfolioPage />);
