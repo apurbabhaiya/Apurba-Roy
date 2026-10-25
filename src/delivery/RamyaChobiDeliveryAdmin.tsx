@@ -58,6 +58,7 @@ import DeliveryDownloadSettings from './DeliveryDownloadSettings';
 import DeliveryPaymentShortcut from './DeliveryPaymentShortcut';
 import PortfolioManager from '../components/PortfolioManager';
 import WebsiteTeamManager from '../booking/WebsiteTeamManager';
+import SpinResultAdmin from '../components/SpinResultAdmin';
 import DriveDeliveryPickerModal from '../components/DriveDeliveryPickerModal';
 import DriveConnectionCard from '../components/DriveConnectionCard';
 
@@ -742,11 +743,11 @@ export default function RamyaChobiDeliveryAdmin() {
 
       <nav aria-label="Admin navigation" className="border-b border-stone-200 bg-white px-5 py-3">
         <div className="mx-auto flex max-w-7xl flex-wrap gap-2">
-          {(['dashboard', 'delivery', 'payments', 'portfolio', 'team', 'settings'] as const).map((section) => (
+          {(['dashboard', 'delivery', 'payments', 'portfolio', 'team', 'spin-results', 'settings'] as const).map((section) => (
             <button key={section} type="button" aria-current={adminSection === section ? 'page' : undefined}
               onClick={() => setAdminSection(section)}
               className={`min-h-12 rounded-2xl px-4 py-3 text-sm sm:text-base font-bold capitalize focus-visible:outline-2 focus-visible:outline-amber-600 ${adminSection === section ? 'bg-stone-950 text-white shadow-sm' : 'bg-stone-100 text-stone-700 hover:bg-amber-100'}`}>
-              {section === 'team' ? 'Website Team' : section}{section === 'payments' && counts.requests > 0 ? ` (${counts.requests})` : ''}
+              {section === 'team' ? 'Website Team' : section === 'spin-results' ? 'Spin Results' : section}{section === 'payments' && counts.requests > 0 ? ` (${counts.requests})` : ''}
             </button>
           ))}
           <a href="/booking/admin" className="flex min-h-11 items-center rounded-xl bg-emerald-800 px-4 py-2.5 text-sm font-semibold text-white">ক্লায়েন্ট ও হিসাব</a>
@@ -802,6 +803,7 @@ export default function RamyaChobiDeliveryAdmin() {
 
         {adminSection === 'portfolio' && <PortfolioManager adminToken={token} />}
         {adminSection === 'team' && <WebsiteTeamManager adminToken={token} />}
+        {adminSection === 'spin-results' && <SpinResultAdmin adminToken={token} />}
 
         {adminSection === 'dashboard' && (
         <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
