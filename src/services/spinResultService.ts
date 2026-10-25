@@ -117,7 +117,7 @@ export const claimSmartphone = async (input: { customerName: string; phone: stri
 export async function createSpinDraw(phone: string): Promise<{ id: string; prize: string; pointsAwarded: number; pointsBalance: number }> {
   const { data, error } = await db.rpc('spin_result_draw_start', { p_phone: phone });
   if (error) throw error;
-  return data as { id: string; prize: string };
+  return data as { id: string; prize: string; pointsAwarded: number; pointsBalance: number };
 }
 
 export async function submitSpinResult(input: {
