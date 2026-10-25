@@ -108,7 +108,7 @@ begin
   if not coalesce(public._booking_admin_valid(p_token), false) then raise exception 'Admin session expired'; end if;
   if p_smartphone_goal < 1 then raise exception 'লক্ষ্য ১-এর বেশি হতে হবে।'; end if;
   if length(btrim(coalesce(p_smartphone_label,''))) not between 1 and 80 then raise exception 'পুরস্কারের নাম লিখুন।'; end if;
-  if coalesce(array_length(p_point_rewards,1),0) <> 4 or exists (select 1 from unnest(p_point_rewards) n where n < 0 or n > 10000000) then raise exception 'চারটি সঠিক পয়েন্ট মান লিখুন।'; end if;
+  if coalesce(array_length(p_point_rewards,1),0) <> 4 or exists (select 1 from unnest(p_point_rewards) as x(value) where x.value < 0 or x.value > 10000000) then raise exception 'চারটি সঠিক পয়েন্ট মান লিখুন।'; end if;
   if p_booking_points < 0 or p_booking_points > 10000000 then raise exception 'বুকিং পয়েন্ট ০ থেকে ১০,০০,০০০-এর মধ্যে দিন।'; end if;
   if v_url <> '' and (length(v_url) > 500 or v_url !~ '^https://') then raise exception 'সঠিক HTTPS Adsterra লিংক দিন।'; end if;
   update public.spin_game_config
@@ -197,6 +197,7 @@ begin
   if length(coalesce(p_admin_note,'')) > 2000 then raise exception 'Admin note is too long'; end if;
   select * into v_claim from public.spin_smartphone_claims where id=p_id for update;
   if not found then raise exception 'Smartphone claim not found'; end if;
+  if v_claim.status='redeemed' and p_status <> 'redeemed' then raise exception 'Redeemed claims cannot be reopened'; end if;
   if p_status='redeemed' and v_claim.status <> 'redeemed' then
     select smartphone_goal into v_goal from public.spin_game_config where id=1;
     update public.spin_points_wallets set points_balance=points_balance-v_goal,updated_at=now()
@@ -268,7 +269,8 @@ declare
   v_points bigint;
   v_balance bigint;
 begin
-  if new.status <> 'completed' or (tg_op='UPDATE' and old.status='completed') then return new; end if;
+  if new.status <> 'completed' then return new; end if;
+  if tg_op='UPDATE' and old.status='completed' then return new; end if;
   v_phone := case when length(v_digits)=13 and left(v_digits,3)='880' then '0'||substr(v_digits,4) else v_digits end;
   if length(v_phone) not between 10 and 14 then return new; end if;
   select booking_points into v_points from public.spin_game_config where id=1;
