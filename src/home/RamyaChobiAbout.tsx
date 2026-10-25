@@ -54,7 +54,7 @@ export default function RamyaChobiAbout() {
               : team.length === 0 ? <p className="mt-5 rounded-xl border border-dashed border-stone-300 bg-white p-6 text-sm text-stone-500">টিমের তথ্য শিগগিরই যোগ করা হবে।</p>
                 : <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {team.map((member) => <article key={member.id} className="overflow-hidden rounded-2xl border border-[#19382e]/10 bg-white">
-                    <div className="aspect-[4/3] overflow-hidden bg-stone-100">{member.photo_url ? <img src={member.photo_url} alt={member.name} loading="lazy" decoding="async" className="h-full w-full object-cover object-top"/> : <div className="flex h-full items-center justify-center"><Camera className="h-8 w-8 text-stone-400"/></div>}</div>
+                    <div className="aspect-[4/5] overflow-hidden bg-[#f8f6ef]">{member.photo_url ? <img src={member.photo_url} alt={member.name} loading="lazy" decoding="async" className="h-full w-full object-contain"/> : <div className="flex h-full items-center justify-center"><Camera className="h-8 w-8 text-stone-400"/></div>}</div>
                     <div className="p-4">
                       <h3 className="text-xl font-bold">{member.name}</h3>
                       <p className="mt-1 flex items-start gap-2 text-sm leading-6 text-stone-500"><Film className="mt-1 h-4 w-4 shrink-0 text-emerald-800"/>{member.role}</p>
