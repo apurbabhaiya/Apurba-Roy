@@ -18,6 +18,7 @@ import {
   Settings2,
   ShieldCheck,
   WalletCards,
+  Users,
   XCircle,
 } from 'lucide-react';
 import {
@@ -56,6 +57,7 @@ import {
 import DeliveryDownloadSettings from './DeliveryDownloadSettings';
 import DeliveryPaymentShortcut from './DeliveryPaymentShortcut';
 import PortfolioManager from '../components/PortfolioManager';
+import WebsiteTeamManager from '../booking/WebsiteTeamManager';
 import DriveDeliveryPickerModal from '../components/DriveDeliveryPickerModal';
 import DriveConnectionCard from '../components/DriveConnectionCard';
 
@@ -740,11 +742,11 @@ export default function RamyaChobiDeliveryAdmin() {
 
       <nav aria-label="Admin navigation" className="border-b border-stone-200 bg-white px-5 py-3">
         <div className="mx-auto flex max-w-7xl flex-wrap gap-2">
-          {(['dashboard', 'delivery', 'payments', 'portfolio', 'settings'] as const).map((section) => (
+          {(['dashboard', 'delivery', 'payments', 'portfolio', 'team', 'settings'] as const).map((section) => (
             <button key={section} type="button" aria-current={adminSection === section ? 'page' : undefined}
               onClick={() => setAdminSection(section)}
-              className={`rounded-xl px-4 py-2.5 text-sm font-semibold capitalize focus-visible:outline-2 focus-visible:outline-amber-600 ${adminSection === section ? 'bg-stone-950 text-white' : 'bg-stone-100 text-stone-700 hover:bg-amber-100'}`}>
-              {section}{section === 'payments' && counts.requests > 0 ? ` (${counts.requests})` : ''}
+              className={`min-h-12 rounded-2xl px-4 py-3 text-sm sm:text-base font-bold capitalize focus-visible:outline-2 focus-visible:outline-amber-600 ${adminSection === section ? 'bg-stone-950 text-white shadow-sm' : 'bg-stone-100 text-stone-700 hover:bg-amber-100'}`}>
+              {section === 'team' ? 'Website Team' : section}{section === 'payments' && counts.requests > 0 ? ` (${counts.requests})` : ''}
             </button>
           ))}
           <a href="/booking/admin" className="flex min-h-11 items-center rounded-xl bg-emerald-800 px-4 py-2.5 text-sm font-semibold text-white">ক্লায়েন্ট ও হিসাব</a>
@@ -763,7 +765,7 @@ export default function RamyaChobiDeliveryAdmin() {
         {adminSection === 'settings' && <section className="space-y-4" aria-label="Connection settings"><h2 className="text-xl font-semibold">Settings</h2><DriveConnectionCard adminToken={token} /></section>}
 
         {adminSection === 'dashboard' && (
-        <section className="grid gap-4 md:grid-cols-3">
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <a href="/photo-selection" className="group rounded-3xl bg-stone-950 p-6 text-white shadow-sm transition hover:-translate-y-0.5">
             <Images className="h-8 w-8 text-amber-300" />
             <h2 className="mt-4 text-xl font-semibold">Photo Selection</h2>
@@ -790,10 +792,16 @@ export default function RamyaChobiDeliveryAdmin() {
               Preview the RamyaChobi payment, Final Delivery and access-restoration landing page.
             </p>
           </a>
+          <button type="button" onClick={() => setAdminSection('team')} className="group rounded-3xl border border-stone-200 bg-white p-6 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-amber-300 focus-visible:outline-2 focus-visible:outline-amber-600">
+            <Users className="h-8 w-8 text-amber-700" />
+            <h2 className="mt-4 text-xl font-semibold">Website Team</h2>
+            <p className="mt-2 text-sm leading-6 text-stone-500">Add team profiles, update photos and contact details, hide profiles, and assign portfolio work.</p>
+          </button>
         </section>
         )}
 
         {adminSection === 'portfolio' && <PortfolioManager adminToken={token} />}
+        {adminSection === 'team' && <WebsiteTeamManager adminToken={token} />}
 
         {adminSection === 'dashboard' && (
         <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
