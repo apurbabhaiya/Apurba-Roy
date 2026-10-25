@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ExternalLink, Loader2, RefreshCw, Save, TicketCheck } from 'lucide-react';
 import { getSpinResultAdminSnapshot, updateSpinResultAdmin, type SpinSubmission } from '../services/spinResultService';
+import SpinLoyaltyAdmin from './SpinLoyaltyAdmin';
 
 type Status = SpinSubmission['status'];
 const labels: Record<Status, string> = { pending: 'নতুন', verified: 'যাচাই হয়েছে', redeemed: 'পুরস্কার দেওয়া হয়েছে', rejected: 'বাতিল' };
@@ -62,6 +63,7 @@ export default function SpinResultAdmin({ adminToken }: { adminToken: string }) 
 
   return (
     <section className="mx-auto max-w-[1500px] space-y-4 px-4 py-5" aria-label="Spin result management">
+      <SpinLoyaltyAdmin adminToken={adminToken}/>
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-white p-4">
         <div className="flex items-center gap-3"><span className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-800"><TicketCheck className="h-5 w-5"/></span><div><h2 className="text-lg font-black">Spin Results</h2><p className="text-sm text-stone-500">{counts.pending}টি নতুন · মোট {counts.all}টি জমা</p></div></div>
         <button type="button" onClick={() => void load()} disabled={loading} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-stone-300 px-3 text-sm font-bold disabled:opacity-50"><RefreshCw className={'h-4 w-4 '+(loading?'animate-spin':'')}/>রিফ্রেশ</button>
