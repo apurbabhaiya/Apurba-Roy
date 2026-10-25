@@ -111,7 +111,7 @@ export default function SpinResultSubmission() {
               <h1 className="mt-2 text-2xl font-black sm:text-3xl">স্পিন করুন, ফলাফল জমা দিন</h1>
               <p className="mt-2 text-sm leading-7 text-stone-600">প্রথম ২০টি RamyaChobi Facebook পোস্টে Like ও Comment করা গ্রাহকের জন্য পুরস্কার প্রযোজ্য। অ্যাডমিন যাচাই করে আপনার সঙ্গে যোগাযোগ করবে।</p>
 
-              <label className="mt-5 block text-sm font-bold">স্পিনের জন্য মোবাইল নম্বর<input required type="tel" inputMode="tel" autoComplete="tel" maxLength={30} className={fieldClass} value={phone} onChange={(e) => { setPhone(e.target.value); setError(''); }} placeholder="01XXXXXXXXX"/><span className="mt-1 block text-xs font-normal leading-5 text-stone-500">একই নম্বরে ৭ দিনে একবার স্পিন করা যাবে।</span></label>
+              <label className="mt-5 block text-sm font-bold">স্পিনের জন্য মোবাইল নম্বর<input required type="tel" inputMode="tel" autoComplete="tel" maxLength={30} disabled={spinning || Boolean(drawId)} className={fieldClass+" disabled:bg-stone-100 disabled:text-stone-500"} value={phone} onChange={(e) => { setPhone(e.target.value); setError(''); }} placeholder="01XXXXXXXXX"/><span className="mt-1 block text-xs font-normal leading-5 text-stone-500">একই নম্বরে ৭ দিনে একবার স্পিন করা যাবে।</span></label>
               <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl bg-[#f8f6ef] p-3 text-sm leading-6"><input type="checkbox" checked={eligible} onChange={e => { setEligible(e.target.checked); setError(''); }} className="mt-1 h-4 w-4 shrink-0 accent-emerald-800"/><span>আমি প্রথম ২০টি RamyaChobi Facebook পোস্টে Like ও Comment করেছি।</span></label>
 
               <div className="mx-auto mt-6 w-full max-w-[390px]">
