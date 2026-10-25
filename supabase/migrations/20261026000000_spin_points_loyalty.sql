@@ -275,6 +275,7 @@ begin
   if length(v_phone) not between 10 and 14 then return new; end if;
   select booking_points into v_points from public.spin_game_config where id=1;
   if coalesce(v_points,0) <= 0 then return new; end if;
+  if exists(select 1 from public.spin_points_ledger where source_type='booking' and source_id=new.id) then return new; end if;
   insert into public.spin_points_wallets(phone_normalized,points_balance) values(v_phone,0) on conflict(phone_normalized) do nothing;
   update public.spin_points_wallets set points_balance=points_balance+v_points,updated_at=now() where phone_normalized=v_phone returning points_balance into v_balance;
   insert into public.spin_points_ledger(phone_normalized,points_delta,balance_after,source_type,source_id,note)
