@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ArrowLeft, CheckCircle2, Loader2, Send, TicketCheck } from 'lucide-react';
-import { claimSmartphone, createSpinDraw, defaultSpinGameConfig, getSpinGamePublicConfig, spinPrizes, submitSpinResult, type SpinGameConfig } from '../services/spinResultService';
+import { claimSmartphone, createSpinDraw, defaultSpinGameConfig, getSpinGamePublicConfig, submitSpinResult, type SpinGameConfig } from '../services/spinResultService';
 
 const prizeLines: Record<string, string[]> = {
   '5% OFF': ['5%', 'OFF'],
@@ -143,7 +143,7 @@ export default function SpinResultSubmission() {
               <div className="mb-4 rounded-2xl border border-[#19382e]/10 bg-[#f8f6ef] p-4">
                 <div className="flex items-center justify-between gap-2"><span className="text-sm font-bold">স্মার্টফোন পুরস্কারের অগ্রগতি</span><span className="text-xs font-semibold">লক্ষ্য {campaign.smartphoneGoal.toLocaleString('bn-BD')}</span></div>
                 <div className="mt-2 h-3 overflow-hidden rounded-full bg-stone-200"><div className="h-full rounded-full bg-emerald-700 transition-all" style={{width: `${progress}%`}}/></div>
-                <p className="mt-2 text-sm">আপনার পয়েন্ট: <strong>{pointsBalance.toLocaleString('bn-BD')}</strong> · {campaign.smartphoneLabel}: ১,০০,০০,০০০ পয়েন্ট</p>
+                <p className="mt-2 text-sm">আপনার পয়েন্ট: <strong>{pointsBalance.toLocaleString('bn-BD')}</strong> · {campaign.smartphoneLabel}: {campaign.smartphoneGoal.toLocaleString('bn-BD')} পয়েন্ট</p>
               </div>
               <div className="mx-auto mt-6 w-full max-w-[390px]">
                 <div className="relative mx-auto aspect-square w-full rounded-full bg-[#3a080c] p-2 shadow-[0_12px_30px_rgba(70,8,12,.25)]">
