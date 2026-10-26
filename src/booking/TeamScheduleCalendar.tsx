@@ -40,28 +40,35 @@ export default function TeamScheduleCalendar() {
 
   useEffect(() => {
     let live = true;
+    const loadSchedule = () => {
+      db.rpc('booking_public_team_schedule', { p_month: monthKey + '-01' })
+        .then(({ data, error: requestError }: any) => {
+          if (!live) return;
+          if (requestError) {
+            setError('টিমের শিডিউল এখন লোড করা যাচ্ছে না।');
+            return;
+          }
+          setItems((data || []) as ScheduleDay[]);
+          setError('');
+        })
+        .catch(() => {
+          if (live) setError('টিমের শিডিউল এখন লোড করা যাচ্ছে না।');
+        })
+        .finally(() => {
+          if (live) setLoading(false);
+        });
+    };
     setLoading(true);
     setError('');
-    db.rpc('booking_public_team_schedule', { p_month: monthKey + '-01' })
-      .then(({ data, error: requestError }: any) => {
-        if (!live) return;
-        if (requestError) {
-          setItems([]);
-          setError('টিমের শিডিউল এখন লোড করা যাচ্ছে না।');
-          return;
-        }
-        setItems((data || []) as ScheduleDay[]);
-      })
-      .catch(() => {
-        if (live) {
-          setItems([]);
-          setError('টিমের শিডিউল এখন লোড করা যাচ্ছে না।');
-        }
-      })
-      .finally(() => {
-        if (live) setLoading(false);
-      });
-    return () => { live = false; };
+    loadSchedule();
+    const refreshAfterSubmit = () => loadSchedule();
+    const interval = window.setInterval(loadSchedule, 30000);
+    window.addEventListener('booking:submitted', refreshAfterSubmit);
+    return () => {
+      live = false;
+      window.clearInterval(interval);
+      window.removeEventListener('booking:submitted', refreshAfterSubmit);
+    };
   }, [monthKey]);
 
   const scheduledDays = useMemo(
@@ -87,7 +94,7 @@ export default function TeamScheduleCalendar() {
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-900"><CalendarDays className="h-5 w-5" /></span>
           <span className="min-w-0 flex-1">
             <span id="team-schedule-title" className="block text-base font-black text-[#193e32] sm:text-lg">টিমের শিডিউল দেখুন</span>
-            <span className="mt-1 block text-xs leading-5 text-stone-600">কোন তারিখে টিমের নিশ্চিত কাজ আছে, ক্যালেন্ডারে দেখুন</span>
+            <span className="mt-1 block text-xs leading-5 text-stone-600">কোন তারিখে বুকিং অনুরোধ বা নিশ্চিত টিমের কাজ আছে, ক্যালেন্ডারে দেখুন</span>
           </span>
           <span aria-hidden="true" className="text-xl text-stone-500">⌄</span>
         </summary>
@@ -114,7 +121,7 @@ export default function TeamScheduleCalendar() {
                   const dayKey = monthKey + '-' + String(day).padStart(2, '0');
                   const count = scheduledDays.get(dayKey) || 0;
                   return (
-                    <div role="gridcell" aria-label={day + ' তারিখ' + (count ? ', টিমের ' + count + 'টি কাজ আছে' : ', কোনো নিশ্চিত কাজ দেখানো নেই')} key={dayKey} className={'flex min-h-12 flex-col items-center justify-center rounded-lg border text-xs sm:min-h-14 sm:text-sm ' + (count ? 'border-amber-300 bg-amber-50 font-bold text-amber-950' : 'border-stone-100 bg-white text-stone-700')}>
+                    <div role="gridcell" aria-label={day + ' তারিখ' + (count ? '; বুকিং অনুরোধ বা টিমের কাজ আছে' : '; কোনো বুকিং অনুরোধ/নিশ্চিত কাজ নেই')} key={dayKey} className={'flex min-h-12 flex-col items-center justify-center rounded-lg border text-xs sm:min-h-14 sm:text-sm ' + (count ? 'border-amber-300 bg-amber-50 font-bold text-amber-950' : 'border-stone-100 bg-white text-stone-700')}>
                       <span>{day}</span>
                       {count > 0 && <span aria-hidden="true" className="mt-0.5 h-1.5 w-1.5 rounded-full bg-amber-600" />}
                     </div>
@@ -122,10 +129,10 @@ export default function TeamScheduleCalendar() {
                 })}
               </div>
               <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-stone-600"><span aria-hidden="true" className="h-2.5 w-2.5 rounded-full bg-amber-600" />এই তারিখে টিমের কাজ আছে</div>
-              {!items.length && <p className="mt-3 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-900">এই মাসে এখনো কোনো নিশ্চিত টিম শিডিউল নেই।</p>}
+              {!items.length && <p className="mt-3 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-900">এই মাসে এখনো কোনো বুকিং অনুরোধ বা নিশ্চিত টিম শিডিউল নেই।</p>}
             </>
           )}
-          <p className="mt-3 text-xs leading-5 text-stone-500">এখানে শুধু বুকড/কনফার্মড কাজের তারিখ দেখানো হয়। নাম, ফোন ও আয়োজনের বিবরণ গোপন থাকে। ফাঁকা তারিখও অফিসের নিশ্চিতকরণ ছাড়া বুকিং নিশ্চিত করে না।</p>
+          <p className="mt-3 text-xs leading-5 text-stone-500">বুকিং ফর্ম জমা হলে তারিখটি সঙ্গে সঙ্গে এখানে দেখা যায়; অন্য খোলা পেজে সর্বোচ্চ ৩০ সেকেন্ডে আপডেট হয়। অফিস নিশ্চিত না করা পর্যন্ত এটি চূড়ান্ত বুকিং নয়। শুধু তারিখ ও অনুরোধের সংখ্যা দেখানো হয়—নাম, ফোন ও আয়োজনের বিবরণ গোপন থাকে। ফাঁকা তারিখও অফিসের নিশ্চিতকরণ ছাড়া বুকিং নিশ্চিত করে না.</p>
         </div>
       </details>
     </section>
