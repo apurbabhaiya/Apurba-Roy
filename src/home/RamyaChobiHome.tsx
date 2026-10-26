@@ -5,7 +5,7 @@ import {getApprovedClientReviews,type ClientReview} from '../services/reviewServ
 import FacebookReviews from './FacebookReviews';
 
 type Work={image:string;title:string;category:string;caption:string};
-const adminHref='https://apurba-roy-git-codex-admin-menu-sections-ramyachobi.vercel.app/delivery-admin';
+const adminHref='/booking/admin?section=spin';
 const links=[{label:'হোম',href:'/#home',icon:Home},{label:'সহজ বুকিং',href:'/booking',icon:CalendarDays},{label:'প্যাকেজ ও বাজেট',href:'/packages',icon:BookOpenCheck},{label:'আমাদের কাজ',href:'/portfolio',icon:Images},{label:'ছবির গ্যালারি',href:'/client-gallery',icon:FolderHeart},{label:'ফাইনাল ছবি ডাউনলোড',href:'/delivery',icon:Download},{label:'মুখ দিয়ে ছবি খুঁজুন',href:'/face-search',icon:Camera},{label:'আমাদের সেবা',href:'/#services',icon:Film},{label:'রম্যছবি সম্পর্কে',href:'/about',icon:BookOpenCheck},{label:'ক্লায়েন্টের মতামত',href:'/#reviews',icon:Star},{label:'Spin & Win',href:'/spin-result',icon:TicketCheck},{label:'যোগাযোগ / আলোচনা',href:'/#contact',icon:CalendarDays}];
 const focus='focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-emerald-700';
 export default function RamyaChobiHome(){
