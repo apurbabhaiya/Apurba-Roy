@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   BadgeCheck,
+  Plus,
   CalendarClock,
   CheckCircle2,
   Clipboard,
@@ -26,6 +27,7 @@ import {
   DeliveryAdminPortal,
   activateFinalDelivery,
   createDeliveryPortalFromBooking,
+  createManualDeliveryClient,
   deliveryAdminLogin,
   deliveryAdminLogout,
   getDeliveryAdminDashboard,
@@ -54,6 +56,7 @@ import {
   setDeliveryDocumentPermission,
   DeliveryPaymentLedger,
 } from '../services/deliveryPortalService';
+import { manualClientPayload, type ManualClientDraft } from './manualClient';
 import { directoryDate, filterClientDirectory, type DirectoryDateField, type DirectorySort } from './clientDirectory';
 import DeliveryDownloadSettings from './DeliveryDownloadSettings';
 import DeliveryPaymentShortcut from './DeliveryPaymentShortcut';
@@ -78,7 +81,8 @@ function money(value: number | string | null | undefined) {
   return new Intl.NumberFormat('en-BD', {
     style: 'currency',
     currency: 'BDT',
-    maximumFractionDigits: 0,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
   }).format(Number(value || 0));
 }
 
@@ -185,6 +189,41 @@ export default function RamyaChobiDeliveryAdmin() {
   const [portalDateField, setPortalDateField] = useState<DirectoryDateField>('event_date');
   const [portalSort, setPortalSort] = useState<DirectorySort>('name');
   const [selectedPortalId, setSelectedPortalId] = useState('');
+  const emptyManualClient: ManualClientDraft = { client_name: '', phone: '', event_date: '', event_name: '', total: '', paid: '0', delivered: false };
+  const [showManualClient, setShowManualClient] = useState(false);
+  const [manualDraft, setManualDraft] = useState<ManualClientDraft>(emptyManualClient);
+  const [manualRequestId, setManualRequestId] = useState(() => crypto.randomUUID());
+  const [manualBusy, setManualBusy] = useState(false);
+  const [manualError, setManualError] = useState('');
+  const [manualSuccess, setManualSuccess] = useState('');
+  const manualDue = Math.max(0, Number(manualDraft.total || 0) - Number(manualDraft.paid || 0));
+  function changeManualDraft(patch: Partial<ManualClientDraft>) {
+    setManualDraft(current => {
+      const next = { ...current, ...patch };
+      if (Number(next.paid) < Number(next.total)) next.delivered = false;
+      return next;
+    });
+  }
+  async function saveManualClient(event: React.FormEvent) {
+    event.preventDefault();
+    if (manualBusy) return;
+    setManualError('');
+    let payload: ReturnType<typeof manualClientPayload>;
+    try { payload = manualClientPayload(manualDraft, manualRequestId); }
+    catch (error: any) { setManualError(error.message); return; }
+    setManualBusy(true);
+    try {
+      const saved = await createManualDeliveryClient(token, payload);
+      setPortalSearch(''); setPortalDate(''); setPortalDateField('event_date');
+      setSelectedPortalId(saved.id); setPortalEdit({}); setEditingPortal(null);
+      await load();
+      setManualSuccess(`${saved.client_name} যোগ হয়েছে। বাকি: ${money(saved.remaining_due)}। ছবি/ভিডিও যোগ করে ডেলিভারি নিয়ন্ত্রণ থেকে Publish করুন।`);
+      setShowManualClient(false); setManualDraft(emptyManualClient); setManualRequestId(crypto.randomUUID());
+      window.requestAnimationFrame(() => document.getElementById(`portal-${saved.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    } catch (error: any) { setManualError(error?.message || 'কাস্টমার যোগ হয়নি। আবার চেষ্টা করুন।'); }
+    finally { setManualBusy(false); }
+  }
+
   const [portalEdit, setPortalEdit] = useState<Record<string, any>>({});
   const [ledgerDrafts, setLedgerDrafts] = useState<Record<string, { date: string; method: DeliveryPaymentLedger['payment_method']; amount: string; transactionId: string; note: string; status: DeliveryPaymentLedger['status'] }>>({});
 
@@ -918,8 +957,27 @@ export default function RamyaChobiDeliveryAdmin() {
         <section className="rounded-3xl border border-stone-200 bg-white p-6 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div><p className="text-xs font-bold uppercase tracking-widest text-emerald-700">Client delivery portals</p><h2 className="mt-1 text-2xl font-bold">ক্লায়েন্ট ডেলিভারি তালিকা</h2><p className="mt-2 text-sm text-stone-500">১. নাম খুঁজুন → ২. ক্লায়েন্ট বাছুন → ৩. ছবি, পেমেন্ট ও ডেলিভারি দেখুন</p></div>
-            <span role="status" className="rounded-full bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800">{portals.length} জনের মধ্যে {filteredPortals.length} জন</span>
+            <div className="flex flex-wrap items-center gap-2"><span role="status" className="rounded-full bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800">{portals.length} জনের মধ্যে {filteredPortals.length} জন</span><button type="button" aria-expanded={showManualClient} aria-controls="manual-client-form" onClick={() => { setShowManualClient(true); setManualError(''); setManualSuccess(''); }} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-emerald-800 px-4 py-3 text-sm font-bold text-white"><Plus className="h-4 w-4" />কাস্টমার যোগ করুন / Add Customer</button></div>
           </div>
+          {manualSuccess && <p role="status" className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-900">{manualSuccess}</p>}
+          {showManualClient && <form id="manual-client-form" onSubmit={saveManualClient} className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50/50 p-5">
+            <h3 className="text-lg font-bold">বুকিং ছাড়া পুরোনো / নতুন কাস্টমার যোগ করুন</h3>
+            <p className="mt-2 text-sm text-stone-600">আগে অনলাইনে বুকিং না থাকলেও সরাসরি হিসাব ও ডেলিভারি পোর্টাল তৈরি করুন। একই কাজের কাস্টমার আগে থাকলে তালিকা থেকে তার হিসাব খুলুন।</p>
+            <fieldset disabled={manualBusy} className="mt-4 space-y-4 disabled:opacity-60">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <label className="text-sm font-semibold">ক্লায়েন্টের নাম *<input autoFocus required minLength={2} maxLength={150} autoComplete="name" value={manualDraft.client_name} onChange={e => changeManualDraft({ client_name: e.target.value })} className="mt-2 min-h-11 w-full rounded-xl border bg-white px-3 py-2 font-normal" /></label>
+                <label className="text-sm font-semibold">মোবাইল নম্বর *<input required type="tel" autoComplete="tel" maxLength={25} value={manualDraft.phone} onChange={e => changeManualDraft({ phone: e.target.value })} className="mt-2 min-h-11 w-full rounded-xl border bg-white px-3 py-2 font-normal" /></label>
+                <label className="min-w-0 text-sm font-semibold">অনুষ্ঠান / কাজের তারিখ *<input required type="date" value={manualDraft.event_date} onChange={e => changeManualDraft({ event_date: e.target.value })} className="mt-2 min-h-11 w-full min-w-0 rounded-xl border bg-white px-3 py-2 font-normal" /></label>
+                <label className="text-sm font-semibold">অনুষ্ঠানের নাম (ঐচ্ছিক)<input maxLength={200} placeholder="যেমন: বিয়ে, জন্মদিন" value={manualDraft.event_name} onChange={e => changeManualDraft({ event_name: e.target.value })} className="mt-2 min-h-11 w-full rounded-xl border bg-white px-3 py-2 font-normal" /></label>
+                <label className="text-sm font-semibold">মোট বিল (টাকা) *<input required type="number" inputMode="decimal" min={0} max={1000000000} step="0.01" value={manualDraft.total} onChange={e => changeManualDraft({ total: e.target.value })} className="mt-2 min-h-11 w-full rounded-xl border bg-white px-3 py-2 font-normal" /></label>
+                <label className="text-sm font-semibold">আগে পাওয়া / জমা টাকা *<input required type="number" inputMode="decimal" min={0} max={Number(manualDraft.total) || 0} step="0.01" value={manualDraft.paid} onChange={e => changeManualDraft({ paid: e.target.value })} className="mt-2 min-h-11 w-full rounded-xl border bg-white px-3 py-2 font-normal" /></label>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white p-4"><div><span className="text-sm text-stone-500">বাকি টাকা</span><strong className="ml-3 text-xl">{money(Number.isFinite(manualDue) ? manualDue : 0)}</strong><p className="mt-1 text-xs text-stone-500">আগের জমা একবারই হিসাবে যোগ হবে। পরে পেমেন্ট অংশে নতুন টাকা যোগ করুন।</p></div><button type="button" disabled={!manualDraft.total} onClick={() => changeManualDraft({ paid: manualDraft.total })} className="min-h-11 rounded-xl border border-emerald-300 px-3 py-2 text-sm font-bold text-emerald-900 disabled:opacity-40">পুরো বিল পেয়েছি</button></div>
+              <div><p className="mb-2 text-sm font-semibold">ডেলিভারির অবস্থা</p><div className="flex flex-wrap gap-3"><label className="flex min-h-11 items-center gap-2 rounded-xl border bg-white px-3 py-2 text-sm"><input type="radio" name="manual-delivery-state" checked={!manualDraft.delivered} onChange={() => changeManualDraft({ delivered: false })} />ডেলিভারি বাকি / প্রস্তুত হচ্ছে</label><label className="flex min-h-11 items-center gap-2 rounded-xl border bg-white px-3 py-2 text-sm"><input type="radio" name="manual-delivery-state" disabled={!manualDraft.total || manualDue > 0} checked={manualDraft.delivered} onChange={() => changeManualDraft({ delivered: true })} />পূর্ণ ডেলিভারি (বিল পরিশোধিত)</label></div><p className="mt-2 text-xs text-stone-500">পূর্ণ ডেলিভারি চিহ্নিত করলে আজ থেকে ৩০ দিনের অ্যাক্সেস গণনা হবে। পোর্টাল প্রথমে ড্রাফট থাকবে; ফাইল যোগ করে Publish করুন। এই এন্ট্রিতে স্বয়ংক্রিয় লেট ফি চালু হবে না।</p></div>
+              {manualError && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700">{manualError}</p>}
+              <div className="flex flex-wrap gap-2"><button type="submit" className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-emerald-800 px-5 py-3 font-bold text-white">{manualBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}{manualBusy ? 'সেভ হচ্ছে…' : 'কাস্টমার ও ডেলিভারি সেভ করুন'}</button><button type="button" onClick={() => { setShowManualClient(false); setManualError(''); }} className="min-h-11 rounded-xl border bg-white px-4 py-3 font-bold">এখন নয়</button></div>
+            </fieldset>
+          </form>}
           <div className="mt-5 grid gap-3 rounded-2xl bg-stone-50 p-4 sm:grid-cols-2 xl:grid-cols-[2fr_1fr_1fr_1fr_auto]">
             <label className="min-w-0 text-sm font-semibold">ক্লায়েন্ট সার্চ<input type="search" value={portalSearch} onChange={e => setPortalSearch(e.target.value)} placeholder="নাম, মোবাইল, অনুষ্ঠান বা প্যাকেজ" className="mt-2 min-h-11 w-full rounded-xl border border-stone-300 bg-white px-3 py-2 font-normal" /></label>
             <label className="text-sm font-semibold">কোন তারিখ?<select value={portalDateField} onChange={e => setPortalDateField(e.target.value as DirectoryDateField)} className="mt-2 min-h-11 w-full rounded-xl border border-stone-300 bg-white px-3 py-2 font-normal"><option value="event_date">অনুষ্ঠানের তারিখ</option><option value="final_delivery_at">ডেলিভারির তারিখ</option><option value="created_at">যোগ করার তারিখ</option></select></label>
