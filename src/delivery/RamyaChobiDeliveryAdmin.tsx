@@ -619,7 +619,7 @@ export default function RamyaChobiDeliveryAdmin() {
 
   async function setPublicListing(portal: DeliveryAdminPortal) {
     const visible = !portal.public_listed;
-    if (visible && !window.confirm('এই ক্লায়েন্টের নাম, অনুষ্ঠান/তারিখ এবং ডেলিভারি পোর্টাল /delivery তালিকায় সবার জন্য দেখানো হবে। পোর্টালে পেমেন্ট ও অ্যাক্সেসের তথ্য থাকতে পারে। প্রকাশ করতে চান?')) return;
+    if (visible && !window.confirm('এই ক্লায়েন্টের নাম, অনুষ্ঠান/তারিখ এবং প্রকাশ্য অ্যালবাম /delivery তালিকায় সবার জন্য দেখানো হবে। প্রকাশ্য অ্যালবাম খুললে শুধু অনুমোদিত প্রিভিউ দেখা যাবে। প্রকাশ করতে চান?')) return;
     setLoading(true);
     try { await setPublicDeliveryListing({token,portalId:portal.id,visible}); await load(); setNotice(visible ? 'অ্যালবাম প্রকাশ্য তালিকায় দেখানো হচ্ছে।' : 'অ্যালবাম প্রকাশ্য তালিকা থেকে লুকানো হয়েছে।'); }
     catch(error:any) {setNotice(error?.message || 'অ্যালবামের দৃশ্যমানতা পরিবর্তন করা যায়নি।');}
@@ -1117,7 +1117,7 @@ export default function RamyaChobiDeliveryAdmin() {
 
                   <div hidden={portalSection !== 'delivery'}>
                   <section className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
-                    <div><h3 className="text-sm font-bold">ক্লায়েন্টের Final Delivery তালিকা</h3><p className="mt-1 text-xs text-stone-600">{portal.public_listed && portal.is_published && portal.preview_enabled !== false ? '/delivery পেজে ক্লায়েন্টের নাম ও পোর্টাল দেখানো হচ্ছে।' : 'ক্লায়েন্টের পোর্টাল /delivery তালিকায় লুকানো আছে।'}</p><p className="mt-1 text-xs text-stone-500">প্রকাশ করলে যে কেউ এই তালিকা থেকে ক্লায়েন্ট পোর্টাল খুলতে পারবে। আগে Publish Delivery ও Preview চালু করুন।</p></div>
+                    <div><h3 className="text-sm font-bold">প্রকাশ্য Final Delivery তালিকা</h3><p className="mt-1 text-xs text-stone-600">{portal.public_listed && portal.is_published && portal.preview_enabled !== false ? '/delivery পেজে নাম ও প্রকাশ্য অ্যালবাম দেখানো হচ্ছে।' : '/delivery তালিকায় এই ক্লায়েন্ট লুকানো আছে।'}</p><p className="mt-1 text-xs text-stone-500">দেখালে ক্লায়েন্টের নাম, অনুষ্ঠান ও তারিখ প্রকাশ্যে দেখা যাবে। প্রিভিউ ও ডাউনলোডের নিয়ম আগের মতোই থাকবে.</p></div>
                     <button type="button" onClick={() => void setPublicListing(portal)} disabled={loading || (!portal.public_listed && (!portal.is_published || portal.preview_enabled === false))} className="rounded-xl bg-stone-950 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-40">{portal.public_listed ? 'লুকান' : 'দেখান'}</button>
                   </section>
 
