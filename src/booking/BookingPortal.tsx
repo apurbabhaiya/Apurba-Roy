@@ -385,7 +385,7 @@ async function submitBooking(form: FormData) {
   };
 }
 
-function ClientForm() {
+function ClientForm(props: { onSaved?: (booking: { id: string; reference_no: string }) => Promise<void>; onCancel?: () => void } = {}) {
   const {config: customConfig, error: configError} = useCustomConfig();
   const [useCustom, setUseCustom] = useState(false);
   const [customOptions, setCustomOptions] = useState<CustomOptions>({travel:{}});
@@ -509,6 +509,10 @@ function ClientForm() {
         if(response.error) throw response.error;
         saved=response.data;
       } else saved=await submitBooking(bookingPayload);
+      if (props.onSaved) {
+        await props.onSaved(saved);
+        return;
+      }
       setSavedRef(saved.reference_no);
       downloadPdf(bookingPayload, saved.reference_no, 0);
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -554,8 +558,10 @@ function ClientForm() {
           <div className="text-sm font-semibold uppercase tracking-[0.24em] text-amber-300">
             Ramya Chobi
           </div>
+          {props.onCancel && <button type="button" disabled={saving} onClick={props.onCancel} className="mb-3 rounded-xl border border-white/40 px-4 py-2 font-bold disabled:opacity-50">← ক্লায়েন্ট তালিকায় ফিরুন</button>}
+          {props.onSaved && <p className="mb-3 text-sm text-amber-200">ক্লায়েন্টের তথ্য, অনুষ্ঠান ও প্যাকেজ লিখুন। ক্লায়েন্টকে দিয়ে স্বাক্ষর ও সম্মতি নিশ্চিত করুন।</p>}
           <h1 className="mt-2 text-3xl font-black sm:text-4xl">
-            রম্যছবি · সহজ বুকিং
+            {props.onSaved ? "নতুন ক্লায়েন্ট যোগ করুন" : "রম্যছবি · সহজ বুকিং"}
           </h1>
           <p className="mt-3 max-w-3xl text-slate-300">
             প্রথমে নাম ও ফোন দিন → অনুষ্ঠান ও সময় বাছুন → প্যাকেজ দেখে সম্মতি দিন।
@@ -1162,6 +1168,7 @@ function bookingPhoneHref(phone: string) {
 }
 
 function AdminPanel() {
+  const [addingClient, setAddingClient] = useState(false);
   const [showCustomSettings,setShowCustomSettings] = useState(new URLSearchParams(window.location.search).get('section')==='settings');
   const [showDiscussions,setShowDiscussions] = useState(new URLSearchParams(window.location.search).get('section')==='discussions');
   const [showChatbot,setShowChatbot] = useState(new URLSearchParams(window.location.search).get('section')==='chat');
@@ -1197,7 +1204,7 @@ function AdminPanel() {
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function load(activeToken?: string) {
+  async function load(activeToken?: string, preferredId?: string) {
     const useToken = activeToken || token;
     if (!useToken) {
       setReady(true);
@@ -1220,7 +1227,9 @@ function AdminPanel() {
       setCosts((payload.costs || []) as Cost[]);
 
       const activeBookings = nextBookings.filter(b => !b.deleted_at);
-      if (!selectedId && activeBookings[0]) {
+      if (preferredId && activeBookings.some(b => b.id === preferredId)) {
+        setSelectedId(preferredId);
+      } else if (!selectedId && activeBookings[0]) {
         setSelectedId(activeBookings[0].id);
       } else if (
         selectedId &&
@@ -1437,6 +1446,16 @@ function AdminPanel() {
     );
   }
 
+  if (addingClient) {
+    return <ClientForm onCancel={() => setAddingClient(false)} onSaved={async saved => {
+      setShowTrash(false);
+      setSearch("");
+      await load(undefined, saved.id);
+      setAddingClient(false);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }} />;
+  }
+
   return (
     <main className="min-h-screen bg-[#f8f6ef] pb-8 text-slate-900">
       <header className="sticky top-0 z-20 border-b border-emerald-900/10 bg-[#f8f6ef]/95 backdrop-blur">
@@ -1468,7 +1487,8 @@ function AdminPanel() {
       <div className="mx-auto grid max-w-[1500px] gap-4 px-4 py-5 xl:grid-cols-[1.1fr_1fr]">
         <section className="min-w-0 rounded-3xl bg-white shadow-sm">
           <div className="border-b border-slate-200 p-4">
-            <div className="mb-3 flex gap-2" aria-label="Booking list view">
+            <div className="mb-3 flex flex-wrap gap-2" aria-label="Booking list view">
+              <button type="button" onClick={() => { setNotice(""); setAddingClient(true); window.scrollTo({ top: 0 }); }} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-emerald-800 px-4 py-2 font-bold text-white"><Plus className="h-4 w-4" />নতুন ক্লায়েন্ট / Add Client</button>
               <button type="button" aria-pressed={!showTrash} onClick={() => setShowTrash(false)} className="rounded-xl border px-4 py-2 font-bold">ক্লায়েন্ট ({bookings.filter(b => !b.deleted_at).length})</button>
               <button type="button" aria-pressed={showTrash} onClick={() => setShowTrash(true)} className="rounded-xl border px-4 py-2 font-bold">ট্র্যাশ / রিকভারি ({bookings.filter(b => b.deleted_at).length})</button>
             </div>
