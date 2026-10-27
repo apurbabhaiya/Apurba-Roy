@@ -28,6 +28,9 @@ export default function RouterApp() {
       document.head.appendChild(robots);
     }
     robots.content = isPublicPage ? "index,follow" : "noindex,nofollow";
+    let referrer = document.querySelector('meta[name="referrer"]') as HTMLMetaElement | null;
+    if (!referrer) { referrer = document.createElement('meta'); referrer.name = 'referrer'; document.head.appendChild(referrer); }
+    referrer.content = path.startsWith('/delivery/') ? 'no-referrer' : 'strict-origin-when-cross-origin';
 
     document.title =
       path === "/"
@@ -77,7 +80,7 @@ export default function RouterApp() {
   if (path.startsWith("/delivery/album/")) return <PublicDeliveryAlbums albumId={path.split("/")[3] || ""} />;
   if (path.startsWith("/delivery/")) {
     const token = decodeURIComponent(path.replace(/^\/delivery\//, "").split("/")[0] || "");
-    return <RamyaChobiDelivery token={token} />;
+    return <RamyaChobiDelivery token={token} view={path.split('/')[3]} />;
   }
   if (path === "/delivery") return (<PublicDeliveryAlbums />);
   return (<RamyaChobiHome />);
