@@ -7,7 +7,7 @@ import { getRecoveryPolicy, emptyRecoveryPolicy } from '../services/deliveryReco
 import FacebookPageActions from '../home/FacebookPageActions';
 import DeliveryRecoveryNotice from './DeliveryRecoveryNotice';
 import { BadgeCheck, CalendarDays, Check, Copy, Download, Image as ImageIcon, LockKeyhole, MessageCircle, PlayCircle, ShieldCheck, Smartphone, WalletCards } from 'lucide-react';
-import { DeliveryFinalFile, DeliveryPortalData, getDeliveryPortal, getDeliveryPreviewPortal, submitDeliveryPayment, submitDeliveryReview } from '../services/deliveryPortalService';
+import { DeliveryFinalFile, DeliveryPortalData, getDeliveryPortal, getDeliveryPreviewPortal, submitDeliveryPayment } from '../services/deliveryPortalService';
 
 const fallbackHero = 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1800&q=85';
 
@@ -52,10 +52,6 @@ export default function RamyaChobiDelivery({ token, view: viewSegment }: { token
   const [downloading, setDownloading] = useState(false);
   const [bulkFiles, setBulkFiles] = useState<DeliveryFinalFile[]>([]);
   const [downloadError, setDownloadError] = useState('');
-  const [review, setReview] = useState('');
-  const [rating, setRating] = useState(5);
-  const [reviewMessage, setReviewMessage] = useState('');
-  const [reviewBusy, setReviewBusy] = useState(false);
   const [adminPreviewToken, setAdminPreviewToken] = useState('');
   const [adminPreviewSources, setAdminPreviewSources] = useState<Record<string, string>>({});
   const [selectedDays, setSelectedDays] = useState(1);
@@ -215,13 +211,6 @@ export default function RamyaChobiDelivery({ token, view: viewSegment }: { token
     } catch (error: any) { setPaymentMessage(error?.message || 'Payment submission failed.'); }
     finally { setSubmitting(false); }
   }
-  async function sendReview(event: React.FormEvent) {
-    event.preventDefault(); setReviewBusy(true); setReviewMessage('');
-    try { const result = await submitDeliveryReview({ token, rating, review }); setReview(''); setReviewMessage(`Review submitted for ${result.status} moderation.`); }
-    catch (error: any) { setReviewMessage(error?.message || 'Review could not be submitted.'); }
-    finally { setReviewBusy(false); }
-  }
-
   if (loading) return <div className="grid min-h-screen place-items-center bg-[#f6f2ea] px-6 text-stone-600"><div className="text-center"><div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-stone-300 border-t-amber-600" /><p className="mt-4 text-sm">Opening your private delivery…</p></div></div>;
   if (!data) return <div className="grid min-h-screen place-items-center bg-[#f6f2ea] p-6"><div className="max-w-md rounded-3xl border border-stone-200 bg-white p-8 text-center"><LockKeyhole className="mx-auto h-9 w-9 text-amber-700" /><h1 className="mt-4 text-2xl font-semibold">Delivery unavailable</h1><p className="mt-2 text-sm leading-6 text-stone-600">{pageError || 'This delivery could not be loaded.'}</p></div></div>;
 
@@ -296,8 +285,7 @@ export default function RamyaChobiDelivery({ token, view: viewSegment }: { token
           </form>
         </section>}
 
-        <section className="grid gap-4 lg:grid-cols-2">
-          <form onSubmit={sendReview} className="rounded-2xl border border-[#e5dfd3] bg-white p-5"><h2 className="text-lg font-semibold">Leave a review</h2><p className="mt-1 text-xs text-stone-500">Your review is sent to the team for approval before it appears publicly.</p><div className="mt-3 flex gap-1" aria-label="Rating">{[1,2,3,4,5].map((value) => <button type="button" key={value} onClick={() => setRating(value)} aria-label={`${value} stars`} className={`text-2xl ${rating >= value ? 'text-amber-500' : 'text-stone-300'}`}>★</button>)}</div><textarea value={review} onChange={(e) => setReview(e.target.value)} minLength={12} maxLength={2000} required placeholder="Tell us about your experience" className="mt-2 min-h-24 w-full resize-y rounded-xl border border-stone-300 px-3 py-2.5 text-sm"/><button disabled={reviewBusy} className="mt-2 rounded-xl border border-stone-300 px-4 py-2.5 text-sm font-bold disabled:opacity-40">{reviewBusy ? 'Submitting…' : 'Submit review'}</button>{reviewMessage && <p className="mt-2 text-xs text-stone-600">{reviewMessage}</p>}</form>
+        <section>
           <div className="rounded-2xl bg-[#ebe4d7] p-5"><h2 className="text-lg font-semibold">Need help?</h2><p className="mt-1 text-sm leading-6 text-stone-600">Contact RamyaChobi about payments, delivery status, or access dates.</p>{supportPhone && <a href={phoneHref(supportPhone)} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-2 rounded-xl bg-[#292820] px-4 py-3 text-sm font-bold text-white"><MessageCircle className="h-4 w-4"/>WhatsApp support</a>}<div className="mt-5 flex items-start gap-2 border-t border-stone-300 pt-4 text-xs leading-5 text-stone-600"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-amber-700"/>Original files stay in private Drive storage. This page never receives a Google login or direct Drive credential.</div></div>
         </section>
         <section className="rounded-2xl border border-stone-200 bg-white p-5"><h2 className="text-lg font-bold">File Recovery / আবার ফাইল পেতে চান?</h2><p className="mt-2 text-sm text-stone-600">মেয়াদ শেষ হলে বা পুরোনো ফাইলের প্রয়োজন হলে আলাদা রিকভারি অংশে নির্দেশনা দেখুন।</p><a href={href('recovery')} className="mt-4 inline-flex min-h-11 items-center rounded-xl border border-stone-300 px-4 py-2 text-sm font-bold">রিকভারি ও অ্যাক্সেসের সাহায্য →</a></section>
