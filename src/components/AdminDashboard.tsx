@@ -266,7 +266,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     <div className="min-h-screen bg-stone-950 text-stone-100 flex flex-col font-sans">
       {/* Top Navigation Bar */}
       <header className="border-b border-stone-850 bg-stone-900/90 backdrop-blur-md sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 min-h-16 py-2 sm:py-0 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-linear-to-br from-amber-400 to-rose-500 flex items-center justify-center text-stone-950 font-serif font-bold text-xl shadow-md">
               র
@@ -282,7 +282,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="admin-header-actions flex flex-wrap sm:flex-nowrap items-center justify-end gap-2">
             {/* Google Drive Connection Badge / Button */}
             {user && accessToken ? (
               <div className="flex items-center gap-3">
