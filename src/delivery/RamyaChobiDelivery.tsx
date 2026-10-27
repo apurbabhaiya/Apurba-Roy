@@ -1,10 +1,16 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import DeliveryBulkDownloads from './DeliveryBulkDownloads';
+import DeliveryCountdown from './DeliveryCountdown';
+import DeliveryPreviewGallery from './DeliveryPreviewGallery';
+import { deliveryView, deliveryPath, deliveryPreviews, deliveryFileAllowed, effectiveDeliveryExpiry, needsNativeBulkDownload, type DeliveryPreview } from './deliveryView';
+import { getRecoveryPolicy, emptyRecoveryPolicy } from '../services/deliveryRecoveryPolicy';
+import FacebookPageActions from '../home/FacebookPageActions';
 import DeliveryRecoveryNotice from './DeliveryRecoveryNotice';
-import { BadgeCheck, CalendarDays, Check, Copy, Download, FileText, Image as ImageIcon, LockKeyhole, MessageCircle, PlayCircle, ShieldCheck, Smartphone, WalletCards, X } from 'lucide-react';
+import { BadgeCheck, CalendarDays, Check, Copy, Download, Image as ImageIcon, LockKeyhole, MessageCircle, PlayCircle, ShieldCheck, Smartphone, WalletCards } from 'lucide-react';
 import { DeliveryFinalFile, DeliveryPortalData, getDeliveryPortal, getDeliveryPreviewPortal, submitDeliveryPayment, submitDeliveryReview } from '../services/deliveryPortalService';
 
 const fallbackHero = 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1800&q=85';
-type Tab = 'PHOTOS' | 'VIDEOS' | 'DOCUMENTS';
+
 
 function money(value: number | string | undefined | null) {
   return new Intl.NumberFormat('en-BD', { style: 'currency', currency: 'BDT', maximumFractionDigits: 0 }).format(Number(value || 0));
@@ -12,15 +18,8 @@ function money(value: number | string | undefined | null) {
 function date(value?: string | null) {
   if (!value) return 'Not set';
   const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? 'Not set' : new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }).format(parsed);
+  return Number.isNaN(parsed.getTime()) ? 'Not set' : new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Dhaka', day: '2-digit', month: 'long', year: 'numeric' }).format(parsed);
 }
-function fileSize(value?: number | null) {
-  const bytes = Number(value || 0);
-  if (!bytes) return '';
-  const units = ['B','KB','MB','GB']; const index = Math.min(3, Math.floor(Math.log(bytes) / Math.log(1024)));
-  return `${(bytes / 1024 ** index).toFixed(index ? 1 : 0)} ${units[index]}`;
-}
-function daysLeft(value?: string | null) { return value ? Math.max(0, Math.ceil((new Date(value).getTime() - Date.now()) / 86400000)) : null; }
 function mediaUrl(token: string, fileId: string, mode: 'PREVIEW' | 'ORIGINAL') { return `/api/delivery-media?token=${encodeURIComponent(token)}&fileId=${encodeURIComponent(fileId)}&mode=${mode}`; }
 function phoneHref(value?: string | null) {
   const digits = String(value || '').replace(/\D/g, '');
@@ -33,15 +32,16 @@ function deliveryLabel(status?: string) {
   return 'Editing';
 }
 
-export default function RamyaChobiDelivery({ token }: { token: string }) {
+export default function RamyaChobiDelivery({ token, view: viewSegment }: { token: string; view?: string }) {
+  const view = deliveryView(viewSegment);
+  const [serverOffset, setServerOffset] = useState(0);
+  const [supportPhone, setSupportPhone] = useState(emptyRecoveryPolicy.whatsapp_number);
   const [clock, setClock] = useState(Date.now());
   useEffect(() => { const timer = window.setInterval(() => setClock(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
   const [data, setData] = useState<DeliveryPortalData | null>(null);
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState('');
-  const [tab, setTab] = useState<Tab>('PHOTOS');
-  const [selected, setSelected] = useState<string[]>([]);
-  const [lightbox, setLightbox] = useState<{ src: string; title: string; isVideo?: boolean } | null>(null);
+
   const [paymentMessage, setPaymentMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [payerPhone, setPayerPhone] = useState('');
@@ -50,6 +50,7 @@ export default function RamyaChobiDelivery({ token }: { token: string }) {
   const [paymentScreenshot, setPaymentScreenshot] = useState<File | null>(null);
   const [amount, setAmount] = useState('');
   const [downloading, setDownloading] = useState(false);
+  const [bulkFiles, setBulkFiles] = useState<DeliveryFinalFile[]>([]);
   const [downloadError, setDownloadError] = useState('');
   const [review, setReview] = useState('');
   const [rating, setRating] = useState(5);
@@ -90,16 +91,12 @@ export default function RamyaChobiDelivery({ token }: { token: string }) {
   const galleryStatus = data?.gallery_status || 'PREVIEW';
   const locked = galleryStatus === 'LOCKED';
   const unavailable = galleryStatus === 'UNAVAILABLE';
-  const canDownload = data?.download_status === 'ENABLED' && !unavailable && data?.is_published !== false && (!data?.download_window_ends_at || new Date(data.download_window_ends_at).getTime() > clock);
-  const canPhoto = canDownload && data?.photo_download_permission === true;
-  const canVideo = canDownload && data?.video_download_permission === true;
-  const canDocument = canDownload && data?.document_download_permission === true;
+  const accessExpiry = data ? effectiveDeliveryExpiry(data) : null;
+  const canDownload = data?.download_status === 'ENABLED' && !unavailable && data?.is_published !== false && (!accessExpiry || Date.parse(accessExpiry) > clock + serverOffset);
   const fullyPaid = data?.payment_status === 'FULLY_PAID';
   const remaining = Number(data?.remaining_due || 0);
   const isAccessPayment = locked && fullyPaid && Number(data?.late_fee_balance || 0) > 0;
   const dailyFee = Number(data?.daily_late_fee ?? data?.access_fee_per_day ?? 20);
-  const standardExpiry = data?.access_expires_at || data?.free_access_expires_at;
-  const accessExpiry = data?.download_window_ends_at && (!standardExpiry || new Date(data.download_window_ends_at) < new Date(standardExpiry)) ? data.download_window_ends_at : standardExpiry;
   const paymentOptions = [
     { id: 'BKASH' as const, label: 'bKash', account: data?.bkash_number || '', mark: 'b', color: 'bg-[#e2136e]' },
     { id: 'NAGAD' as const, label: 'Nagad', account: data?.nagad_number || '', mark: 'N', color: 'bg-[#f58220]' },
@@ -108,13 +105,36 @@ export default function RamyaChobiDelivery({ token }: { token: string }) {
   ].filter((item) => Boolean(item.account));
   const currentMethod = paymentOptions.find((item) => item.id === paymentMethod) || paymentOptions[0];
   const finalFiles = data?.delivery_files || [];
-  const photos = finalFiles.filter((item) => item.file_type === 'PHOTO');
-  const videos = finalFiles.filter((item) => item.file_type === 'VIDEO');
-  const documents = finalFiles.filter((item) => item.file_type === 'DOCUMENT');
-  const previews = data?.preview_items || [];
-  const legacyPhotos = previews.filter((item) => item.type === 'image');
-  const legacyVideos = previews.filter((item) => item.type === 'video');
-  const activeItems = tab === 'PHOTOS' ? (photos.length ? photos : legacyPhotos) : tab === 'VIDEOS' ? (videos.length ? videos : legacyVideos) : documents;
+  const photos = finalFiles.filter(file => file.file_type === 'PHOTO');
+  const videos = finalFiles.filter(file => file.file_type === 'VIDEO');
+  const documents = finalFiles.filter(file => file.file_type === 'DOCUMENT');
+  const photoItems = useMemo(() => data ? deliveryPreviews(data, 'PHOTO') : [], [data]);
+  const videoItems = useMemo(() => data ? deliveryPreviews(data, 'VIDEO') : [], [data]);
+  const activeItems = view === 'photos' ? photoItems : view === 'videos' ? videoItems : [];
+
+  useEffect(() => {
+    if (!data?.id) return;
+    let alive = true;
+    const sync = async () => {
+      try {
+        const policy = await getRecoveryPolicy(data.id, token, previewMode ? adminPreviewToken : undefined);
+        if (alive && policy?.server_now && Number.isFinite(Date.parse(policy.server_now))) setServerOffset(Date.parse(policy.server_now) - Date.now());
+        if (alive && policy?.whatsapp_number) setSupportPhone(policy.whatsapp_number);
+      } catch { /* The media API remains authoritative if clock sync is unavailable. */ }
+    };
+    void sync();
+    const refresh = async () => {
+      if (document.hidden) return;
+      void sync();
+      try {
+        const latest = previewMode && adminPreviewToken ? await getDeliveryPreviewPortal(token, adminPreviewToken) : await getDeliveryPortal(token);
+        if (alive) setData(latest);
+      } catch { /* Keep the last view; every download is authorized again on the server. */ }
+    };
+    const timer = window.setInterval(() => void refresh(), 60000);
+    window.addEventListener('focus', refresh);
+    return () => { alive = false; window.clearInterval(timer); window.removeEventListener('focus', refresh); };
+  }, [data?.id, token, previewMode, adminPreviewToken]);
 
   useEffect(() => {
     if (!data) return;
@@ -123,43 +143,48 @@ export default function RamyaChobiDelivery({ token }: { token: string }) {
   }, [data, remaining, paymentOptions.length, isAccessPayment, selectedDays, dailyFee]);
 
   useEffect(() => {
-    if (!previewMode || !adminPreviewToken || !activeItems.length) { setAdminPreviewSources({}); return; }
+    if (!previewMode || !adminPreviewToken || view !== 'photos' || data?.is_published !== false) { setAdminPreviewSources({}); return; }
     let cancelled = false;
     const urls: string[] = [];
+    const sources: Record<string, string> = {};
+    const files = photoItems.flatMap(item => item.file ? [item.file] : []);
     const run = async () => {
-      const entries = await Promise.all(activeItems.slice(0, 80).map(async (item: any, index) => {
-        if (!item.id || item.file_type === 'DOCUMENT') return null;
-        try {
-          const response = await fetch(mediaUrl(token, item.id, 'PREVIEW'), { headers: { 'x-admin-token': adminPreviewToken } });
-          if (!response.ok) return null;
-          const url = URL.createObjectURL(await response.blob()); urls.push(url);
-          return [item.id, url] as const;
-        } catch { return null; }
+      let cursor = 0;
+      await Promise.all(Array.from({ length: Math.min(6, files.length) }, async () => {
+        while (!cancelled && cursor < files.length) {
+          const file = files[cursor++];
+          try {
+            const response = await fetch(mediaUrl(token, file.id, 'PREVIEW'), { headers: { 'x-admin-token': adminPreviewToken } });
+            if (!response.ok) continue;
+            const url = URL.createObjectURL(await response.blob());
+            if (cancelled) { URL.revokeObjectURL(url); return; }
+            urls.push(url); sources[file.id] = url;
+            setAdminPreviewSources({ ...sources });
+          } catch { /* An unavailable thumbnail does not hide the rest of the gallery. */ }
+        }
       }));
-      if (!cancelled) setAdminPreviewSources(Object.fromEntries(entries.filter(Boolean) as Array<readonly [string,string]>));
     };
     void run();
     return () => { cancelled = true; urls.forEach(URL.revokeObjectURL); };
-  }, [previewMode, adminPreviewToken, token, tab, activeItems.length]);
-
-  useEffect(() => {
-    if (!lightbox) return;
-    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') setLightbox(null); };
-    window.addEventListener('keydown', onKey);
-    document.body.style.overflow = 'hidden';
-    return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = ''; };
-  }, [lightbox]);
+  }, [previewMode, adminPreviewToken, token, view, photoItems, data?.is_published]);
 
   function fileCanDownload(file: DeliveryFinalFile) {
-    return file.file_type === 'PHOTO' ? canPhoto : file.file_type === 'VIDEO' ? canVideo : file.file_type === 'DOCUMENT' ? canDocument : false;
+    return Boolean(data && deliveryFileAllowed(file, data, clock + serverOffset));
   }
-  function openFile(file: DeliveryFinalFile) {
-    if (file.file_type === 'DOCUMENT') return;
-    const url = mediaUrl(token, file.id, fileCanDownload(file) ? 'ORIGINAL' : 'PREVIEW');
-    setLightbox({ src: previewMode ? (adminPreviewSources[file.id] || url) : url, title: file.title || file.file_name || 'RamyaChobi delivery', isVideo: file.file_type === 'VIDEO' });
+  function previewSource(item: DeliveryPreview) {
+    return item.file ? previewMode && data?.is_published === false ? adminPreviewSources[item.file.id] || '' : mediaUrl(token, item.file.id, 'PREVIEW') : item.source || '';
   }
+  const resolvePreview = useCallback(async (item: DeliveryPreview) => {
+    if (!item.file) return item.source || "";
+    if (!previewMode || data?.is_published !== false) return mediaUrl(token, item.file.id, "PREVIEW");
+    if (item.file.file_type === 'VIDEO' && Number(item.file.file_size_bytes) > 100 * 1024 * 1024) throw new Error('এই বড় ভিডিওর প্রিভিউ দেখতে private delivery লিংক প্রকাশ করে খুলুন। ফাইল সবার তালিকায় প্রকাশ করার প্রয়োজন নেই।');
+    const response = await fetch(mediaUrl(token, item.file.id, 'PREVIEW'), { headers: { 'x-admin-token': adminPreviewToken } });
+    if (!response.ok) throw new Error('প্রিভিউ খোলা যায়নি। ফাইল ও অনুমতি পরীক্ষা করুন।');
+    return URL.createObjectURL(await response.blob());
+  }, [previewMode, token, adminPreviewToken, data?.is_published]);
   async function downloadZip(files: DeliveryFinalFile[], fileName: string) {
     if (!canDownload || !files.length || downloading) return;
+    if (needsNativeBulkDownload(files)) { setBulkFiles(files); setDownloadError(''); window.requestAnimationFrame(() => document.querySelector('[aria-label="Download all original files"]')?.scrollIntoView({ behavior: 'smooth', block: 'center' })); return; }
     setDownloading(true); setDownloadError('');
     try {
       const response = await fetch('/api/delivery-zip', { method: 'POST', headers: { 'content-type': 'application/json', ...(previewMode && adminPreviewToken ? { 'x-admin-token': adminPreviewToken } : {}) }, body: JSON.stringify({ token, files: files.map((file) => file.id) }) });
@@ -172,9 +197,10 @@ export default function RamyaChobiDelivery({ token }: { token: string }) {
   }
   function downloadOne(file: DeliveryFinalFile) {
     if (!fileCanDownload(file)) return;
-    const link = document.createElement('a'); link.href = mediaUrl(token, file.id, 'ORIGINAL'); link.download = file.file_name || file.title || 'ramyachobi-file';
-    if (previewMode && adminPreviewToken) link.setAttribute('data-admin-preview', adminPreviewToken);
-    link.click();
+    const link = document.createElement('a');
+    link.href = mediaUrl(token, file.id, 'ORIGINAL');
+    link.download = file.file_name || file.title || 'ramyachobi-file'; link.referrerPolicy = 'no-referrer';
+    document.body.appendChild(link); link.click(); link.remove();
   }
   async function submitPayment(event: React.FormEvent) {
     event.preventDefault();
@@ -200,20 +226,27 @@ export default function RamyaChobiDelivery({ token }: { token: string }) {
   if (!data) return <div className="grid min-h-screen place-items-center bg-[#f6f2ea] p-6"><div className="max-w-md rounded-3xl border border-stone-200 bg-white p-8 text-center"><LockKeyhole className="mx-auto h-9 w-9 text-amber-700" /><h1 className="mt-4 text-2xl font-semibold">Delivery unavailable</h1><p className="mt-2 text-sm leading-6 text-stone-600">{pageError || 'This delivery could not be loaded.'}</p></div></div>;
 
   const deliveryStatus = deliveryLabel(data.delivery_status);
-  const freeDays = daysLeft(accessExpiry);
-  const selectedFiles = finalFiles.filter((file) => selected.includes(file.id) && fileCanDownload(file));
+  const freeDays = accessExpiry ? Math.max(0, Math.ceil((Date.parse(accessExpiry) - clock - serverOffset) / 86400000)) : null;
+  const allowedFiles = finalFiles.filter(fileCanDownload);
   const statusColor = unavailable || locked ? 'bg-stone-200 text-stone-700' : canDownload ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800';
-  const displayUrl = (item: any, index: number) => 'file_type' in item ? (previewMode ? adminPreviewSources[item.id] || '' : mediaUrl(token, item.id, 'PREVIEW')) : item.url;
+  const href = (page: 'main' | 'photos' | 'videos' | 'recovery') => deliveryPath(token, page, previewMode);
+  if (view !== 'main') return <main className="min-h-screen bg-[#f6f2ea] text-stone-900"><header className="border-b border-stone-200 bg-white px-5 py-6"><div className="mx-auto max-w-6xl"><p className="text-xs font-bold tracking-widest text-emerald-800">RAMYACHOBI · PRIVATE DELIVERY</p><h1 className="mt-2 text-2xl font-bold">{data.client_name}</h1><p className="mt-2 text-sm text-stone-500">{data.event_name || 'Final Delivery'} · {date(data.event_date)}</p>{previewMode && <p className="mt-2 text-sm text-amber-800">Admin preview</p>}</div></header><div className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-8">
+    {view === 'recovery' ? <><a href={href('main')} className="inline-block rounded-xl border bg-white px-4 py-3 font-bold">← মূল ডেলিভারি পেজে ফিরুন</a><h2 className="text-2xl font-bold">File Recovery / অ্যাক্সেসের সাহায্য</h2><DeliveryRecoveryNotice portalId={data.id} clientToken={token} expiresAt={accessExpiry} title={data.event_name || data.client_name} /></> : <>
+      <DeliveryCountdown expiresAt={accessExpiry} serverOffset={serverOffset} />
+      {bulkFiles.length > 0 && <DeliveryBulkDownloads files={bulkFiles} allowed={fileCanDownload} onDownload={downloadOne} onClose={() => setBulkFiles([])} />}
+      <DeliveryPreviewGallery kind={view === 'photos' ? 'PHOTO' : 'VIDEO'} items={unavailable ? [] : activeItems} backHref={href('main')} source={previewSource} resolveSource={resolvePreview} allowed={fileCanDownload} onDownload={file => void downloadOne(file)} onDownloadAll={() => void downloadZip((view === 'photos' ? photos : videos).filter(fileCanDownload), `ramyachobi-${view}.zip`)} busy={downloading} error={downloadError} previewEnabled={!unavailable && data.preview_enabled !== false} />
+    </>}
+  </div></main>;
 
   return (
     <main className="min-h-screen bg-[#f6f2ea] text-[#292820]">
       {previewMode && <div className="bg-amber-200 px-4 py-2 text-center text-xs font-bold text-amber-950">Admin preview · unpublished delivery</div>}
       <header className="relative isolate overflow-hidden bg-[#292820] text-white">
-        <img src={data.hero_image_url || fallbackHero} alt="Event cover" className="absolute inset-0 h-full w-full object-cover opacity-40" />
+        <img src={data.hero_image_url || fallbackHero} alt="Event cover" referrerPolicy="no-referrer" className="absolute inset-0 h-full w-full object-cover opacity-40" />
         <div className="absolute inset-0 bg-gradient-to-r from-black/75 via-black/45 to-black/30" />
         <div className="relative mx-auto max-w-6xl px-5 py-6 sm:px-8 sm:py-8">
           <div className="flex items-center justify-between gap-4"><div><div className="text-lg font-semibold tracking-[.18em]">RAMYACHOBI</div><div className="mt-1 text-[10px] uppercase tracking-[.24em] text-white/60">Photography · Cinematography</div></div><span className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs">Private delivery</span></div>
-          <div className="mt-12 max-w-2xl sm:mt-16">
+          <div className="mt-7 max-w-2xl sm:mt-9">
             <div className="inline-flex items-center gap-2 rounded-full border border-amber-200/30 bg-amber-100/10 px-3 py-1.5 text-xs text-amber-100"><ShieldCheck className="h-4 w-4" /> Private client gallery</div>
             <h1 className="mt-4 text-3xl font-semibold leading-tight sm:text-5xl">{data.client_name || 'Your event memories'}</h1>
             <p className="mt-2 text-sm text-white/75 sm:text-base">{data.event_name || 'Photography & Videography'}{data.event_date ? ` · ${date(data.event_date)}` : ''}</p>
@@ -226,8 +259,17 @@ export default function RamyaChobiDelivery({ token }: { token: string }) {
       </header>
 
       <div className="mx-auto max-w-6xl space-y-5 px-4 py-5 sm:px-8 sm:py-8">
-        <DeliveryRecoveryNotice portalId={data.id} clientToken={token} expiresAt={data.download_window_ends_at} title={data.event_name || data.client_name}/>
+        <DeliveryCountdown expiresAt={accessExpiry} serverOffset={serverOffset} />
         {data.client_message && <div className="rounded-2xl border border-[#e8dfcf] bg-white p-4 text-sm leading-6"><strong>Message from RamyaChobi</strong><p className="mt-1 whitespace-pre-line text-stone-600">{data.client_message}</p></div>}
+        {bulkFiles.length > 0 && <DeliveryBulkDownloads files={bulkFiles} allowed={fileCanDownload} onDownload={downloadOne} onClose={() => setBulkFiles([])} />}
+        <section aria-label="Your delivery files" className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm sm:p-7"><h2 className="text-xl font-bold">আপনার ছবি ও ভিডিও / Your memories</h2><p className="mt-2 text-sm text-stone-500">আলাদাভাবে ছবি বা ভিডিও দেখুন। সংরক্ষণ করতে Download চাপুন।</p><div className="mt-5 grid gap-3 sm:grid-cols-3">
+          <a href={href('photos')} className="flex min-h-28 flex-col justify-center rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-950"><ImageIcon className="mb-3 h-7 w-7" /><strong>Preview Photos</strong><span className="mt-1 text-sm">ছবি দেখুন · {photoItems.length}টি</span></a>
+          <a href={href('videos')} className="flex min-h-28 flex-col justify-center rounded-2xl border border-stone-200 bg-stone-50 p-5"><PlayCircle className="mb-3 h-7 w-7" /><strong>Preview Videos</strong><span className="mt-1 text-sm text-stone-600">ভিডিও দেখুন · {videoItems.length}টি</span></a>
+          <button type="button" onClick={() => void downloadZip(allowedFiles, 'ramyachobi-all-files.zip')} disabled={!allowedFiles.length || downloading} className="flex min-h-28 flex-col items-start justify-center rounded-2xl bg-emerald-800 p-5 text-left text-white disabled:opacity-40"><Download className="mb-3 h-7 w-7" /><strong>{downloading ? 'ডাউনলোড প্রস্তুত হচ্ছে…' : 'Download All Files'}</strong><span className="mt-1 text-sm">সব অনুমোদিত ফাইল · {allowedFiles.length}টি</span></button>
+        </div>{!allowedFiles.length && <p className="mt-4 text-sm text-stone-600">ফাইল প্রস্তুত, পেমেন্ট যাচাই ও ডাউনলোডের অনুমতি চালু হলে Download বাটন কাজ করবে।</p>}{downloadError && <p role="alert" className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-800">{downloadError}</p>}
+        {documents.length > 0 && <details className="mt-5 rounded-xl border border-stone-200 p-4"><summary className="cursor-pointer font-bold">কাগজপত্র / Documents ({documents.length})</summary><div className="mt-3 space-y-2">{documents.map(file => <div key={file.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-stone-50 p-3"><span className="break-all text-sm">{file.title || file.file_name || 'Document'}</span><button type="button" disabled={!fileCanDownload(file) || downloading} onClick={() => void downloadOne(file)} className="min-h-11 rounded-xl border bg-white px-4 py-2 text-sm font-bold disabled:opacity-40">Download</button></div>)}</div></details>}
+        </section>
+
         <section className="grid gap-4 lg:grid-cols-[1.15fr_.85fr]">
           <div className="rounded-2xl border border-[#e5dfd3] bg-white p-5 shadow-sm sm:p-6">
             <div className="flex items-start justify-between gap-3"><div><p className="text-[11px] font-bold uppercase tracking-[.18em] text-amber-700">Event delivery</p><h2 className="mt-1 text-xl font-semibold">{data.event_name || 'Final Delivery'}</h2><p className="mt-1 text-sm text-stone-500">{data.package_name || 'Photography package'}</p></div><span className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-bold ${statusColor}`}>{deliveryStatus}</span></div>
@@ -243,38 +285,6 @@ export default function RamyaChobiDelivery({ token }: { token: string }) {
 
         {unavailable ? <section className="rounded-2xl border border-red-200 bg-white p-8 text-center"><LockKeyhole className="mx-auto h-8 w-8 text-red-600"/><h2 className="mt-3 text-xl font-semibold">Storage retention ended</h2><p className="mt-2 text-sm text-stone-600">The storage retention period has ended. Please contact RamyaChobi for help.</p></section> : locked ? <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5"><h2 className="font-semibold">Download access expired</h2><p className="mt-1 text-sm text-stone-600">Access has expired. Send a restoration payment only after confirming the amount with RamyaChobi.</p></section> : null}
 
-        {!unavailable && <section className="overflow-hidden rounded-2xl border border-[#e5dfd3] bg-white shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-200 px-4 py-4 sm:px-5">
-            <div><p className="text-[11px] font-bold uppercase tracking-[.18em] text-amber-700">Your files</p><h2 className="mt-1 text-xl font-semibold">{canDownload ? 'Final delivery' : 'Preview gallery'}</h2></div>
-            <div className="flex flex-wrap gap-2">
-              {selectedFiles.length > 0 && <button onClick={() => void downloadZip(selectedFiles,'ramyachobi-selected.zip')} disabled={!canDownload || downloading} className="rounded-xl border border-stone-300 px-3 py-2 text-xs font-bold disabled:opacity-40">Download selected ({selectedFiles.length})</button>}
-              <button onClick={() => void downloadZip(photos.filter(fileCanDownload),'ramyachobi-photos.zip')} disabled={!canPhoto || !photos.length || downloading} className="inline-flex items-center gap-1.5 rounded-xl bg-[#292820] px-3 py-2 text-xs font-bold text-white disabled:opacity-40"><Download className="h-3.5 w-3.5" />All photos ZIP</button>
-            </div>
-          </div>
-          <div className="flex gap-1 overflow-x-auto border-b border-stone-200 px-3 pt-2 sm:px-5" role="tablist">
-            {([['PHOTOS',`Photos (${photos.length || legacyPhotos.length})`],['VIDEOS',`Videos (${videos.length || legacyVideos.length})`],['DOCUMENTS',`Documents (${documents.length})`]] as [Tab,string][]).map(([value,label]) => <button key={value} role="tab" aria-selected={tab===value} onClick={() => { setTab(value); setSelected([]); }} className={`shrink-0 border-b-2 px-3 py-3 text-sm font-semibold ${tab===value ? 'border-amber-600 text-stone-950' : 'border-transparent text-stone-500'}`}>{label}</button>)}
-          </div>
-          <div className="p-3 sm:p-5">
-            {activeItems.length === 0 ? <div className="grid min-h-40 place-items-center rounded-xl border border-dashed border-stone-300 bg-[#fbfaf7] p-5 text-center"><div><FileText className="mx-auto h-7 w-7 text-stone-400"/><p className="mt-2 text-sm font-semibold">No {tab.toLowerCase()} available yet</p><p className="mt-1 text-xs text-stone-500">Files will appear here when the delivery is ready.</p></div></div> : <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-4">
-              {activeItems.map((item: any, index: number) => {
-                const isFile = Boolean(item.id);
-                const label = item.title || item.file_name || `Photo ${index + 1}`;
-                const canItem = isFile && fileCanDownload(item);
-                const source = isFile ? displayUrl(item,index) : item.url;
-                return <article key={isFile ? item.id : `${tab}-${index}`} className="group overflow-hidden rounded-xl border border-stone-200 bg-white">
-                  <div className={`relative aspect-[4/3] bg-[#efede7] ${tab !== 'DOCUMENTS' ? 'cursor-zoom-in' : ''}`} onClick={() => { if (tab === 'DOCUMENTS') return; setLightbox({ src: source, title: label, isVideo: tab === 'VIDEOS' }); }}>
-                    {tab === 'PHOTOS' ? source ? <img src={source} loading="lazy" alt={label} className="h-full w-full object-cover transition group-hover:scale-[1.02]" /> : <div className="grid h-full place-items-center"><ImageIcon className="h-8 w-8 text-stone-400"/></div> : tab === 'VIDEOS' ? <div className="relative h-full"><video src={source} controlsList="nodownload" onContextMenu={(event) => event.preventDefault()} preload="metadata" className="h-full w-full object-cover"/><span className="absolute inset-0 grid place-items-center bg-black/10"><PlayCircle className="h-10 w-10 text-white drop-shadow"/></span></div> : <div className="grid h-full place-items-center"><FileText className="h-9 w-9 text-amber-700"/></div>}
-                    {!canDownload && tab !== 'DOCUMENTS' && <span className="absolute left-2 top-2 rounded-full bg-black/55 px-2 py-1 text-[10px] font-bold text-white">PREVIEW</span>}
-                    {isFile && canItem && <label onClick={(e) => e.stopPropagation()} className="absolute right-2 top-2 grid h-7 w-7 place-items-center rounded-lg bg-white/95 shadow"><input type="checkbox" checked={selected.includes(item.id)} onChange={(e) => setSelected((old) => e.target.checked ? [...old,item.id] : old.filter((id) => id !== item.id))} aria-label={`Select ${label}`} className="h-4 w-4 accent-stone-900" /></label>}
-                  </div>
-                  <div className="flex items-center justify-between gap-2 p-2.5"><div className="min-w-0"><div className="truncate text-xs font-semibold" title={label}>{label}</div><div className="mt-0.5 text-[10px] text-stone-500">{isFile ? fileSize(item.file_size_bytes) || item.file_type.toLowerCase() : tab.toLowerCase()}</div></div>{isFile && canItem && <button onClick={() => downloadOne(item)} className="shrink-0 rounded-lg bg-[#292820] px-2.5 py-1.5 text-[10px] font-bold text-white">Download</button>}</div>
-                </article>;
-              })}
-            </div>}
-            {downloadError && <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{downloadError}</div>}
-          </div>
-        </section>}
-
         {!fullyPaid && !unavailable && <section className="grid gap-4 lg:grid-cols-[.8fr_1.2fr]">
           <div className="rounded-2xl bg-[#292820] p-5 text-white"><WalletCards className="h-7 w-7 text-amber-300"/><h2 className="mt-3 text-xl font-semibold">Submit payment</h2><p className="mt-1 text-sm text-white/65">Select a configured account, copy the number, then send payment.</p><div className="mt-4 space-y-2">{paymentOptions.length ? paymentOptions.map((option) => <button key={option.id} onClick={() => setPaymentMethod(option.id)} className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left ${paymentMethod===option.id ? 'border-amber-300 bg-white/10' : 'border-white/10 bg-white/5'}`}><span className={`grid h-8 w-8 place-items-center rounded-lg text-sm font-black ${option.color}`}>{option.mark}</span><span className="text-sm font-semibold">{option.label}</span>{paymentMethod===option.id && <Check className="ml-auto h-4 w-4 text-amber-300"/>}</button>) : <p className="rounded-xl bg-white/5 p-3 text-sm text-white/70">Payment methods are not configured. Contact RamyaChobi.</p>}</div>
             {currentMethod && <div className="mt-3 rounded-xl bg-white/10 p-3"><div className="text-[10px] uppercase tracking-[.16em] text-white/55">{currentMethod.label} number</div><div className="mt-1 flex items-center justify-between gap-3"><strong className="text-lg">{currentMethod.account}</strong><button onClick={() => { void navigator.clipboard?.writeText(currentMethod.account); setPaymentMessage('Payment number copied.'); }} className="rounded-lg bg-white px-2.5 py-2 text-xs font-bold text-stone-900"><Copy className="mr-1 inline h-3.5 w-3.5"/>Copy</button></div></div>}
@@ -288,12 +298,14 @@ export default function RamyaChobiDelivery({ token }: { token: string }) {
 
         <section className="grid gap-4 lg:grid-cols-2">
           <form onSubmit={sendReview} className="rounded-2xl border border-[#e5dfd3] bg-white p-5"><h2 className="text-lg font-semibold">Leave a review</h2><p className="mt-1 text-xs text-stone-500">Your review is sent to the team for approval before it appears publicly.</p><div className="mt-3 flex gap-1" aria-label="Rating">{[1,2,3,4,5].map((value) => <button type="button" key={value} onClick={() => setRating(value)} aria-label={`${value} stars`} className={`text-2xl ${rating >= value ? 'text-amber-500' : 'text-stone-300'}`}>★</button>)}</div><textarea value={review} onChange={(e) => setReview(e.target.value)} minLength={12} maxLength={2000} required placeholder="Tell us about your experience" className="mt-2 min-h-24 w-full resize-y rounded-xl border border-stone-300 px-3 py-2.5 text-sm"/><button disabled={reviewBusy} className="mt-2 rounded-xl border border-stone-300 px-4 py-2.5 text-sm font-bold disabled:opacity-40">{reviewBusy ? 'Submitting…' : 'Submit review'}</button>{reviewMessage && <p className="mt-2 text-xs text-stone-600">{reviewMessage}</p>}</form>
-          <div className="rounded-2xl bg-[#ebe4d7] p-5"><h2 className="text-lg font-semibold">Need help?</h2><p className="mt-1 text-sm leading-6 text-stone-600">Contact RamyaChobi about payments, delivery status, or access dates.</p>{(data.whatsapp_number || data.client_phone) && <a href={phoneHref(data.whatsapp_number || data.client_phone)} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-2 rounded-xl bg-[#292820] px-4 py-3 text-sm font-bold text-white"><MessageCircle className="h-4 w-4"/>WhatsApp support</a>}<div className="mt-5 flex items-start gap-2 border-t border-stone-300 pt-4 text-xs leading-5 text-stone-600"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-amber-700"/>Original files stay in private Drive storage. This page never receives a Google login or direct Drive credential.</div></div>
+          <div className="rounded-2xl bg-[#ebe4d7] p-5"><h2 className="text-lg font-semibold">Need help?</h2><p className="mt-1 text-sm leading-6 text-stone-600">Contact RamyaChobi about payments, delivery status, or access dates.</p>{supportPhone && <a href={phoneHref(supportPhone)} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-2 rounded-xl bg-[#292820] px-4 py-3 text-sm font-bold text-white"><MessageCircle className="h-4 w-4"/>WhatsApp support</a>}<div className="mt-5 flex items-start gap-2 border-t border-stone-300 pt-4 text-xs leading-5 text-stone-600"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-amber-700"/>Original files stay in private Drive storage. This page never receives a Google login or direct Drive credential.</div></div>
         </section>
+        <section className="rounded-2xl border border-stone-200 bg-white p-5"><h2 className="text-lg font-bold">File Recovery / আবার ফাইল পেতে চান?</h2><p className="mt-2 text-sm text-stone-600">মেয়াদ শেষ হলে বা পুরোনো ফাইলের প্রয়োজন হলে আলাদা রিকভারি অংশে নির্দেশনা দেখুন।</p><a href={href('recovery')} className="mt-4 inline-flex min-h-11 items-center rounded-xl border border-stone-300 px-4 py-2 text-sm font-bold">রিকভারি ও অ্যাক্সেসের সাহায্য →</a></section>
+        <section className="rounded-2xl bg-white p-6 text-center"><h2 className="text-xl font-bold">আপনার অভিজ্ঞতা জানান</h2><p className="mb-4 mt-2 text-sm text-stone-500">Facebook-এ রিভিউ লিখুন অথবা আমাদের পেজ Like / Follow করুন। এটি ঐচ্ছিক।</p><FacebookPageActions /></section>
         <footer className="pb-4 text-center text-[11px] text-stone-500">RamyaChobi · Private client delivery</footer>
       </div>
 
-      {lightbox && <div className="fixed inset-0 z-[150] grid place-items-center bg-black/90 p-3 sm:p-6" role="dialog" aria-modal="true" aria-label="Photo preview" onClick={() => setLightbox(null)}><button onClick={() => setLightbox(null)} aria-label="Close preview" className="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white"><X className="h-5 w-5"/></button><div className="max-h-full w-full max-w-6xl" onClick={(e) => e.stopPropagation()}>{lightbox.isVideo ? <video src={lightbox.src} controls controlsList="nodownload" onContextMenu={(event) => event.preventDefault()} autoPlay className="mx-auto max-h-[82vh] max-w-full"/> : <img src={lightbox.src} alt={lightbox.title} className="mx-auto max-h-[86vh] max-w-full object-contain"/>}<p className="mt-3 text-center text-sm text-white/80">{lightbox.title}</p></div></div>}
+
     </main>
   );
 }
