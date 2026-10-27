@@ -293,11 +293,11 @@ export default function RamyaChobiDelivery({ token, view: viewSegment }: { token
           </form>
         </section>}
 
+        <section className="rounded-2xl bg-white p-6 text-center"><h2 className="text-xl font-bold">আপনার অভিজ্ঞতা জানান</h2><p className="mb-4 mt-2 text-sm text-stone-500">Facebook-এ রিভিউ লিখুন অথবা আমাদের পেজ Like / Follow করুন। এটি ঐচ্ছিক।</p><FacebookPageActions /></section>
+        <section className="rounded-2xl border border-stone-200 bg-white p-5"><h2 className="text-lg font-bold">File Recovery / আবার ফাইল পেতে চান?</h2><p className="mt-2 text-sm text-stone-600">মেয়াদ শেষ হলে বা পুরোনো ফাইলের প্রয়োজন হলে আলাদা রিকভারি অংশে নির্দেশনা দেখুন।</p><a href={href('recovery')} className="mt-4 inline-flex min-h-11 items-center rounded-xl border border-stone-300 px-4 py-2 text-sm font-bold">রিকভারি ও অ্যাক্সেসের সাহায্য →</a></section>
         <section>
           <div className="rounded-2xl bg-[#ebe4d7] p-5"><h2 className="text-lg font-semibold">Need help?</h2><p className="mt-1 text-sm leading-6 text-stone-600">Contact RamyaChobi about payments, delivery status, or access dates.</p>{supportPhone && <a href={phoneHref(supportPhone)} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-2 rounded-xl bg-[#292820] px-4 py-3 text-sm font-bold text-white"><MessageCircle className="h-4 w-4"/>WhatsApp support</a>}<div className="mt-5 flex items-start gap-2 border-t border-stone-300 pt-4 text-xs leading-5 text-stone-600"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-amber-700"/>Original files stay in private Drive storage. This page never receives a Google login or direct Drive credential.</div></div>
         </section>
-        <section className="rounded-2xl border border-stone-200 bg-white p-5"><h2 className="text-lg font-bold">File Recovery / আবার ফাইল পেতে চান?</h2><p className="mt-2 text-sm text-stone-600">মেয়াদ শেষ হলে বা পুরোনো ফাইলের প্রয়োজন হলে আলাদা রিকভারি অংশে নির্দেশনা দেখুন।</p><a href={href('recovery')} className="mt-4 inline-flex min-h-11 items-center rounded-xl border border-stone-300 px-4 py-2 text-sm font-bold">রিকভারি ও অ্যাক্সেসের সাহায্য →</a></section>
-        <section className="rounded-2xl bg-white p-6 text-center"><h2 className="text-xl font-bold">আপনার অভিজ্ঞতা জানান</h2><p className="mb-4 mt-2 text-sm text-stone-500">Facebook-এ রিভিউ লিখুন অথবা আমাদের পেজ Like / Follow করুন। এটি ঐচ্ছিক।</p><FacebookPageActions /></section>
         <footer className="pb-4 text-center text-[11px] text-stone-500">RamyaChobi · Private client delivery</footer>
       </div>
 
