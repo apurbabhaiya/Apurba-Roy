@@ -3,7 +3,7 @@ import DeliveryRecoveryNotice from './DeliveryRecoveryNotice';
 import {ArrowLeft,Images,RefreshCw,Download,LockKeyhole,Film,Search,CalendarDays,ArrowRight} from 'lucide-react';
 import {supabase} from '../services/supabase';
 type Media={id:string;name:string;download_enabled:boolean};
-type Album={id:string;title:string;client_name?:string|null;event_name?:string|null;event_date:string|null;download_expires_at:string|null;photos:Media[];videos:Media[]};
+type Album={id:string;title:string;client_name?:string|null;event_name?:string|null;secure_token?:string|null;event_date:string|null;download_expires_at:string|null;photos:Media[];videos:Media[]};
 const mediaUrl=(album:string,file:string,mode='PREVIEW')=>`/api/delivery-media?albumId=${encodeURIComponent(album)}&fileId=${encodeURIComponent(file)}&mode=${mode}`;
 const normalize=(value:string)=>value.toLocaleLowerCase().replace(/[০-৯]/g,d=>String('০১২৩৪৫৬৭৮৯'.indexOf(d))).trim();
 export default function PublicDeliveryAlbums({albumId}:{albumId?:string}) {
@@ -20,7 +20,7 @@ export default function PublicDeliveryAlbums({albumId}:{albumId?:string}) {
  const visibleAlbums=albums.filter(album=>{const q=normalize(query);const matchesQuery=!q||normalize(`${album.client_name||''} ${album.event_name||''} ${album.title}`).includes(q);const matchesDate=!dateFilter||Boolean(album.event_date&&album.event_date.slice(0,10)===dateFilter);return matchesQuery&&matchesDate;});
  function updateDirectory(nextQuery:string,nextDate:string){setQuery(nextQuery);setDateFilter(nextDate);const params=new URLSearchParams();if(nextQuery.trim())params.set('q',nextQuery);if(nextDate)params.set('date',nextDate);const suffix=params.toString();window.history.replaceState(null,'',`${window.location.pathname}${suffix?`?${suffix}`:''}`);}
  function directoryHref(){const params=new URLSearchParams();if(query.trim())params.set('q',query);if(dateFilter)params.set('date',dateFilter);const suffix=params.toString();return `/delivery${suffix?`?${suffix}`:''}`;}
- function clientAlbumHref(album:Album){const params=new URLSearchParams({from:'list'});if(query.trim())params.set('q',query);if(dateFilter)params.set('date',dateFilter);return `/delivery/album/${album.id}?${params.toString()}`;}
+ function clientPortalHref(album:Album){const params=new URLSearchParams({from:'list'});if(query.trim())params.set('q',query);if(dateFilter)params.set('date',dateFilter);return `/delivery/${encodeURIComponent(album.secure_token||'')}?${params.toString()}`;}
  function displayDate(value:string|null){return value?new Intl.DateTimeFormat('bn-BD',{day:'numeric',month:'short',year:'numeric',timeZone:'Asia/Dhaka'}).format(new Date(`${value.slice(0,10)}T12:00:00+06:00`)):'তারিখ নেই';}
  const expiry=selected?.download_expires_at?new Intl.DateTimeFormat('bn-BD',{dateStyle:'medium',timeStyle:'short',timeZone:'Asia/Dhaka'}).format(new Date(selected.download_expires_at)):null;
  return <main className="min-h-screen bg-stone-50 text-stone-900"><header className="border-b border-stone-200 bg-white"><div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-5 py-5"><a href="/" className="font-bold tracking-widest">RAMYACHOBI</a><a href={albumId?directoryHref():'/'} className="inline-flex items-center gap-2 text-sm font-semibold"><ArrowLeft className="h-4 w-4"/>{albumId?'সব অ্যালবাম':'হোম'}</a></div></header>
@@ -42,7 +42,7 @@ export default function PublicDeliveryAlbums({albumId}:{albumId?:string}) {
  </div>
  {visibleAlbums.length===0?<div className="rounded-2xl border border-dashed border-[#dfd7c1] bg-[#fffdf4] px-4 py-8 text-center"><Images className="mx-auto h-7 w-7 text-stone-400"/><p className="mt-2 text-sm font-semibold text-stone-700">{albums.length?'এই নাম বা তারিখে ডেলিভারি পাওয়া যায়নি':'এখনো কোনো ডেলিভারি প্রকাশ করা হয়নি'}</p>{albums.length>0&&<p className="mt-1 text-xs text-stone-500">সার্চ বা তারিখ বদলে আবার চেষ্টা করুন।</p>}</div>:
  <ol className="overflow-hidden rounded-2xl border border-[#e7dfc7] bg-[#fffdf4] shadow-sm divide-y divide-[#eee8d8]">
-  {visibleAlbums.map((album,index)=><li key={album.id}><a href={clientAlbumHref(album)} className="flex min-h-[68px] items-center gap-3 px-3 py-2.5 transition-colors hover:bg-white focus-visible:outline-2 focus-visible:outline-emerald-700 sm:px-4">
+  {visibleAlbums.map((album,index)=><li key={album.id}><a href={clientPortalHref(album)} className="flex min-h-[68px] items-center gap-3 px-3 py-2.5 transition-colors hover:bg-white focus-visible:outline-2 focus-visible:outline-emerald-700 sm:px-4">
    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#e8efdf] text-[11px] font-bold text-emerald-900">{String(index+1).padStart(2,'0')}</span>
    <span className="min-w-0 flex-1"><strong className="block truncate text-[15px] font-bold text-[#34311f]">{album.client_name||album.title}</strong><span className="mt-0.5 block truncate text-xs text-stone-500">{album.event_name||album.title} · {displayDate(album.event_date)}</span></span>
    <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#f0ead7] text-emerald-900"><ArrowRight className="h-4 w-4"/></span>

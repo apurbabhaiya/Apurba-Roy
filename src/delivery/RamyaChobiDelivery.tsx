@@ -218,8 +218,15 @@ export default function RamyaChobiDelivery({ token, view: viewSegment }: { token
   const freeDays = accessExpiry ? Math.max(0, Math.ceil((Date.parse(accessExpiry) - clock - serverOffset) / 86400000)) : null;
   const allowedFiles = finalFiles.filter(fileCanDownload);
   const statusColor = unavailable || locked ? 'bg-stone-200 text-stone-700' : canDownload ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800';
-  const href = (page: 'main' | 'photos' | 'videos' | 'recovery') => deliveryPath(token, page, previewMode);
-  if (view !== 'main') return <main className="min-h-screen bg-[#f6f2ea] text-stone-900"><header className="border-b border-stone-200 bg-white px-5 py-6"><div className="mx-auto max-w-6xl"><p className="text-xs font-bold tracking-widest text-emerald-800">RAMYACHOBI · PRIVATE DELIVERY</p><h1 className="mt-2 text-2xl font-bold">{data.client_name}</h1><p className="mt-2 text-sm text-stone-500">{data.event_name || 'Final Delivery'} · {date(data.event_date)}</p>{previewMode && <p className="mt-2 text-sm text-amber-800">Admin preview</p>}</div></header><div className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-8">
+  const directoryParams = new URLSearchParams(window.location.search);
+  const fromDirectory = directoryParams.get('from') === 'list';
+  const directorySearch = new URLSearchParams();
+  if (directoryParams.get('q')) directorySearch.set('q', directoryParams.get('q')!);
+  if (directoryParams.get('date')) directorySearch.set('date', directoryParams.get('date')!);
+  const directoryReturnHref = fromDirectory ? `/delivery${directorySearch.toString() ? `?${directorySearch.toString()}` : ''}` : null;
+  const preserveDirectoryContext = (path: string) => { if (!fromDirectory) return path; const next = new URL(path, window.location.origin); next.searchParams.set('from', 'list'); for (const key of ['q', 'date']) { const value = directoryParams.get(key); if (value) next.searchParams.set(key, value); } return `${next.pathname}${next.search}`; };
+  const href = (page: 'main' | 'photos' | 'videos' | 'recovery') => preserveDirectoryContext(deliveryPath(token, page, previewMode));
+  if (view !== 'main') return <main className="min-h-screen bg-[#f6f2ea] text-stone-900"><header className="border-b border-stone-200 bg-white px-5 py-6"><div className="mx-auto max-w-6xl">{directoryReturnHref && <a href={directoryReturnHref} className="mb-3 inline-flex min-h-9 items-center rounded-full border border-emerald-200 bg-white px-3 py-1 text-xs font-bold text-emerald-900">← সব ডেলিভারি</a>}<p className="text-xs font-bold tracking-widest text-emerald-800">RAMYACHOBI · PRIVATE DELIVERY</p><h1 className="mt-2 text-2xl font-bold">{data.client_name}</h1><p className="mt-2 text-sm text-stone-500">{data.event_name || 'Final Delivery'} · {date(data.event_date)}</p>{previewMode && <p className="mt-2 text-sm text-amber-800">Admin preview</p>}</div></header><div className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-8">
     {view === 'recovery' ? <><a href={href('main')} className="inline-block rounded-xl border bg-white px-4 py-3 font-bold">← মূল ডেলিভারি পেজে ফিরুন</a><h2 className="text-2xl font-bold">File Recovery / অ্যাক্সেসের সাহায্য</h2><DeliveryRecoveryNotice portalId={data.id} clientToken={token} expiresAt={accessExpiry} title={data.event_name || data.client_name} /></> : <>
       <DeliveryCountdown expiresAt={accessExpiry} serverOffset={serverOffset} />
       {bulkFiles.length > 0 && <DeliveryBulkDownloads files={bulkFiles} allowed={fileCanDownload} onDownload={downloadOne} onClose={() => setBulkFiles([])} />}
@@ -248,6 +255,7 @@ export default function RamyaChobiDelivery({ token, view: viewSegment }: { token
       </header>
 
       <div className="mx-auto max-w-6xl space-y-5 px-4 py-5 sm:px-8 sm:py-8">
+        {directoryReturnHref && <a href={directoryReturnHref} className="inline-flex min-h-10 items-center rounded-full border border-[#d9d2c2] bg-white/80 px-4 py-2 text-sm font-bold text-emerald-900">← সব Final Delivery</a>}
         <DeliveryCountdown expiresAt={accessExpiry} serverOffset={serverOffset} />
         {data.client_message && <div className="rounded-2xl border border-[#e8dfcf] bg-white p-4 text-sm leading-6"><strong>Message from RamyaChobi</strong><p className="mt-1 whitespace-pre-line text-stone-600">{data.client_message}</p></div>}
         {bulkFiles.length > 0 && <DeliveryBulkDownloads files={bulkFiles} allowed={fileCanDownload} onDownload={downloadOne} onClose={() => setBulkFiles([])} />}
