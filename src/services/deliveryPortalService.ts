@@ -244,6 +244,15 @@ export async function getDeliveryAdminDashboard(token: string): Promise<Delivery
   } as DeliveryAdminDashboard;
 }
 
+export async function createManualDeliveryClient(token: string, payload: {
+  request_id: string; client_name: string; phone: string; event_date: string; event_name: string;
+  total: number; paid: number; delivered: boolean;
+}) {
+  const { data, error } = await db.rpc('delivery_admin_create_manual_client', { p_token: token, p_payload: payload });
+  if (error) throw error;
+  return data as { id: string; client_name: string; remaining_due: number };
+}
+
 export async function createDeliveryPortalFromBooking(input: {
   token: string;
   bookingId: string;
