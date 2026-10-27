@@ -214,7 +214,7 @@ export const CustomerGalleriesPanel: React.FC<CustomerGalleriesPanelProps> = ({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="customer-galleries-panel space-y-6">
       {/* Top Header Strip with Action */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-stone-900/60 border border-stone-800 p-5 rounded-3xl backdrop-blur-md">
         <div>
@@ -233,7 +233,7 @@ export const CustomerGalleriesPanel: React.FC<CustomerGalleriesPanelProps> = ({
 
         <button
           onClick={() => setIsCreateModalOpen(true)}
-          className="px-4 py-2.5 bg-linear-to-r from-amber-500 to-amber-600 hover:opacity-95 text-stone-950 font-bold text-xs rounded-xl transition shadow-lg flex items-center gap-2 shrink-0 cursor-pointer"
+          className="min-h-11 w-full sm:w-auto justify-center px-4 py-2.5 bg-linear-to-r from-amber-500 to-amber-600 hover:opacity-95 text-stone-950 font-bold text-xs rounded-xl transition shadow-lg flex items-center gap-2 shrink-0 cursor-pointer"
         >
           <FolderPlus className="w-4 h-4" />
           <span>+ Create Gallery</span>
@@ -242,28 +242,28 @@ export const CustomerGalleriesPanel: React.FC<CustomerGalleriesPanelProps> = ({
 
       {/* Stats Summary Strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-        <div className="p-4 rounded-2xl bg-stone-900/80 border border-stone-800">
+        <div className="p-3 sm:p-4 rounded-2xl bg-stone-900/80 border border-stone-800">
           <p className="text-stone-400 text-xs font-medium">Total Galleries</p>
           <p className="text-2xl font-serif font-bold text-stone-100 mt-1">
             {galleries.length}
           </p>
         </div>
 
-        <div className="p-4 rounded-2xl bg-stone-900/80 border border-stone-800">
+        <div className="p-3 sm:p-4 rounded-2xl bg-stone-900/80 border border-stone-800">
           <p className="text-amber-400 text-xs font-medium">In Progress</p>
           <p className="text-2xl font-serif font-bold text-amber-400 mt-1">
             {galleries.filter((g) => g.status === 'selection_in_progress').length}
           </p>
         </div>
 
-        <div className="p-4 rounded-2xl bg-stone-900/80 border border-stone-800">
+        <div className="p-3 sm:p-4 rounded-2xl bg-stone-900/80 border border-stone-800">
           <p className="text-emerald-400 text-xs font-medium">Submitted</p>
           <p className="text-2xl font-serif font-bold text-emerald-400 mt-1">
             {galleries.filter((g) => g.status === 'submitted').length}
           </p>
         </div>
 
-        <div className="p-4 rounded-2xl bg-stone-900/80 border border-stone-800">
+        <div className="p-3 sm:p-4 rounded-2xl bg-stone-900/80 border border-stone-800">
           <p className="text-stone-400 text-xs font-medium">Curated Photos</p>
           <p className="text-2xl font-serif font-bold text-stone-100 mt-1">
             {galleries.reduce((acc, g) => acc + (g.selectedCount || 0), 0)}
@@ -280,7 +280,7 @@ export const CustomerGalleriesPanel: React.FC<CustomerGalleriesPanelProps> = ({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search by customer, event, or gallery name..."
-            className="w-full pl-10 pr-4 py-2 bg-stone-950 border border-stone-800 rounded-xl text-xs text-stone-200 placeholder:text-stone-500 focus:border-amber-400 focus:outline-hidden"
+            className="min-h-11 w-full pl-10 pr-4 py-2 bg-stone-950 border border-stone-800 rounded-xl text-xs text-stone-200 placeholder:text-stone-500 focus:border-amber-400 focus:outline-hidden"
           />
         </div>
 
@@ -290,7 +290,7 @@ export const CustomerGalleriesPanel: React.FC<CustomerGalleriesPanelProps> = ({
               <button
                 key={st}
                 onClick={() => setStatusFilter(st)}
-                className={`px-3 py-1.5 rounded-xl text-[11px] font-medium whitespace-nowrap transition cursor-pointer ${
+                className={`min-h-10 px-3 py-1.5 rounded-xl text-[11px] font-medium whitespace-nowrap transition cursor-pointer ${
                   statusFilter === st
                     ? 'bg-amber-500 text-stone-950 font-bold shadow-xs'
                     : 'bg-stone-900 border border-stone-800 text-stone-400 hover:text-stone-200'
@@ -329,7 +329,7 @@ export const CustomerGalleriesPanel: React.FC<CustomerGalleriesPanelProps> = ({
             return (
               <div
                 key={gallery.id}
-                className="bg-stone-900/80 border border-stone-800 hover:border-stone-750 p-5 rounded-3xl transition shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-5"
+                className="customer-gallery-card bg-stone-900/80 border border-stone-800 hover:border-stone-750 p-3 sm:p-5 rounded-3xl transition shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-5"
               >
                 {/* Left: Customer & Event info */}
                 <div className="flex items-start gap-4 min-w-0 flex-1">
@@ -439,7 +439,7 @@ export const CustomerGalleriesPanel: React.FC<CustomerGalleriesPanelProps> = ({
                 </div>
 
                 {/* Right: Actions */}
-                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <div className="customer-gallery-actions flex flex-wrap items-center gap-2 shrink-0">
                   {/* Open Gallery */}
                   <button
                     onClick={() => onOpenCustomerView(gallery)}
