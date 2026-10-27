@@ -54,6 +54,7 @@ import {
   setDeliveryDocumentPermission,
   DeliveryPaymentLedger,
 } from '../services/deliveryPortalService';
+import { directoryDate, filterClientDirectory, type DirectoryDateField, type DirectorySort } from './clientDirectory';
 import DeliveryDownloadSettings from './DeliveryDownloadSettings';
 import DeliveryPaymentShortcut from './DeliveryPaymentShortcut';
 import PortfolioManager from '../components/PortfolioManager';
@@ -180,6 +181,9 @@ export default function RamyaChobiDeliveryAdmin() {
   const [drivePickerPortalId, setDrivePickerPortalId] = useState('');
   const [ledgerByPortal, setLedgerByPortal] = useState<Record<string, DeliveryPaymentLedger[]>>({});
   const [portalSearch, setPortalSearch] = useState('');
+  const [portalDate, setPortalDate] = useState('');
+  const [portalDateField, setPortalDateField] = useState<DirectoryDateField>('event_date');
+  const [portalSort, setPortalSort] = useState<DirectorySort>('name');
   const [selectedPortalId, setSelectedPortalId] = useState('');
   const [portalEdit, setPortalEdit] = useState<Record<string, any>>({});
   const [ledgerDrafts, setLedgerDrafts] = useState<Record<string, { date: string; method: DeliveryPaymentLedger['payment_method']; amount: string; transactionId: string; note: string; status: DeliveryPaymentLedger['status'] }>>({});
@@ -242,12 +246,29 @@ export default function RamyaChobiDeliveryAdmin() {
   const bookings = dashboard?.bookings || [];
   const availableBookings = bookings.filter((b) => !b.has_portal);
   const pendingRequests = submissions.filter((s) => s.status === 'SUBMITTED');
-  const filteredPortals = portals.filter((portal) => {
-    const query = portalSearch.trim().toLowerCase();
-    if (!query) return true;
-    return [portal.client_name, portal.event_name, portal.client_phone, portal.whatsapp_number]
-      .filter(Boolean).some((value) => String(value).toLowerCase().includes(query));
+  const directoryPortals = portals.map(portal => ({
+    ...portal,
+    event_date: portal.event_date || bookings.find(booking => booking.id === portal.booking_id)?.event_date,
+  }));
+  const filteredPortals = filterClientDirectory(directoryPortals, {
+    query: portalSearch, date: portalDate, dateField: portalDateField, sort: portalSort,
   });
+  const activePortal = filteredPortals.find(portal => portal.id === selectedPortalId) || filteredPortals[0];
+  const dateLabels: Record<DirectoryDateField, string> = {
+    event_date: 'অনুষ্ঠানের তারিখ', final_delivery_at: 'ডেলিভারির তারিখ', created_at: 'যোগ করার তারিখ',
+  };
+  function selectDirectoryClient(id: string) {
+    if (id !== selectedPortalId) {
+      setPortalEdit({});
+      setEditingPortal(null);
+    }
+    setSelectedPortalId(id);
+    window.requestAnimationFrame(() => {
+      const detail = document.getElementById(`portal-${id}`);
+      detail?.focus({ preventScroll: true });
+      if (window.innerWidth < 1024) detail?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
 
   const counts = useMemo(() => {
     return {
@@ -895,36 +916,42 @@ export default function RamyaChobiDeliveryAdmin() {
 
         {adminSection === 'delivery' && (
         <section className="rounded-3xl border border-stone-200 bg-white p-6 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-xl font-semibold">Client delivery portals</h2>
-            <div className="flex flex-wrap items-center gap-2">
-              <input value={portalSearch} onChange={(e) => setPortalSearch(e.target.value)} placeholder="Search client, event or phone" className="rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm" />
-              <span className="text-sm text-stone-500">{filteredPortals.length} of {portals.length}</span>
-              <button type="button" onClick={() => {
-                if (!filteredPortals.length) return;
-                const current = filteredPortals.findIndex((p) => p.id === selectedPortalId);
-                const next = filteredPortals[(current <= 0 ? filteredPortals.length : current) - 1];
-                setSelectedPortalId(next.id);
-                document.getElementById(`portal-${next.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              }} className="rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm font-semibold">Previous</button>
-              <button type="button" onClick={() => {
-                if (!filteredPortals.length) return;
-                const current = filteredPortals.findIndex((p) => p.id === selectedPortalId);
-                const next = filteredPortals[(current + 1) % filteredPortals.length];
-                setSelectedPortalId(next.id);
-                document.getElementById(`portal-${next.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              }} className="rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm font-semibold">Next</button>
-            </div>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div><p className="text-xs font-bold uppercase tracking-widest text-emerald-700">Client delivery portals</p><h2 className="mt-1 text-2xl font-bold">ক্লায়েন্ট ডেলিভারি তালিকা</h2><p className="mt-2 text-sm text-stone-500">১. নাম খুঁজুন → ২. ক্লায়েন্ট বাছুন → ৩. ছবি, পেমেন্ট ও ডেলিভারি দেখুন</p></div>
+            <span role="status" className="rounded-full bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800">{portals.length} জনের মধ্যে {filteredPortals.length} জন</span>
           </div>
-          <div className="mt-5 space-y-4">
-            {filteredPortals.map((portal) => {
+          <div className="mt-5 grid gap-3 rounded-2xl bg-stone-50 p-4 sm:grid-cols-2 xl:grid-cols-[2fr_1fr_1fr_1fr_auto]">
+            <label className="min-w-0 text-sm font-semibold">ক্লায়েন্ট সার্চ<input type="search" value={portalSearch} onChange={e => setPortalSearch(e.target.value)} placeholder="নাম, মোবাইল, অনুষ্ঠান বা প্যাকেজ" className="mt-2 min-h-11 w-full rounded-xl border border-stone-300 bg-white px-3 py-2 font-normal" /></label>
+            <label className="text-sm font-semibold">কোন তারিখ?<select value={portalDateField} onChange={e => setPortalDateField(e.target.value as DirectoryDateField)} className="mt-2 min-h-11 w-full rounded-xl border border-stone-300 bg-white px-3 py-2 font-normal"><option value="event_date">অনুষ্ঠানের তারিখ</option><option value="final_delivery_at">ডেলিভারির তারিখ</option><option value="created_at">যোগ করার তারিখ</option></select></label>
+            <label className="min-w-0 text-sm font-semibold">ক্যালেন্ডার থেকে দিন<input type="date" value={portalDate} onChange={e => setPortalDate(e.target.value)} className="mt-2 min-h-11 w-full min-w-0 rounded-xl border border-stone-300 bg-white px-3 py-2 font-normal" /></label>
+            <label className="text-sm font-semibold">তালিকার ক্রম<select value={portalSort} onChange={e => setPortalSort(e.target.value as DirectorySort)} className="mt-2 min-h-11 w-full rounded-xl border border-stone-300 bg-white px-3 py-2 font-normal"><option value="name">নাম অনুযায়ী</option><option value="newest">নতুন তারিখ আগে</option><option value="oldest">পুরোনো তারিখ আগে</option></select></label>
+            <button type="button" onClick={() => { setPortalSearch(''); setPortalDate(''); setPortalDateField('event_date'); setPortalSort('name'); }} className="min-h-11 self-end rounded-xl border border-stone-300 bg-white px-4 py-2 text-sm font-bold">সব দেখুন</button>
+          </div>
+          <p className="mt-2 text-xs text-stone-500">তারিখ না দিলে সব ক্লায়েন্ট দেখা যাবে। সময়যুক্ত তারিখ বাংলাদেশ সময় অনুযায়ী দেখানো হয়।</p>
+          {filteredPortals.length === 0 ? <div className="mt-5 rounded-2xl border border-dashed border-stone-300 p-8 text-center"><Users className="mx-auto mb-3 h-8 w-8 text-stone-400" /><h3 className="font-bold">{portals.length ? 'এই সার্চ বা তারিখে ক্লায়েন্ট পাওয়া যায়নি' : 'এখনও কোনো ক্লায়েন্ট ডেলিভারি নেই'}</h3><p className="mt-2 text-sm text-stone-500">{portals.length ? 'নাম বা তারিখ বদলান, অথবা “সব দেখুন” চাপুন।' : 'উপরের Client Delivery অংশ থেকে বুকিং বেছে পোর্টাল তৈরি করুন।'}</p></div> :
+          <div className="mt-5 grid items-start gap-5 lg:grid-cols-[minmax(260px,340px)_minmax(0,1fr)]">
+            <aside aria-label="ক্লায়েন্টের নামের তালিকা" className="overflow-hidden rounded-2xl border border-stone-200">
+              <div className="flex justify-between bg-stone-50 px-4 py-3 text-xs font-bold text-stone-500"><span>ক্রম · ক্লায়েন্টের নাম</span><span>বাকি টাকা</span></div>
+              <ol className="max-h-[440px] divide-y divide-stone-100 overflow-y-auto lg:max-h-[700px]">
+                {filteredPortals.map((client, index) => <li key={client.id}><button type="button" aria-pressed={activePortal?.id === client.id} aria-controls={`portal-${activePortal?.id}`} onClick={() => selectDirectoryClient(client.id)} className={'flex min-h-20 w-full items-start gap-3 px-4 py-4 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-emerald-700 '+(activePortal?.id === client.id ? 'bg-emerald-50 text-emerald-950' : 'bg-white hover:bg-stone-50')}>
+                  <span className={'flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold '+(activePortal?.id === client.id ? 'bg-emerald-800 text-white' : 'bg-stone-100 text-stone-500')}>{index + 1}</span>
+                  <span className="min-w-0 flex-1"><strong className="block break-words text-sm">{client.client_name}</strong><span className="mt-1 block break-words text-xs text-stone-500">{client.client_phone || client.whatsapp_number || 'মোবাইল দেওয়া নেই'}</span><span className="mt-1 block break-words text-xs text-stone-500">{client.event_name || 'অনুষ্ঠানের নাম নেই'} · {directoryDate(client[portalDateField]) || 'তারিখ দেওয়া নেই'}</span></span>
+                  <span className="shrink-0 text-right text-xs font-bold"><span className={Number(client.remaining_due) > 0 ? 'text-amber-800' : 'text-emerald-700'}>{money(client.remaining_due)}</span><span className="mt-2 block font-normal text-stone-400">{activePortal?.id === client.id ? 'খোলা আছে' : 'বিস্তারিত →'}</span></span>
+                </button></li>)}
+              </ol>
+            </aside>
+            <div className="min-w-0">
+            {activePortal && [activePortal].map((portal) => {
               const portalSection = portalSections[portal.id] || 'overview';
               const canActivate = portal.payment_status === 'FULLY_PAID' && portal.delivery_status !== 'FINAL_DELIVERED';
               return (
-                <div id={`portal-${portal.id}`} key={portal.id} className={`rounded-2xl border p-4 ${selectedPortalId === portal.id ? 'border-amber-400 ring-2 ring-amber-100' : 'border-stone-200'}`}>
+                <div id={`portal-${portal.id}`} key={portal.id} tabIndex={-1} aria-label={`${portal.client_name} এর ডেলিভারির বিস্তারিত`} className={`scroll-mt-24 rounded-2xl border p-4 outline-none ${activePortal?.id === portal.id ? 'border-amber-400 ring-2 ring-amber-100' : 'border-stone-200'}`}>
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
-                      <div className="text-lg font-semibold">{portal.client_name}</div>
+                      <div className="mb-3 flex flex-wrap gap-2"><button type="button" onClick={() => selectDirectoryClient(filteredPortals[(filteredPortals.findIndex(p => p.id === portal.id) - 1 + filteredPortals.length) % filteredPortals.length].id)} disabled={filteredPortals.length < 2} className="min-h-9 rounded-lg border px-3 text-xs font-bold disabled:opacity-40">← আগের ক্লায়েন্ট</button><button type="button" onClick={() => selectDirectoryClient(filteredPortals[(filteredPortals.findIndex(p => p.id === portal.id) + 1) % filteredPortals.length].id)} disabled={filteredPortals.length < 2} className="min-h-9 rounded-lg border px-3 text-xs font-bold disabled:opacity-40">পরের ক্লায়েন্ট →</button></div>
+                      <div className="break-words text-lg font-semibold">{portal.client_name}</div>
+                      <p className="mt-1 text-xs text-stone-500">{dateLabels[portalDateField]}: {directoryDate(portal[portalDateField]) || 'তারিখ দেওয়া নেই'}</p>
+                      <div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={() => copyLink(portal)} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-emerald-800 px-3 py-2 text-sm font-bold text-white"><Copy className="h-4 w-4" />লিংক কপি</button><a href={`/delivery/${portal.secure_token}`} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-stone-300 px-3 py-2 text-sm font-bold"><ExternalLink className="h-4 w-4" />ক্লায়েন্ট পেজ খুলুন</a></div>
                       <div className="mt-1 text-sm text-stone-500">{portal.event_name || 'Event'} · {portal.package_name || 'Package'}</div>
                       <div className="mt-2 text-xs text-stone-500">{portal.client_phone || portal.whatsapp_number || 'No phone saved'}</div>
                       <div className="mt-3 flex flex-wrap gap-2">
@@ -956,7 +983,7 @@ export default function RamyaChobiDeliveryAdmin() {
                     ].map(item => <button key={item.next} type="button" onClick={() => setPortalSections(current => ({ ...current, [portal.id]: item.next }))} className="rounded-2xl border border-stone-200 bg-white p-4 text-left hover:border-emerald-400 focus-visible:outline-2 focus-visible:outline-emerald-600"><span className="block text-xs font-semibold text-stone-500">{item.label}</span><strong className="mt-2 block text-sm">{item.value}</strong><span className="mt-3 block text-xs font-bold text-emerald-800">বিস্তারিত দেখুন →</span></button>)}
                   </div>}
 
-                  <div hidden={portalSection !== 'overview'} className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                  <div hidden={portalSection !== 'overview'} className="mt-4 grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-3">
                     <div className="rounded-xl bg-stone-50 p-3"><span className="block text-stone-500">Final Delivery</span><strong>{fmt(portal.final_delivery_at)}</strong></div>
                     <div className="rounded-xl bg-stone-50 p-3"><span className="block text-stone-500">Free access ends</span><strong>{fmt(portal.free_access_expires_at)}</strong></div>
                     <div className="rounded-xl bg-stone-50 p-3"><span className="block text-stone-500">Temporary access</span><strong>{fmt(portal.access_expires_at)}</strong></div>
@@ -973,7 +1000,7 @@ export default function RamyaChobiDeliveryAdmin() {
                       </div>
                       <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-stone-600">{(filesByPortal[portal.id] || []).length} file(s)</span>
                     </div>
-                    <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.6fr)_auto_120px_minmax(0,1fr)_minmax(0,1fr)_90px_auto]">
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-2">
                       <input value={fileDrafts[portal.id]?.url || ''} onChange={(e) => { const url = e.target.value; updateFileDraft(portal.id, { url, ...(isGoogleDriveFolderLink(url) ? { type: 'FOLDER' as const } : {}) }); }} placeholder="Private Google Drive photo, video, or folder link" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm" />
                       <button type="button" onClick={() => void openDeliveryDrivePicker(portal.id)} disabled={loading} className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-300 bg-white px-3 py-2.5 text-sm font-bold text-amber-900 disabled:opacity-50"><Link2 className="h-4 w-4" /> Browse Drive</button>
                       <select value={fileDrafts[portal.id]?.type || 'PHOTO'} onChange={(e) => updateFileDraft(portal.id, { type: e.target.value as 'PHOTO' | 'VIDEO' | 'DOCUMENT' | 'FOLDER' })} className="rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm">
@@ -1006,7 +1033,7 @@ export default function RamyaChobiDeliveryAdmin() {
 
                   <section hidden={portalSection !== 'payments'} id={`payment-ledger-${portal.id}`} tabIndex={-1} className="mt-4 rounded-2xl border border-stone-200 bg-stone-50 p-4 focus:outline-2 focus:outline-emerald-600">
                     <div className="flex items-center justify-between gap-2"><h3 className="font-semibold">Payment ledger</h3><span className="text-xs text-stone-500">Verified payments count toward total paid</span></div>
-                    <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                       <label className="block text-xs font-semibold text-stone-600"><span className="mb-1 block">Payment date</span><input type="date" value={ledgerDraft(portal.id).date} onChange={(e) => updateLedgerDraft(portal.id, { date: e.target.value })} className="w-full rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm" /></label>
                       <label className="block text-xs font-semibold text-stone-600"><span className="mb-1 block">Payment method</span><select value={ledgerDraft(portal.id).method} onChange={(e) => updateLedgerDraft(portal.id, { method: e.target.value as any })} className="w-full rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm"><option value="CASH">Cash</option><option value="BKASH">bKash</option><option value="NAGAD">Nagad</option><option value="BANK">Bank</option></select></label>
                       <label className="block text-xs font-semibold text-stone-600"><span className="mb-1 block">Paid amount</span><input type="number" min="0" value={ledgerDraft(portal.id).amount} onChange={(e) => updateLedgerDraft(portal.id, { amount: e.target.value })} placeholder="Amount" className="w-full rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm" /></label>
@@ -1131,7 +1158,8 @@ export default function RamyaChobiDeliveryAdmin() {
                 </div>
               );
             })}
-          </div>
+            </div>
+          </div>}
         </section>
         )}
 
