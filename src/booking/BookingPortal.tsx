@@ -1271,6 +1271,7 @@ function AdminPanel() {
   const [showFinance,setShowFinance] = useState(new URLSearchParams(window.location.search).get('section')==='finance');
   const [showTrash, setShowTrash] = useState(false);
   const [pendingTrash, setPendingTrash] = useState<Booking | null>(null);
+  const [pendingPermanentDelete, setPendingPermanentDelete] = useState<Booking | null>(null);
   const [trashBusy, setTrashBusy] = useState(false);
   async function changeTrash(booking: Booking, deleted: boolean) {
     if (trashBusy) return;
@@ -1285,6 +1286,27 @@ function AdminPanel() {
       setNotice(deleted ? 'Booking moved to Trash. Payments and events are preserved. Use Restore to recover it.' : 'Booking restored.');
     } catch (error: any) { setNotice(error?.message || 'Could not update booking.'); }
     finally { setTrashBusy(false); }
+  }
+
+  async function permanentlyDeleteBooking(booking: Booking) {
+    if (trashBusy) return;
+    setTrashBusy(true);
+    try {
+      const result = await db.rpc('booking_admin_permanently_delete', {
+        p_token: token,
+        p_booking_id: booking.id,
+      });
+      if (result.error) throw result.error;
+      if (!result.data) throw new Error('Booking was not found. Refresh and try again.');
+      setPendingPermanentDelete(null);
+      setSelectedId('');
+      await load();
+      setNotice('ক্লায়েন্ট ও বুকিংয়ের তথ্য স্থায়ীভাবে মুছে ফেলা হয়েছে। আলাদা ডেলিভারি পোর্টাল এবং সাধারণ খরচের রেকর্ড রাখা হয়েছে।');
+    } catch (error: any) {
+      setNotice(error?.message || 'ক্লায়েন্ট স্থায়ীভাবে মুছতে সমস্যা হয়েছে।');
+    } finally {
+      setTrashBusy(false);
+    }
   }
 
   const [ready, setReady] = useState(false);
@@ -1657,7 +1679,16 @@ function AdminPanel() {
                           {b.status}
                         </span>
                       </td>
-                      <td className="px-4 py-3"><button type="button" disabled={trashBusy} onClick={e => { e.stopPropagation(); if (showTrash) void changeTrash(b, false); else setPendingTrash(b); }} className="rounded-lg border px-3 py-2 font-bold disabled:opacity-50">{showTrash ? 'ফিরিয়ে আনুন' : 'ট্র্যাশে নিন'}</button></td>
+                      <td className="px-4 py-3">
+                        {showTrash ? (
+                          <div className="flex min-w-28 flex-col gap-2">
+                            <button type="button" disabled={trashBusy} onClick={e => { e.stopPropagation(); void changeTrash(b, false); }} className="rounded-lg border border-slate-300 px-3 py-2 font-bold disabled:opacity-50">ফিরিয়ে আনুন</button>
+                            <button type="button" disabled={trashBusy} onClick={e => { e.stopPropagation(); setPendingPermanentDelete(b); }} className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 font-bold text-red-700 disabled:opacity-50">পার্মানেন্ট ডিলিট</button>
+                          </div>
+                        ) : (
+                          <button type="button" disabled={trashBusy} onClick={e => { e.stopPropagation(); setPendingTrash(b); }} className="rounded-lg border px-3 py-2 font-bold disabled:opacity-50">ট্র্যাশে নিন</button>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}
@@ -1690,6 +1721,7 @@ function AdminPanel() {
         </aside>
       </div>
       {pendingTrash && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"><section role="dialog" aria-modal="true" aria-labelledby="trash-title" className="w-full max-w-md rounded-2xl bg-white p-6"><h2 id="trash-title" className="text-xl font-bold">বুকিং ট্র্যাশে নিতে চান?</h2><p className="mt-3">{pendingTrash.reference_no} · {pendingTrash.client_name}</p><p className="mt-2 text-sm">জমা, খরচ ও অনুষ্ঠানের তথ্য সংরক্ষিত থাকবে। ট্র্যাশ থেকে বুকিং ফিরিয়ে আনতে পারবেন। ডেলিভারির প্রবেশাধিকার আগের মতো থাকবে।</p><div className="mt-5 flex gap-3"><button autoFocus disabled={trashBusy} onClick={() => setPendingTrash(null)} className="rounded-xl border px-4 py-2">Cancel</button><button disabled={trashBusy} onClick={() => void changeTrash(pendingTrash, true)} className="rounded-xl bg-red-700 px-4 py-2 text-white">{trashBusy ? 'সরানো হচ্ছে…' : 'ট্র্যাশে নিন'}</button></div></section></div>}
+      {pendingPermanentDelete && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"><section role="dialog" aria-modal="true" aria-labelledby="permanent-delete-title" className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"><h2 id="permanent-delete-title" className="text-xl font-bold text-red-800">ক্লায়েন্ট স্থায়ীভাবে মুছবেন?</h2><p className="mt-3 font-semibold">{pendingPermanentDelete.reference_no} · {pendingPermanentDelete.client_name}</p><p className="mt-2 text-sm text-slate-700">এই কাজ ফিরিয়ে আনা যাবে না। বুকিং, অনুষ্ঠান, জমা/পেমেন্ট, বুকিংয়ের খরচ ও পেমেন্ট অনুরোধ মুছে যাবে। আলাদা ডেলিভারি পোর্টাল ও সাধারণ খরচের রেকর্ড থাকবে, তবে বুকিংয়ের সঙ্গে সংযোগ বিচ্ছিন্ন হবে।</p><div className="mt-5 grid grid-cols-2 gap-3"><button autoFocus type="button" disabled={trashBusy} onClick={() => setPendingPermanentDelete(null)} className="rounded-xl border px-4 py-3 font-bold disabled:opacity-50">বাতিল</button><button type="button" disabled={trashBusy} onClick={() => void permanentlyDeleteBooking(pendingPermanentDelete)} className="rounded-xl bg-red-700 px-4 py-3 font-bold text-white disabled:opacity-50">{trashBusy ? 'মুছছে…' : 'স্থায়ীভাবে মুছুন'}</button></div></section></div>}
       </div>
     </main>
   );
