@@ -1251,6 +1251,16 @@ function BookingPaymentInbox({ token, bookings, onChanged }: { token: string; bo
   </section>;
 }
 
+class AdminPanelRenderBoundary extends React.Component<React.PropsWithChildren, {failed:boolean}> {
+  state = {failed:false};
+  static getDerivedStateFromError() { return {failed:true}; }
+  componentDidCatch(error:Error) { console.error('Admin panel render error',error); }
+  render() {
+    if (this.state.failed) return <main role="alert" className="min-h-screen bg-[#f8f6ef] p-6 text-slate-900"><section className="mx-auto mt-12 max-w-xl rounded-3xl border border-amber-200 bg-white p-6 shadow-sm"><h1 className="text-xl font-black">অ্যাডমিন স্ক্রিনটি লোড করা যায়নি</h1><p className="mt-2 text-sm text-slate-600">একটি হিসাবের তালিকা লোড করতে সমস্যা হয়েছে। পেজ রিফ্রেশ করে আবার চেষ্টা করুন।</p><button type="button" onClick={()=>window.location.reload()} className="mt-4 min-h-11 rounded-xl bg-emerald-800 px-4 font-bold text-white">আবার লোড করুন</button></section></main>;
+    return this.props.children;
+  }
+}
+
 function AdminPanel() {
   const [addingClient, setAddingClient] = useState(false);
   const [showCustomSettings,setShowCustomSettings] = useState(new URLSearchParams(window.location.search).get('section')==='settings');
@@ -2224,6 +2234,6 @@ function BookingDetail(props: {
 
 export default function BookingPortal() {
   const isAdmin = window.location.pathname.startsWith("/booking/admin");
-  return isAdmin ? <AdminPanel /> : window.location.pathname==='/booking/city' ? <MiniBooking /> : new URLSearchParams(window.location.search).has('legacy') ? <ClientForm /> : <FriendlyBooking />;
+  return isAdmin ? <AdminPanelRenderBoundary><AdminPanel /></AdminPanelRenderBoundary> : window.location.pathname==='/booking/city' ? <MiniBooking /> : new URLSearchParams(window.location.search).has('legacy') ? <ClientForm /> : <FriendlyBooking />;
 }
 
