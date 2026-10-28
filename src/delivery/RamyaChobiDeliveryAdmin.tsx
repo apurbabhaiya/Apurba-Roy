@@ -55,6 +55,9 @@ import {
   setPublicDeliveryDownload,
   setDeliveryDocumentPermission,
   DeliveryPaymentLedger,
+  BookingPaymentRequest,
+  listBookingPaymentRequests,
+  reviewBookingPaymentRequest as saveBookingPaymentReview,
 } from '../services/deliveryPortalService';
 import { manualClientPayload, type ManualClientDraft } from './manualClient';
 import { directoryDate, filterClientDirectory, type DirectoryDateField, type DirectorySort } from './clientDirectory';
@@ -180,6 +183,10 @@ export default function RamyaChobiDeliveryAdmin() {
   const [settingsRetention, setSettingsRetention] = useState('');
   const [paymentProofUrl, setPaymentProofUrl] = useState('');
   const [proofLoadingId, setProofLoadingId] = useState('');
+  const [bookingPaymentRequests, setBookingPaymentRequests] = useState<BookingPaymentRequest[]>([]);
+  const [bookingPaymentLoading, setBookingPaymentLoading] = useState(false);
+  const [bookingPaymentBusyId, setBookingPaymentBusyId] = useState('');
+  const [bookingPaymentMessage, setBookingPaymentMessage] = useState('');
   const [filesByPortal, setFilesByPortal] = useState<Record<string, DeliveryAdminFile[]>>({});
   const [fileDrafts, setFileDrafts] = useState<Record<string, { url: string; fileName: string; title: string; type: 'PHOTO' | 'VIDEO' | 'DOCUMENT' | 'FOLDER'; sortOrder: string }>>({});
   const [fileMetaByPortal, setFileMetaByPortal] = useState<Record<string, { name?: string; mimeType?: string; size?: string | null }>>({});
@@ -287,6 +294,35 @@ export default function RamyaChobiDeliveryAdmin() {
   const bookings = dashboard?.bookings || [];
   const availableBookings = bookings.filter((b) => !b.has_portal);
   const pendingRequests = submissions.filter((s) => s.status === 'SUBMITTED');
+
+  useEffect(() => {
+    let live = true;
+    if (!token || !bookings.length) {
+      setBookingPaymentRequests([]);
+      setBookingPaymentLoading(false);
+      return () => { live = false; };
+    }
+    setBookingPaymentLoading(true);
+    setBookingPaymentMessage('');
+    void Promise.all(bookings.map(async (booking) => {
+      const requests = await listBookingPaymentRequests(token, booking.id);
+      return requests.map((request) => ({
+        ...request,
+        client_name: booking.client_name,
+        reference_no: booking.reference_no,
+        event_name: booking.event_name,
+      }));
+    })).then((groups) => {
+      if (live) setBookingPaymentRequests(groups.flat());
+    }).catch((error: any) => {
+      if (live) setBookingPaymentMessage(error?.message || 'Booking payments could not be loaded.');
+    }).finally(() => {
+      if (live) setBookingPaymentLoading(false);
+    });
+    return () => { live = false; };
+  }, [token, bookings]);
+
+  const pendingBookingPayments = bookingPaymentRequests.filter((request) => request.status === 'pending');
   const directoryPortals = portals.map(portal => ({
     ...portal,
     event_date: portal.event_date || bookings.find(booking => booking.id === portal.booking_id)?.event_date,
@@ -320,6 +356,22 @@ export default function RamyaChobiDeliveryAdmin() {
       requests: pendingRequests.length,
     };
   }, [portals, pendingRequests]);
+
+  const paymentReviewCount = counts.requests + pendingBookingPayments.length;
+
+  async function reviewBookingPayment(requestId: string, approve: boolean) {
+    setBookingPaymentBusyId(requestId);
+    setBookingPaymentMessage('');
+    try {
+      await saveBookingPaymentReview(token, requestId, approve);
+      setBookingPaymentMessage(approve ? 'Booking payment verified and added to the client ledger.' : 'Booking payment request rejected.');
+      await load();
+    } catch (error: any) {
+      setBookingPaymentMessage(error?.message || 'Could not update the booking payment.');
+    } finally {
+      setBookingPaymentBusyId('');
+    }
+  }
 
   function startPortalEdit(portal: DeliveryAdminPortal) {
     setSelectedPortalId(portal.id);
@@ -809,7 +861,7 @@ export default function RamyaChobiDeliveryAdmin() {
             <button key={section} type="button" aria-current={adminSection === section ? 'page' : undefined}
               onClick={() => setAdminSection(section)}
               className={`min-h-12 rounded-2xl px-4 py-3 text-sm sm:text-base font-bold capitalize focus-visible:outline-2 focus-visible:outline-amber-600 ${adminSection === section ? 'bg-stone-950 text-white shadow-sm' : 'bg-stone-100 text-stone-700 hover:bg-amber-100'}`}>
-              {section === 'team' ? 'Website Team' : section === 'spin-results' ? 'Spin Results' : section}{section === 'payments' && counts.requests > 0 ? ` (${counts.requests})` : ''}
+              {section === 'team' ? 'Website Team' : section === 'spin-results' ? 'Spin Results' : section}{section === 'payments' && paymentReviewCount > 0 ? ` (${paymentReviewCount})` : ''}
             </button>
           ))}
           <a href="/booking/admin" className="flex min-h-11 items-center rounded-xl bg-emerald-800 px-4 py-2.5 text-sm font-semibold text-white">ক্লায়েন্ট ও হিসাব</a>
@@ -916,10 +968,52 @@ export default function RamyaChobiDeliveryAdmin() {
         )}
 
         {adminSection === 'payments' && (
+        <div className="space-y-5">
+        <section className="rounded-3xl border border-stone-200 bg-white p-6 shadow-sm" aria-label="Booking payment verification">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-semibold">Booking payment requests</h2>
+              <p className="mt-1 text-sm text-stone-500">Booking advance payments with the submitted transaction ID and amount appear here for review.</p>
+            </div>
+            <StatusPill value={`${pendingBookingPayments.length} PENDING`} />
+          </div>
+          {bookingPaymentMessage && <p role="status" className="mt-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">{bookingPaymentMessage}</p>}
+          <div className="mt-5 space-y-3">
+            {bookingPaymentLoading ? (
+              <div className="rounded-2xl bg-stone-50 p-5 text-sm text-stone-500">Loading booking payments…</div>
+            ) : pendingBookingPayments.length === 0 ? (
+              <div className="rounded-2xl bg-stone-50 p-5 text-sm text-stone-500">No booking payments are waiting for review.</div>
+            ) : pendingBookingPayments.map((request) => (
+              <div key={request.id} className="grid gap-4 rounded-2xl border border-stone-200 p-4 lg:grid-cols-[1.2fr_.8fr_.7fr_auto] lg:items-center">
+                <div>
+                  <div className="font-semibold">{request.client_name || 'Client'}</div>
+                  <div className="mt-1 text-sm text-stone-500">{request.reference_no} · {request.event_name || 'Booking'}</div>
+                </div>
+                <div className="text-sm">
+                  <div><span className="text-stone-500">Method:</span> {request.method}</div>
+                  <div><span className="text-stone-500">TrxID:</span> {request.transaction_id}</div>
+                  <div><span className="text-stone-500">Payer:</span> {request.payer_phone || 'Not provided'}</div>
+                </div>
+                <div>
+                  <div className="text-lg font-semibold">{money(request.amount)}</div>
+                  {request.created_at && <div className="text-xs text-stone-500">{fmt(request.created_at)}</div>}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => void reviewBookingPayment(request.id, true)} disabled={Boolean(bookingPaymentBusyId)} className="inline-flex items-center gap-1 rounded-xl bg-emerald-600 px-3 py-2 text-sm font-bold text-white disabled:opacity-50">
+                    <BadgeCheck className="h-4 w-4" /> Verify
+                  </button>
+                  <button type="button" onClick={() => void reviewBookingPayment(request.id, false)} disabled={Boolean(bookingPaymentBusyId)} className="inline-flex items-center gap-1 rounded-xl bg-red-50 px-3 py-2 text-sm font-bold text-red-700 disabled:opacity-50">
+                    <XCircle className="h-4 w-4" /> Reject
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
         <section className="rounded-3xl border border-stone-200 bg-white p-6 shadow-sm">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-xl font-semibold">Payment verification</h2>
+              <h2 className="text-xl font-semibold">Delivery payment verification</h2>
               <p className="mt-1 text-sm text-stone-500">Package and access-fee submissions stay locked until you verify them.</p>
             </div>
             <StatusPill value={`${pendingRequests.length} SUBMITTED`} />
@@ -956,8 +1050,8 @@ export default function RamyaChobiDeliveryAdmin() {
             ))}
           </div>
         </section>
+        </div>
         )}
-
         {adminSection === 'delivery' && (
         <section className="rounded-3xl border border-stone-200 bg-white p-6 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-3">
