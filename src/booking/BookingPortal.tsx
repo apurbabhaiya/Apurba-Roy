@@ -1167,6 +1167,89 @@ function bookingPhoneHref(phone: string) {
   return /^\+?[0-9]{7,15}$/.test(normalized) && !/^0+$/.test(normalized) ? `tel:${normalized}` : null;
 }
 
+function BookingPaymentInbox({ token, bookings, onChanged }: { token: string; bookings: Booking[]; onChanged: () => Promise<void> }) {
+  const [requests, setRequests] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [busyId, setBusyId] = useState('');
+  const [message, setMessage] = useState('');
+
+  async function loadRequests() {
+    if (!token || bookings.length === 0) {
+      setRequests([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setMessage('');
+    try {
+      const groups = await Promise.all(bookings.map(async booking => {
+        const result = await db.rpc('booking_admin_payment_requests', { p_token: token, p_booking_id: booking.id });
+        if (result.error) throw result.error;
+        return (result.data || []).map((request: any) => ({
+          ...request,
+          client_name: booking.client_name,
+          reference_no: booking.reference_no,
+        }));
+      }));
+      setRequests(groups.flat().filter(request => request.status === 'pending').sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || ''))));
+    } catch (error: any) {
+      setMessage(error?.message || 'পেমেন্টের তথ্য লোড হয়নি।');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    let live = true;
+    if (!token || bookings.length === 0) {
+      setRequests([]);
+      setLoading(false);
+      return () => { live = false; };
+    }
+    setLoading(true);
+    setMessage('');
+    void Promise.all(bookings.map(async booking => {
+      const result = await db.rpc('booking_admin_payment_requests', { p_token: token, p_booking_id: booking.id });
+      if (result.error) throw result.error;
+      return (result.data || []).map((request: any) => ({ ...request, client_name: booking.client_name, reference_no: booking.reference_no }));
+    })).then(groups => {
+      if (live) setRequests(groups.flat().filter(request => request.status === 'pending').sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || ''))));
+    }).catch((error: any) => {
+      if (live) setMessage(error?.message || 'পেমেন্টের তথ্য লোড হয়নি।');
+    }).finally(() => {
+      if (live) setLoading(false);
+    });
+    return () => { live = false; };
+  }, [token, bookings]);
+
+  async function review(id: string, approve: boolean) {
+    setBusyId(id);
+    setMessage('');
+    try {
+      const result = await db.rpc('booking_admin_review_payment', { p_token: token, p_request_id: id, p_approve: approve });
+      if (result.error) throw result.error;
+      await loadRequests();
+      await onChanged();
+      setMessage(approve ? 'পেমেন্ট যাচাই করে ক্লায়েন্টের জমার হিসাবে যোগ হয়েছে।' : 'পেমেন্ট অনুরোধ বাতিল করা হয়েছে।');
+    } catch (error: any) {
+      setMessage(error?.message || 'পেমেন্টের অবস্থা সংরক্ষণ হয়নি।');
+    } finally {
+      setBusyId('');
+    }
+  }
+
+  return <section aria-label="জমা পেমেন্ট যাচাই" className="mx-auto mt-5 max-w-[1500px] rounded-3xl border border-amber-200 bg-white p-4 shadow-sm sm:p-5">
+    <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-black">জমা পেমেন্ট যাচাই</h2><p className="mt-1 text-sm text-slate-600">ক্লায়েন্ট পাঠানো টাকা, TrxID ও পেমেন্টের নম্বর এখানে দেখুন।</p></div><span className="rounded-full bg-amber-100 px-3 py-2 text-sm font-black text-amber-900">{requests.length}টি যাচাই বাকি</span></div>
+    {message && <p role="status" className="mt-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">{message}</p>}
+    <div className="mt-4 space-y-3">{loading ? <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">পেমেন্টের তথ্য আনা হচ্ছে…</p> : requests.length === 0 ? <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">যাচাইয়ের অপেক্ষায় কোনো পেমেন্ট নেই।</p> : requests.map(request => <article key={request.id} className="grid gap-3 rounded-2xl border border-slate-200 p-4 sm:grid-cols-[1fr_1.2fr_.7fr_auto] sm:items-center">
+      <div><b>{request.client_name || 'ক্লায়েন্ট'}</b><p className="text-xs text-slate-500">বুকিং: {request.reference_no}</p></div>
+      <div className="text-sm"><p>পদ্ধতি: {request.method}</p>{request.method === 'CASH' ? <p>ক্যাশ পেমেন্ট</p> : <><p>TrxID: <b className="break-all">{request.transaction_id}</b></p><p>পাঠানো নম্বর: {request.payer_phone || 'দেওয়া হয়নি'}</p></>}</div>
+      <div><b className="text-lg">{money(Number(request.amount))}</b>{request.created_at && <p className="text-xs text-slate-500">{new Date(request.created_at).toLocaleString('bn-BD')}</p>}</div>
+      <div className="flex flex-wrap gap-2"><button type="button" disabled={Boolean(busyId)} onClick={() => void review(request.id, true)} className="min-h-10 rounded-xl bg-emerald-800 px-3 py-2 text-sm font-bold text-white disabled:opacity-50">যাচাই করে জমা করুন</button><button type="button" disabled={Boolean(busyId)} onClick={() => void review(request.id, false)} className="min-h-10 rounded-xl border border-slate-300 px-3 py-2 text-sm font-bold disabled:opacity-50">বাতিল</button></div>
+    </article>)}</div>
+  </section>;
+}
+
 function AdminPanel() {
   const [addingClient, setAddingClient] = useState(false);
   const [showCustomSettings,setShowCustomSettings] = useState(new URLSearchParams(window.location.search).get('section')==='settings');
@@ -1289,6 +1372,7 @@ function AdminPanel() {
     bookings.find(function (b) {
       return b.id === selectedId && !b.deleted_at && !showTrash;
     }) || null;
+  const activePaymentBookings = useMemo(() => bookings.filter(booking => !booking.deleted_at), [bookings]);
 
   async function signIn(e?: React.FormEvent) {
     if (e) e.preventDefault();
@@ -1484,6 +1568,7 @@ function AdminPanel() {
       {showTeam && <WebsiteTeamManager adminToken={token}/>}
       {showSpin && <SpinResultAdmin adminToken={token}/>}
       <div hidden={showCustomSettings||showDiscussions||showChatbot||showTeam||showSpin}>
+      {!showTrash && <BookingPaymentInbox token={token} bookings={activePaymentBookings} onChanged={load} />}
       <div className="mx-auto grid max-w-[1500px] gap-4 px-4 py-5 xl:grid-cols-[1.1fr_1fr]">
         <section className="min-w-0 rounded-3xl bg-white shadow-sm">
           <div className="border-b border-slate-200 p-4">
