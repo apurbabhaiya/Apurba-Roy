@@ -363,6 +363,39 @@ export async function setDeliveryAdvancePaid(input: { token: string; portalId: s
   return data;
 }
 
+export type BookingPaymentRequest = {
+  id: string;
+  booking_id: string;
+  amount: number | string;
+  method: string;
+  transaction_id: string;
+  payer_phone?: string | null;
+  status: 'pending' | 'approved' | 'rejected';
+  created_at?: string;
+  client_name?: string;
+  reference_no?: string;
+  event_name?: string | null;
+};
+
+export async function listBookingPaymentRequests(token: string, bookingId: string): Promise<BookingPaymentRequest[]> {
+  const { data, error } = await db.rpc('booking_admin_payment_requests', {
+    p_token: token,
+    p_booking_id: bookingId,
+  });
+  if (error) throw error;
+  return (data || []) as BookingPaymentRequest[];
+}
+
+export async function reviewBookingPaymentRequest(token: string, requestId: string, approve: boolean) {
+  const { data, error } = await db.rpc('booking_admin_review_payment', {
+    p_token: token,
+    p_request_id: requestId,
+    p_approve: approve,
+  });
+  if (error) throw error;
+  return data;
+}
+
 export async function listDeliveryPaymentSubmissions(token: string): Promise<DeliveryPaymentSubmission[]> {
   const { data, error } = await db.rpc('delivery_admin_list_payment_submissions', { p_token: token });
   if (error) throw error;
