@@ -4,17 +4,23 @@ import { cashDate, CashEntry, sumCash } from './financeSummary';
 const money = (amount: number) => new Intl.NumberFormat('en-BD', { style: 'currency', currency: 'BDT', maximumFractionDigits: 0 }).format(amount);
 const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const todayDhaka = () => new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Dhaka',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+type ScheduleBooking = { id: string; reference_no?: string | null; client_name?: string | null; status?: string | null; deleted_at?: string | null; advance_paid?: number | string };
+type ScheduleEvent = { booking_id: string; event_date: string; event_name?: string | null; start_time?: string | null; end_time?: string | null; venue?: string | null; location?: string | null };
 type Props = {
-  bookings: { advance_paid: number | string }[];
+  bookings: ScheduleBooking[];
   payments: { amount: number | string; paid_on?: string | null }[];
   costs: { amount: number | string; paid_on?: string | null }[];
+  events?: ScheduleEvent[];
   calendarNotes?: { note_date: string; title: string; note: string }[];
 };
-export default function FinanceCalendar({bookings=[],payments=[],costs=[],calendarNotes=[]}: Props) {
-  const safeBookings=Array.isArray(bookings)?bookings:[]; const safePayments=Array.isArray(payments)?payments:[]; const safeCosts=Array.isArray(costs)?costs:[]; const safeNotes=Array.isArray(calendarNotes)?calendarNotes:[];
+export default function FinanceCalendar({bookings=[],payments=[],costs=[],events=[],calendarNotes=[]}: Props) {
+  const safeBookings=Array.isArray(bookings)?bookings:[]; const safePayments=Array.isArray(payments)?payments:[]; const safeCosts=Array.isArray(costs)?costs:[]; const safeEvents=Array.isArray(events)?events:[]; const safeNotes=Array.isArray(calendarNotes)?calendarNotes:[];
+  const bookingById=new Map(safeBookings.filter(booking=>!booking.deleted_at&&!['cancelled','rejected','declined'].includes(String(booking.status||'').toLowerCase())).map(booking=>[booking.id,booking]));
+  const scheduleEvents=safeEvents.filter(event=>bookingById.has(event.booking_id));
   const today = todayDhaka();
   const [month, setMonth] = useState(today.slice(0,7));
   const [selectedDay, setSelectedDay] = useState(today);
+  const selectedEvents=scheduleEvents.filter(event=>event.event_date===selectedDay);
   const [year, monthNumber] = month.split('-').map(Number);
   const { entries, undatedIncome, undatedExpense } = useMemo(() => {
     const entries: CashEntry[] = [];
@@ -47,10 +53,12 @@ export default function FinanceCalendar({bookings=[],payments=[],costs=[],calend
       <div className="grid grid-cols-7 gap-1 text-center">{['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=><div key={d} className="py-1 text-xs font-bold text-slate-500">{d}</div>)}{Array.from({length:offset},(_,i)=><span key={`blank-${i}`} />)}{Array.from({length:numberOfDays},(_,i)=>{
         const date = `${month}-${String(i+1).padStart(2,'0')}`, totals = sumCash(entries,date);
         const hasNote=safeNotes.some(note=>note.note_date===date);
-        return <button key={date} type="button" aria-label={`${date}: received ${money(totals.income)}, expense ${money(totals.expense)}${hasNote?', has note':''}`} aria-pressed={selectedDay===date} onClick={()=>setSelectedDay(date)} className={`min-h-12 rounded-lg border p-1 text-sm ${selectedDay===date?'border-amber-500 bg-amber-100 font-bold':'border-slate-100 hover:bg-slate-50'}`}><span>{i+1}</span><span className="mt-1 flex justify-center gap-1">{totals.income!==0 && <span className="h-1.5 w-1.5 rounded-full bg-emerald-600"/>}{totals.expense!==0 && <span className="h-1.5 w-1.5 rounded-full bg-red-500"/>}{hasNote&&<span className="h-1.5 w-1.5 rounded-full bg-blue-600"/>}</span></button>;
+        const eventCount=scheduleEvents.filter(event=>event.event_date===date).length;
+        return <button key={date} type="button" aria-label={`${date}: received ${money(totals.income)}, expense ${money(totals.expense)}${hasNote?', has note':''}${eventCount?', '+eventCount+' event'+(eventCount===1?'':'s'):''}`} aria-pressed={selectedDay===date} onClick={()=>setSelectedDay(date)} className={`min-h-14 rounded-lg border p-1 text-sm ${selectedDay===date?'border-amber-500 bg-amber-100 font-bold':'border-slate-100 hover:bg-slate-50'}`}><span>{i+1}</span><span className="mt-1 flex justify-center gap-1">{totals.income!==0 && <span className="h-1.5 w-1.5 rounded-full bg-emerald-600"/>}{totals.expense!==0 && <span className="h-1.5 w-1.5 rounded-full bg-red-500"/>}{hasNote&&<span className="h-1.5 w-1.5 rounded-full bg-blue-600"/>}{eventCount>0&&<span className="h-1.5 w-1.5 rounded-full bg-amber-500"/>}</span>{eventCount>0&&<span className="block text-[9px] font-bold leading-3 text-amber-800">{eventCount}টি ইভেন্ট</span>}</button>;
       })}</div>
       <p className="text-xs text-slate-500">সবুজ বিন্দু: টাকা জমা · লাল বিন্দু: খরচ · নীল বিন্দু: তারিখের নোট</p>
       {safeNotes.filter(note=>note.note_date===selectedDay).map(note=><article key={note.title+note.note} className="rounded-xl border border-blue-200 bg-blue-50 p-3"><b className="text-sm">{note.title}</b><p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">{note.note}</p></article>)}
+      <section aria-label={selectedDay+' এর বুকিং'} className="rounded-2xl border border-amber-200 bg-amber-50 p-3"><h3 className="font-bold">এই তারিখের ইভেন্ট · {selectedEvents.length}</h3>{selectedEvents.length?<div className="mt-2 space-y-2">{selectedEvents.map((event,index)=>{const booking=bookingById.get(event.booking_id);const time=[event.start_time,event.end_time].filter(Boolean).map(value=>value?.slice(0,5)).join('–');return <article key={event.booking_id+'-'+event.event_date+'-'+index} className="rounded-xl border border-amber-100 bg-white p-3"><p className="font-bold">{booking?.client_name||'নাম নেই'} · {event.event_name||'অনুষ্ঠান'}</p><p className="mt-1 text-xs text-stone-600">{booking?.reference_no||'বুকিং'}{time?' · '+time:''}{event.venue||event.location?' · '+(event.venue||event.location):''}</p></article>})}</div>:<p className="mt-1 text-sm text-stone-600">এই তারিখে কোনো সক্রিয় বুকিং ইভেন্ট নেই।</p>}</section>
       {[{label:selectedDay,total:dayTotals},{label:`${months[monthNumber-1]} ${year}`,total:monthTotals},{label:`পুরো বছর ${year}`,total:yearTotals}].map(({label,total})=><div key={label} className="rounded-2xl bg-slate-50 p-3"><h3 className="text-sm font-bold">{label}</h3><dl className="mt-2 grid grid-cols-3 gap-2 text-xs"><div><dt>জমা</dt><dd className="mt-1 font-bold text-emerald-700">{money(total.income)}</dd></div><div><dt>খরচ</dt><dd className="mt-1 font-bold text-red-700">{money(total.expense)}</dd></div><div><dt>{netLabel(total.net)}</dt><dd className={`mt-1 font-bold ${total.net<0?'text-red-700':'text-slate-900'}`}>{money(Math.abs(total.net))}</dd></div></dl></div>)}
       <details><summary className="cursor-pointer text-sm font-bold">বছরের ১২ মাসের হিসাব</summary><div className="mt-3 overflow-x-auto"><table className="w-full text-left text-xs"><caption className="sr-only">Monthly cash summary for {year}</caption><thead><tr><th className="p-2">মাস</th><th>জমা</th><th>খরচ</th><th>উদ্বৃত্ত / ঘাটতি</th></tr></thead><tbody>{months.map((name,i)=>{const totals=sumCash(entries,`${year}-${String(i+1).padStart(2,'0')}`);return <tr key={name} className="border-t"><th className="p-2">{name}</th><td>{money(totals.income)}</td><td>{money(totals.expense)}</td><td className={totals.net<0?'text-red-700':'text-emerald-700'}>{money(totals.net)}</td></tr>;})}</tbody></table></div></details>
       <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5"><strong>হিসাবের ভিত্তি:</strong> তারিখসহ রেকর্ড করা টাকা জমা − খরচ। এটি নগদ প্রবাহের উদ্বৃত্ত/ঘাটতি, পূর্ণ ব্যবসায়িক লাভ/লস নয়। বকেয়া বা প্যাকেজের দাম আয় হিসেবে ধরা হয়নি।<p className="mt-2">তারিখবিহীন জমা/অগ্রিম: <strong>{money(undatedIncome)}</strong> · তারিখবিহীন খরচ: <strong>{money(undatedExpense)}</strong>। এগুলো দিন, মাস ও বছরের মোটে নেই।</p></div>

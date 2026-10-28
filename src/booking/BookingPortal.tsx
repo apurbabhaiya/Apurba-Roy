@@ -1602,7 +1602,7 @@ function AdminPanel() {
       {showChatbot && <div className="px-4 py-5"><ChatbotAdmin token={token}/></div>}
       {showTeam && <WebsiteTeamManager adminToken={token}/>}
       {showSpin && <SpinResultAdmin adminToken={token}/>}
-      {showFinance && <BookingFinanceManager token={token} bookings={bookings} payments={payments} costs={costs} onChanged={load}/>}
+      {showFinance && <BookingFinanceManager token={token} bookings={bookings} payments={payments} costs={costs} events={events} onChanged={load}/>}
       <div hidden={showCustomSettings||showDiscussions||showChatbot||showTeam||showSpin||showFinance}>
       {!showTrash && <BookingPaymentInbox token={token} bookings={activePaymentBookings} onChanged={load} />}
       <div className="mx-auto grid max-w-[1500px] gap-4 px-4 py-5 xl:grid-cols-[1.1fr_1fr]">
@@ -1716,7 +1716,7 @@ function AdminPanel() {
           <details className="mt-5 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
             <summary className="cursor-pointer font-bold text-slate-800">সব ক্লায়েন্টের মাসিক ও বার্ষিক রিপোর্ট</summary>
             <p className="my-3 text-xs text-slate-500">সমস্ত বুকিংয়ের সম্মিলিত হিসাব। ক্লায়েন্টভিত্তিক হিসাব উপরে দেখুন।</p>
-            <FinanceCalendar bookings={bookings} payments={payments} costs={costs} />
+            <FinanceCalendar bookings={bookings} payments={payments} costs={costs} events={events} />
           </details>
         </aside>
       </div>

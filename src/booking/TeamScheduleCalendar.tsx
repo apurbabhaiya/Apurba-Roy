@@ -31,6 +31,7 @@ export default function TeamScheduleCalendar() {
   const [items, setItems] = useState<ScheduleDay[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [selectedDay, setSelectedDay] = useState('');
 
   const monthKey = monthKeyOf(month);
   const monthLabel = useMemo(
@@ -75,6 +76,7 @@ export default function TeamScheduleCalendar() {
     () => new Map(items.map((item) => [item.event_date, Number(item.booking_count)])),
     [items],
   );
+  const selectedCount = selectedDay ? (scheduledDays.get(selectedDay) || 0) : 0;
 
   const leadingEmptyDays = new Date(month.getFullYear(), month.getMonth(), 1).getDay();
   const daysInMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
@@ -86,6 +88,12 @@ export default function TeamScheduleCalendar() {
 
   const canGoBack = monthKey > currentMonthKey;
   const canGoForward = monthKey < maxMonthKey;
+
+  function changeMonth(delta: number) {
+    const nextMonth = new Date(month.getFullYear(), month.getMonth() + delta, 1);
+    setMonth(nextMonth);
+    setSelectedDay(monthKeyOf(nextMonth) + '-01');
+  }
 
   return (
     <section className="mx-auto mt-6 max-w-4xl rounded-3xl border border-stone-200 bg-white p-4 shadow-sm sm:p-6" aria-labelledby="team-schedule-title">
@@ -101,9 +109,9 @@ export default function TeamScheduleCalendar() {
 
         <div className="pt-4">
           <div className="mb-3 flex items-center justify-between gap-2">
-            <button type="button" disabled={!canGoBack} onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))} aria-label="আগের মাস" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-stone-300 disabled:opacity-40"><ChevronLeft className="h-5 w-5" /></button>
+            <button type="button" disabled={!canGoBack} onClick={() => changeMonth(-1)} aria-label="আগের মাস" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-stone-300 disabled:opacity-40"><ChevronLeft className="h-5 w-5" /></button>
             <h3 className="text-base font-bold capitalize text-[#193e32]" aria-live="polite">{monthLabel}</h3>
-            <button type="button" disabled={!canGoForward} onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))} aria-label="পরের মাস" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-stone-300 disabled:opacity-40"><ChevronRight className="h-5 w-5" /></button>
+            <button type="button" disabled={!canGoForward} onClick={() => changeMonth(1)} aria-label="পরের মাস" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-stone-300 disabled:opacity-40"><ChevronRight className="h-5 w-5" /></button>
           </div>
 
           {loading ? (
@@ -121,14 +129,17 @@ export default function TeamScheduleCalendar() {
                   const dayKey = monthKey + '-' + String(day).padStart(2, '0');
                   const count = scheduledDays.get(dayKey) || 0;
                   return (
-                    <div role="gridcell" aria-label={day + ' তারিখ' + (count ? '; বুকিং অনুরোধ বা টিমের কাজ আছে' : '; কোনো বুকিং অনুরোধ/নিশ্চিত কাজ নেই')} key={dayKey} className={'flex min-h-12 flex-col items-center justify-center rounded-lg border text-xs sm:min-h-14 sm:text-sm ' + (count ? 'border-amber-300 bg-amber-50 font-bold text-amber-950' : 'border-stone-100 bg-white text-stone-700')}>
-                      <span>{day}</span>
-                      {count > 0 && <span aria-hidden="true" className="mt-0.5 h-1.5 w-1.5 rounded-full bg-amber-600" />}
+                    <div role="gridcell" key={dayKey} className="min-w-0">
+                      <button type="button" aria-pressed={selectedDay === dayKey} aria-label={day + ' তারিখ' + (count ? '; ' + count + 'টি বুকিং অনুরোধ বা টিমের কাজ' : '; কোনো বুকিং অনুরোধ/নিশ্চিত কাজ নেই')} onClick={() => setSelectedDay(dayKey)} className={'flex min-h-12 w-full flex-col items-center justify-center rounded-lg border text-xs sm:min-h-14 sm:text-sm ' + (selectedDay === dayKey ? 'ring-2 ring-emerald-700 ' : '') + (count ? 'border-amber-300 bg-amber-50 font-bold text-amber-950' : 'border-stone-100 bg-white text-stone-700')}>
+                        <span>{day}</span>
+                        {count > 0 && <><span className="mt-0.5 text-[9px] font-semibold leading-3 sm:text-[10px]">{count}টি</span><span aria-hidden="true" className="mt-0.5 h-1.5 w-1.5 rounded-full bg-amber-600" /></>}
+                      </button>
                     </div>
                   );
                 })}
               </div>
-              <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-stone-600"><span aria-hidden="true" className="h-2.5 w-2.5 rounded-full bg-amber-600" />এই তারিখে টিমের কাজ আছে</div>
+              <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-stone-600"><span aria-hidden="true" className="h-2.5 w-2.5 rounded-full bg-amber-600" />এই তারিখে বুকিং অনুরোধ বা টিমের কাজ আছে</div>
+              {selectedDay && <div role="status" className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-950"><strong>{new Intl.DateTimeFormat('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(selectedDay + 'T00:00:00'))}</strong><p className="mt-1">{selectedCount ? selectedCount + 'টি বুকিং অনুরোধ বা টিমের কাজ আছে। ক্লায়েন্টের পরিচয় ও ইভেন্টের বিস্তারিত শুধু অ্যাডমিনে দেখা যাবে।' : 'এই তারিখে কোনো বুকিং অনুরোধ বা নিশ্চিত টিমের কাজ নেই।'}</p></div>}
               {!items.length && <p className="mt-3 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-900">এই মাসে এখনো কোনো বুকিং অনুরোধ বা নিশ্চিত টিম শিডিউল নেই।</p>}
             </>
           )}
