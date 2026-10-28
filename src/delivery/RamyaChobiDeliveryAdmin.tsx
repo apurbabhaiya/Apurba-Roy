@@ -828,7 +828,7 @@ export default function RamyaChobiDeliveryAdmin() {
         {adminSection === 'settings' && <section className="space-y-4" aria-label="Connection settings"><h2 className="text-xl font-semibold">Settings</h2><DriveConnectionCard adminToken={token} /></section>}
         {adminSection === 'booking-discounts' && <section className="space-y-4" aria-label="বুকিং ও ডিসকাউন্ট"><CustomPackageAdmin token={token} /></section>}
         {adminSection === 'chat-replies' && <section className="space-y-4" aria-label="চ্যাটের উত্তর"><ChatbotAdmin token={token} /></section>}
-        {adminSection === 'discussion-requests' && <section className="space-y-4" aria-label="আলোচনার অনুরোধ"><BookingDiscussionAdmin token={token} /></section>
+        {adminSection === 'discussion-requests' && <section className="space-y-4" aria-label="আলোচনার অনুরোধ"><BookingDiscussionAdmin token={token} /></section>}
 
         {adminSection === 'dashboard' && (
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
