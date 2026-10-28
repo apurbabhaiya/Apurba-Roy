@@ -62,6 +62,8 @@ import DeliveryDownloadSettings from './DeliveryDownloadSettings';
 import DeliveryPaymentShortcut from './DeliveryPaymentShortcut';
 import PortfolioManager from '../components/PortfolioManager';
 import WebsiteTeamManager from '../booking/WebsiteTeamManager';
+import ChatbotAdmin from '../booking/ChatbotAdmin';
+import { BookingDiscussionAdmin, CustomPackageAdmin } from '../booking/CustomPackages';
 import SpinResultAdmin from '../components/SpinResultAdmin';
 import DriveDeliveryPickerModal from '../components/DriveDeliveryPickerModal';
 import DriveConnectionCard from '../components/DriveConnectionCard';
@@ -811,9 +813,9 @@ export default function RamyaChobiDeliveryAdmin() {
             </button>
           ))}
           <a href="/booking/admin" className="flex min-h-11 items-center rounded-xl bg-emerald-800 px-4 py-2.5 text-sm font-semibold text-white">ক্লায়েন্ট ও হিসাব</a>
-          <a href="/booking/admin?section=settings" className="flex min-h-11 items-center rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-900">বুকিং / ডিসকাউন্ট</a>
-          <a href="/booking/admin?section=chat" className="flex min-h-11 items-center rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-900">চ্যাটের উত্তর</a>
-          <a href="/booking/admin?section=discussions" className="flex min-h-11 items-center rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-900">আলোচনার অনুরোধ</a>
+          <button type="button" aria-current={adminSection === 'booking-discounts' ? 'page' : undefined} onClick={() => setAdminSection('booking-discounts')} className={`flex min-h-11 items-center rounded-xl px-4 py-2.5 text-sm font-semibold ${adminSection === 'booking-discounts' ? 'bg-emerald-800 text-white' : 'bg-emerald-50 text-emerald-900'}`}>বুকিং / ডিসকাউন্ট</button>
+          <button type="button" aria-current={adminSection === 'chat-replies' ? 'page' : undefined} onClick={() => setAdminSection('chat-replies')} className={`flex min-h-11 items-center rounded-xl px-4 py-2.5 text-sm font-semibold ${adminSection === 'chat-replies' ? 'bg-emerald-800 text-white' : 'bg-emerald-50 text-emerald-900'}`}>চ্যাটের উত্তর</button>
+          <button type="button" aria-current={adminSection === 'discussion-requests' ? 'page' : undefined} onClick={() => setAdminSection('discussion-requests')} className={`flex min-h-11 items-center rounded-xl px-4 py-2.5 text-sm font-semibold ${adminSection === 'discussion-requests' ? 'bg-emerald-800 text-white' : 'bg-emerald-50 text-emerald-900'}`}>আলোচনার অনুরোধ</button>
           <a href="/photo-selection" className="rounded-xl bg-stone-100 px-4 py-2.5 text-sm font-semibold text-stone-700 hover:bg-amber-100">Photo Selection</a>
         </div>
       </nav>
@@ -824,6 +826,9 @@ export default function RamyaChobiDeliveryAdmin() {
         )}
 
         {adminSection === 'settings' && <section className="space-y-4" aria-label="Connection settings"><h2 className="text-xl font-semibold">Settings</h2><DriveConnectionCard adminToken={token} /></section>}
+        {adminSection === 'booking-discounts' && <section className="space-y-4" aria-label="বুকিং ও ডিসকাউন্ট"><CustomPackageAdmin token={token} /></section>}
+        {adminSection === 'chat-replies' && <section className="space-y-4" aria-label="চ্যাটের উত্তর"><ChatbotAdmin token={token} /></section>}
+        {adminSection === 'discussion-requests' && <section className="space-y-4" aria-label="আলোচনার অনুরোধ"><BookingDiscussionAdmin token={token} /></section>}
 
         {adminSection === 'dashboard' && (
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
