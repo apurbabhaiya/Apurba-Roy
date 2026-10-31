@@ -192,7 +192,7 @@ export default function RamyaChobiDeliveryAdmin() {
   const [fileDrafts, setFileDrafts] = useState<Record<string, { url: string; fileName: string; title: string; type: 'PHOTO' | 'VIDEO' | 'DOCUMENT' | 'FOLDER'; sortOrder: string }>>({});
   const [fileMetaByPortal, setFileMetaByPortal] = useState<Record<string, { name?: string; mimeType?: string; size?: string | null }>>({});
   const [fileErrorByPortal, setFileErrorByPortal] = useState<Record<string, string>>({});
-  const [rawZipLinkByPortal, setRawZipLinkByPortal] = useState<Record<string, string>>({});
+  const [rawZipLinksByPortal, setRawZipLinksByPortal] = useState<Record<string, { photos: string; videos: string }>>({});
   const [drivePickerPortalId, setDrivePickerPortalId] = useState('');
   const [ledgerByPortal, setLedgerByPortal] = useState<Record<string, DeliveryPaymentLedger[]>>({});
   const [portalSearch, setPortalSearch] = useState('');
@@ -750,8 +750,9 @@ export default function RamyaChobiDeliveryAdmin() {
     finally { setLoading(false); }
   }
 
-  async function addRawZipFromDrive(portalId: string) {
-    const sourceUrl = (rawZipLinkByPortal[portalId] || '').trim();
+  async function addRawZipFromDrive(portalId: string, media: 'photos' | 'videos') {
+    const sourceUrl = (rawZipLinksByPortal[portalId]?.[media] || '').trim();
+    const title = media === 'photos' ? 'RAW Photos ZIP' : 'RAW Videos ZIP';
     if (!sourceUrl) {
       setFileErrorByPortal((current) => ({ ...current, [portalId]: 'Google Drive ZIP ফাইলের লিংক দিন। / Paste a Google Drive ZIP file link.' }));
       return;
@@ -765,7 +766,7 @@ export default function RamyaChobiDeliveryAdmin() {
         portalId,
         sourceUrl,
         fileType: 'DOCUMENT',
-        title: 'RAW photos & videos ZIP',
+        title,
         sortOrder: (filesByPortal[portalId] || []).length,
         rawZip: true,
         persist: true,
@@ -773,8 +774,8 @@ export default function RamyaChobiDeliveryAdmin() {
       if (!verified.saved) throw new Error('RAW ZIP link was verified but not saved.');
       const files = await listDeliveryFiles({ token, portalId });
       setFilesByPortal((current) => ({ ...current, [portalId]: files }));
-      setRawZipLinkByPortal((current) => ({ ...current, [portalId]: '' }));
-      setNotice(`RAW ZIP যুক্ত হয়েছে: ${verified.metadata.name}. ক্লায়েন্ট আলাদা Download RAW ZIP বাটন থেকে ফাইলটি পাবে।`);
+      setRawZipLinksByPortal((current) => ({ ...current, [portalId]: { photos: current[portalId]?.photos || '', videos: current[portalId]?.videos || '', [media]: '' } }));
+      setNotice(`${title} যুক্ত হয়েছে: ${verified.metadata.name}. ক্লায়েন্ট RAW ${media === 'photos' ? 'Photos' : 'Videos'} বিভাগ থেকে ডাউনলোড করতে পারবে।`);
     } catch (error: any) {
       const message = error?.message || 'RAW ZIP Google Drive link যুক্ত করা যায়নি।';
       setFileErrorByPortal((current) => ({ ...current, [portalId]: message }));
@@ -1207,14 +1208,20 @@ export default function RamyaChobiDeliveryAdmin() {
                       <input value={fileDrafts[portal.id]?.sortOrder || ''} onChange={(e) => updateFileDraft(portal.id, { sortOrder: e.target.value })} type="number" placeholder="Order" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm" />
                       <button onClick={() => addFinalDeliveryFile(portal.id)} disabled={loading} className="rounded-xl bg-amber-300 px-3.5 py-2 text-sm font-bold text-stone-950 disabled:opacity-50">{loading ? 'Validating...' : 'Verify & Save'}</button>
                     </div>
-                    <div className="mt-3 rounded-xl border border-emerald-200 bg-white p-3">
-                      <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-                        <input value={rawZipLinkByPortal[portal.id] || ''} onChange={(event) => setRawZipLinkByPortal((current) => ({ ...current, [portal.id]: event.target.value }))} placeholder="Google Drive .zip file link" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm" />
-                        <button type="button" onClick={() => void addRawZipFromDrive(portal.id)} disabled={loading} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-800 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-900 disabled:opacity-50">
-                          <Archive className="h-4 w-4" /> {loading ? 'Verifying…' : 'Add RAW ZIP from Drive'}
-                        </button>
+                    <div className="mt-3 rounded-xl border border-emerald-200 bg-white p-4">
+                      <h4 className="font-semibold text-emerald-950">RAW Files · Photos & Videos</h4>
+                      <p className="mt-1 text-xs leading-5 text-stone-600">ছবি ও ভিডিওর RAW ZIP আলাদা আলাদা Google Drive লিংক দিয়ে যোগ করুন। সংযুক্ত Drive account-এর ফাইল access থাকতে হবে।</p>
+                      <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                        {(['photos', 'videos'] as const).map((media) => (
+                          <div key={media} className="rounded-xl border border-stone-200 bg-stone-50 p-3">
+                            <label className="mb-2 block text-sm font-bold text-stone-800">RAW {media === 'photos' ? 'Photos' : 'Videos'} ZIP</label>
+                            <input value={rawZipLinksByPortal[portal.id]?.[media] || ''} onChange={(event) => setRawZipLinksByPortal((current) => ({ ...current, [portal.id]: { photos: current[portal.id]?.photos || '', videos: current[portal.id]?.videos || '', [media]: event.target.value } }))} placeholder="Google Drive .zip file link" className="w-full rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm" />
+                            <button type="button" onClick={() => void addRawZipFromDrive(portal.id, media)} disabled={loading} className="mt-2 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl bg-emerald-800 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-900 disabled:opacity-50">
+                              <Archive className="h-4 w-4" /> {loading ? 'Verifying…' : `Add RAW ${media === 'photos' ? 'Photos' : 'Videos'} ZIP`}
+                            </button>
+                          </div>
+                        ))}
                       </div>
-                      <p className="mt-2 max-w-2xl text-xs leading-5 text-stone-600">Google Drive-এ রাখা .zip ফাইলের লিংক পেস্ট করুন। সংযুক্ত Drive account-এর ফাইলটি দেখার access থাকতে হবে। যাচাইয়ের পর ক্লায়েন্ট পেজে আলাদা Download RAW ZIP বাটন দেখাবে।</p>
                     </div>
                     {fileMetaByPortal[portal.id] && (
                       <div className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
