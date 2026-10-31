@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   BadgeCheck,
+  Archive,
   Plus,
   CalendarClock,
   CheckCircle2,
@@ -58,6 +59,7 @@ import {
   BookingPaymentRequest,
   listBookingPaymentRequests,
   reviewBookingPaymentRequest as saveBookingPaymentReview,
+  uploadDeliveryRawZip,
 } from '../services/deliveryPortalService';
 import { manualClientPayload, type ManualClientDraft } from './manualClient';
 import { directoryDate, filterClientDirectory, type DirectoryDateField, type DirectorySort } from './clientDirectory';
@@ -191,6 +193,7 @@ export default function RamyaChobiDeliveryAdmin() {
   const [fileDrafts, setFileDrafts] = useState<Record<string, { url: string; fileName: string; title: string; type: 'PHOTO' | 'VIDEO' | 'DOCUMENT' | 'FOLDER'; sortOrder: string }>>({});
   const [fileMetaByPortal, setFileMetaByPortal] = useState<Record<string, { name?: string; mimeType?: string; size?: string | null }>>({});
   const [fileErrorByPortal, setFileErrorByPortal] = useState<Record<string, string>>({});
+  const [rawUploadProgressByPortal, setRawUploadProgressByPortal] = useState<Record<string, number | null>>({});
   const [drivePickerPortalId, setDrivePickerPortalId] = useState('');
   const [ledgerByPortal, setLedgerByPortal] = useState<Record<string, DeliveryPaymentLedger[]>>({});
   const [portalSearch, setPortalSearch] = useState('');
@@ -748,6 +751,36 @@ export default function RamyaChobiDeliveryAdmin() {
     finally { setLoading(false); }
   }
 
+  async function uploadRawDeliveryZip(portalId: string, file?: File) {
+    if (!file) return;
+    if (!/\.zip$/i.test(file.name) || file.size < 1) {
+      setFileErrorByPortal((current) => ({ ...current, [portalId]: 'একটি খালি নয় এমন .zip ফাইল বেছে নিন। / Choose a non-empty .zip file.' }));
+      return;
+    }
+    setLoading(true);
+    setFileErrorByPortal((current) => ({ ...current, [portalId]: '' }));
+    setRawUploadProgressByPortal((current) => ({ ...current, [portalId]: 0 }));
+    setNotice('RAW ZIP Google Drive-এ আপলোড হচ্ছে…');
+    try {
+      await uploadDeliveryRawZip({
+        adminToken: token,
+        portalId,
+        file,
+        onProgress: (progress) => setRawUploadProgressByPortal((current) => ({ ...current, [portalId]: progress })),
+      });
+      const files = await listDeliveryFiles({ token, portalId });
+      setFilesByPortal((current) => ({ ...current, [portalId]: files }));
+      setNotice(`RAW ZIP আপলোড হয়েছে: ${file.name}. ক্লায়েন্ট আলাদা Download RAW ZIP বাটন থেকে ফাইলটি পাবে।`);
+    } catch (error: any) {
+      const message = error?.message || 'RAW ZIP আপলোড করা যায়নি।';
+      setFileErrorByPortal((current) => ({ ...current, [portalId]: message }));
+      setNotice(message);
+    } finally {
+      setRawUploadProgressByPortal((current) => ({ ...current, [portalId]: null }));
+      setLoading(false);
+    }
+  }
+
   async function removeFinalDeliveryFile(portalId: string, fileId: string) {
     setLoading(true); setNotice('');
     try {
@@ -1171,6 +1204,29 @@ export default function RamyaChobiDeliveryAdmin() {
                       <input value={fileDrafts[portal.id]?.sortOrder || ''} onChange={(e) => updateFileDraft(portal.id, { sortOrder: e.target.value })} type="number" placeholder="Order" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm" />
                       <button onClick={() => addFinalDeliveryFile(portal.id)} disabled={loading} className="rounded-xl bg-amber-300 px-3.5 py-2 text-sm font-bold text-stone-950 disabled:opacity-50">{loading ? 'Validating...' : 'Verify & Save'}</button>
                     </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-emerald-200 bg-white p-3">
+                      <label className={`inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-xl bg-emerald-800 px-4 py-2.5 text-sm font-bold text-white ${loading ? 'pointer-events-none opacity-50' : 'hover:bg-emerald-900'}`}>
+                        <Archive className="h-4 w-4" /> Upload RAW ZIP
+                        <input
+                          type="file"
+                          accept=".zip,application/zip"
+                          disabled={loading}
+                          className="sr-only"
+                          onChange={(event) => {
+                            const file = event.currentTarget.files?.[0];
+                            event.currentTarget.value = '';
+                            void uploadRawDeliveryZip(portal.id, file);
+                          }}
+                        />
+                      </label>
+                      <p className="max-w-2xl text-xs leading-5 text-stone-600">ফটো/ভিডিওর RAW ফাইলগুলো ZIP করে এখানে দিন। ফাইলটি ব্যক্তিগত Google Drive-এ থাকবে এবং ক্লায়েন্ট পেজে আলাদা Download RAW ZIP বাটন দেখাবে।</p>
+                      {rawUploadProgressByPortal[portal.id] != null && (
+                        <div className="w-full" role="status" aria-live="polite">
+                          <div className="mb-1 flex justify-between text-xs text-stone-600"><span>ZIP আপলোড হচ্ছে</span><span>{rawUploadProgressByPortal[portal.id]}%</span></div>
+                          <div className="h-2 overflow-hidden rounded-full bg-stone-100"><div className="h-full rounded-full bg-emerald-700 transition-[width]" style={{ width: `${rawUploadProgressByPortal[portal.id]}%` }} /></div>
+                        </div>
+                      )}
+                    </div>
                     {fileMetaByPortal[portal.id] && (
                       <div className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
                         <strong>Private file connected:</strong> {fileMetaByPortal[portal.id].name || 'Google Drive item'} · {fileMetaByPortal[portal.id].mimeType || 'Unknown type'}{fileMetaByPortal[portal.id].size ? ` · ${fileMetaByPortal[portal.id].size} bytes` : ''}
@@ -1265,7 +1321,7 @@ export default function RamyaChobiDeliveryAdmin() {
                       Drive link access: {portal.drive_link_access_enabled === true ? 'ON' : 'OFF'}
                     </button>
                     <button type="button" onClick={() => void setDeliveryDocumentPermission({ token, portalId: portal.id, allowed: portal.document_download_permission !== true }).then(() => load()).catch((error: any) => setNotice(error?.message || 'Could not update document permission.'))} disabled={loading} className={`rounded-xl px-3 py-2 text-xs font-bold ${portal.document_download_permission === true ? 'bg-emerald-100 text-emerald-800' : 'bg-stone-200 text-stone-700'}`}>
-                      Document download: {portal.document_download_permission === true ? 'ON' : 'OFF'}
+                      Document / RAW ZIP download: {portal.document_download_permission === true ? 'ON' : 'OFF'}
                     </button>
                   </div>
 
@@ -1290,7 +1346,7 @@ export default function RamyaChobiDeliveryAdmin() {
                         <label className="flex items-center gap-2 rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm"><input type="checkbox" checked={Boolean(portalEdit.previewEnabled)} onChange={(e) => updatePortalEdit({ previewEnabled: e.target.checked })} /> Preview enabled</label>
                         <label className="flex items-center gap-2 rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm"><input type="checkbox" checked={Boolean(portalEdit.photoDownloadPermission)} onChange={(e) => updatePortalEdit({ photoDownloadPermission: e.target.checked })} /> Photo download permission</label>
                         <label className="flex items-center gap-2 rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm"><input type="checkbox" checked={Boolean(portalEdit.videoDownloadPermission)} onChange={(e) => updatePortalEdit({ videoDownloadPermission: e.target.checked })} /> Video download permission</label>
-                        <label className="flex items-center gap-2 rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm"><input type="checkbox" checked={Boolean(portalEdit.documentDownloadPermission)} onChange={(e) => updatePortalEdit({ documentDownloadPermission: e.target.checked })} /> Document download permission</label>
+                        <label className="flex items-center gap-2 rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm"><input type="checkbox" checked={Boolean(portalEdit.documentDownloadPermission)} onChange={(e) => updatePortalEdit({ documentDownloadPermission: e.target.checked })} /> Document / RAW ZIP download permission</label>
                         <label className="flex items-center gap-2 rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm"><input type="checkbox" checked={Boolean(portalEdit.driveLinkAccessEnabled)} onChange={(e) => updatePortalEdit({ driveLinkAccessEnabled: e.target.checked })} /> Google Drive link access after payment</label>
                         <input value={portalEdit.finalDeliveryAt || ''} onChange={(e) => updatePortalEdit({ finalDeliveryAt: e.target.value })} type="datetime-local" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5" />
                         <input value={portalEdit.accessExpiryAt || ''} onChange={(e) => updatePortalEdit({ accessExpiryAt: e.target.value })} type="datetime-local" className="rounded-xl border border-stone-300 bg-white px-3 py-2.5" />

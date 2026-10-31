@@ -6,7 +6,7 @@ import { deliveryView, deliveryPath, deliveryPreviews, deliveryFileAllowed, effe
 import { getRecoveryPolicy, emptyRecoveryPolicy } from '../services/deliveryRecoveryPolicy';
 import FacebookPageActions from '../home/FacebookPageActions';
 import DeliveryRecoveryNotice from './DeliveryRecoveryNotice';
-import { BadgeCheck, CalendarDays, Check, Copy, Download, Image as ImageIcon, LockKeyhole, MessageCircle, PlayCircle, ShieldCheck, Smartphone, WalletCards } from 'lucide-react';
+import { Archive, BadgeCheck, CalendarDays, Check, Copy, Download, Image as ImageIcon, LockKeyhole, MessageCircle, PlayCircle, ShieldCheck, Smartphone, WalletCards } from 'lucide-react';
 import { DeliveryFinalFile, DeliveryPortalData, getDeliveryPortal, getDeliveryPreviewPortal, submitDeliveryPayment } from '../services/deliveryPortalService';
 
 const fallbackHero = 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1800&q=85';
@@ -103,7 +103,9 @@ export default function RamyaChobiDelivery({ token, view: viewSegment }: { token
   const finalFiles = data?.delivery_files || [];
   const photos = finalFiles.filter(file => file.file_type === 'PHOTO');
   const videos = finalFiles.filter(file => file.file_type === 'VIDEO');
-  const documents = finalFiles.filter(file => file.file_type === 'DOCUMENT');
+  const documentFiles = finalFiles.filter(file => file.file_type === 'DOCUMENT');
+  const rawArchives = documentFiles.filter(file => /\.zip$/i.test(String(file.file_name || file.title || '')) || file.mime_type === 'application/zip');
+  const documents = documentFiles.filter(file => !rawArchives.some(raw => raw.id === file.id));
   const photoItems = useMemo(() => data ? deliveryPreviews(data, 'PHOTO') : [], [data]);
   const videoItems = useMemo(() => data ? deliveryPreviews(data, 'VIDEO') : [], [data]);
   const activeItems = view === 'photos' ? photoItems : view === 'videos' ? videoItems : [];
@@ -217,6 +219,7 @@ export default function RamyaChobiDelivery({ token, view: viewSegment }: { token
   const deliveryStatus = deliveryLabel(data.delivery_status);
   const freeDays = accessExpiry ? Math.max(0, Math.ceil((Date.parse(accessExpiry) - clock - serverOffset) / 86400000)) : null;
   const allowedFiles = finalFiles.filter(fileCanDownload);
+  const downloadAllFiles = allowedFiles.filter(file => !rawArchives.some(raw => raw.id === file.id));
   const statusColor = unavailable || locked ? 'bg-stone-200 text-stone-700' : canDownload ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800';
   const directoryParams = new URLSearchParams(window.location.search);
   const fromDirectory = directoryParams.get('from') === 'list';
@@ -262,8 +265,9 @@ export default function RamyaChobiDelivery({ token, view: viewSegment }: { token
         <section aria-label="Your delivery files" className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm sm:p-7"><h2 className="text-xl font-bold">আপনার ছবি ও ভিডিও / Your memories</h2><p className="mt-2 text-sm text-stone-500">আলাদাভাবে ছবি বা ভিডিও দেখুন। সংরক্ষণ করতে Download চাপুন।</p><div className="mt-5 grid gap-3 sm:grid-cols-3">
           <a href={href('photos')} className="flex min-h-28 flex-col justify-center rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-950"><ImageIcon className="mb-3 h-7 w-7" /><strong>Preview Photos</strong><span className="mt-1 text-sm">ছবি দেখুন · {photoItems.length}টি</span></a>
           <a href={href('videos')} className="flex min-h-28 flex-col justify-center rounded-2xl border border-stone-200 bg-stone-50 p-5"><PlayCircle className="mb-3 h-7 w-7" /><strong>Preview Videos</strong><span className="mt-1 text-sm text-stone-600">ভিডিও দেখুন · {videoItems.length}টি</span></a>
-          <button type="button" onClick={() => void downloadZip(allowedFiles, 'ramyachobi-all-files.zip')} disabled={!allowedFiles.length || downloading} className="flex min-h-28 flex-col items-start justify-center rounded-2xl bg-emerald-800 p-5 text-left text-white disabled:opacity-40"><Download className="mb-3 h-7 w-7" /><strong>{downloading ? 'ডাউনলোড প্রস্তুত হচ্ছে…' : 'Download All Files'}</strong><span className="mt-1 text-sm">সব অনুমোদিত ফাইল · {allowedFiles.length}টি</span></button>
+          <button type="button" onClick={() => void downloadZip(downloadAllFiles, 'ramyachobi-all-files.zip')} disabled={!downloadAllFiles.length || downloading} className="flex min-h-28 flex-col items-start justify-center rounded-2xl bg-emerald-800 p-5 text-left text-white disabled:opacity-40"><Download className="mb-3 h-7 w-7" /><strong>{downloading ? 'ডাউনলোড প্রস্তুত হচ্ছে…' : 'Download All Files'}</strong><span className="mt-1 text-sm">অনুমোদিত ছবি, ভিডিও ও ডকুমেন্ট · {downloadAllFiles.length}টি</span></button>
         </div>{!allowedFiles.length && <p className="mt-4 text-sm text-stone-600">ফাইল প্রস্তুত, পেমেন্ট যাচাই ও ডাউনলোডের অনুমতি চালু হলে Download বাটন কাজ করবে।</p>}{downloadError && <p role="alert" className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-800">{downloadError}</p>}
+        {rawArchives.length > 0 && <section aria-label="RAW photo and video ZIP files" className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4 sm:p-5"><div className="flex items-start gap-3"><Archive className="mt-0.5 h-6 w-6 shrink-0 text-emerald-800" /><div><h3 className="font-bold text-emerald-950">RAW Photos & Videos ZIP</h3><p className="mt-1 text-sm text-stone-600">ক্যামেরার RAW ছবি ও মূল ভিডিওসহ ZIP ফাইল আলাদাভাবে ডাউনলোড করুন।</p></div></div><div className="mt-3 space-y-2">{rawArchives.map(file => <div key={file.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-100 bg-white p-3"><span className="min-w-0 break-all text-sm font-semibold">{file.title || file.file_name || 'RAW photos & videos ZIP'}</span><button type="button" disabled={!fileCanDownload(file) || downloading} onClick={() => downloadOne(file)} className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl bg-emerald-800 px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40"><Download className="h-4 w-4" />Download RAW ZIP</button></div>)}</div>{rawArchives.some(file => !fileCanDownload(file)) && <p className="mt-3 text-xs text-stone-600">পেমেন্ট, ফাইলের মেয়াদ এবং Document / RAW ZIP download অনুমতি চালু হলে ডাউনলোড করা যাবে।</p>}</section>}
         {documents.length > 0 && <details className="mt-5 rounded-xl border border-stone-200 p-4"><summary className="cursor-pointer font-bold">কাগজপত্র / Documents ({documents.length})</summary><div className="mt-3 space-y-2">{documents.map(file => <div key={file.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-stone-50 p-3"><span className="break-all text-sm">{file.title || file.file_name || 'Document'}</span><button type="button" disabled={!fileCanDownload(file) || downloading} onClick={() => void downloadOne(file)} className="min-h-11 rounded-xl border bg-white px-4 py-2 text-sm font-bold disabled:opacity-40">Download</button></div>)}</div></details>}
         </section>
 
