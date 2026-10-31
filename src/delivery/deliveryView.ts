@@ -1,8 +1,8 @@
 import type { DeliveryFinalFile, DeliveryPortalData } from '../services/deliveryPortalService';
 
-export type DeliveryView = 'main' | 'photos' | 'videos' | 'recovery';
+export type DeliveryView = 'main' | 'photos' | 'videos' | 'raw-photos' | 'raw-videos' | 'recovery';
 export function deliveryView(segment?: string): DeliveryView {
-  return segment === 'photos' || segment === 'videos' || segment === 'recovery' ? segment : 'main';
+  return segment === 'photos' || segment === 'videos' || segment === 'raw-photos' || segment === 'raw-videos' || segment === 'recovery' ? segment : 'main';
 }
 export function deliveryPath(token: string, view: DeliveryView = 'main', adminPreview = false) {
   return `/delivery/${encodeURIComponent(token)}${view === 'main' ? '' : `/${view}`}${adminPreview ? '?preview=admin' : ''}`;
@@ -21,8 +21,9 @@ export function deliveryFileAllowed(file: DeliveryFinalFile, data: DeliveryPorta
     : file.file_type === 'DOCUMENT' ? data.document_download_permission === true : false;
 }
 export type DeliveryPreview = { key: string; title: string; kind: 'PHOTO' | 'VIDEO'; source?: string; file?: DeliveryFinalFile };
-export function deliveryPreviews(data: DeliveryPortalData, kind: 'PHOTO' | 'VIDEO'): DeliveryPreview[] {
-  const files = (data.delivery_files || []).filter(file => file.file_type === kind);
+export function deliveryPreviews(data: DeliveryPortalData, kind: 'PHOTO' | 'VIDEO', rawOnly = false): DeliveryPreview[] {
+  const files = (data.delivery_files || []).filter(file => file.file_type === kind && Boolean(file.is_raw) === rawOnly);
+  if (rawOnly) return files.map(file => ({ key: file.id, title: file.title || file.file_name || (kind === 'PHOTO' ? 'RAW Photo' : 'RAW Video'), kind, file }));
   if (files.length) return files.map(file => ({ key: file.id, title: file.title || file.file_name || (kind === 'PHOTO' ? 'Photo' : 'Video'), kind, file }));
   return (data.preview_items || []).filter(item => item.type === (kind === 'PHOTO' ? 'image' : 'video')).map((item, index) => ({ key: `legacy-${kind}-${index}`, title: item.title || `${kind === 'PHOTO' ? 'Photo' : 'Video'} ${index + 1}`, kind, source: item.url }));
 }

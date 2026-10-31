@@ -97,9 +97,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
     if (saved?.id && metadata.size) {
       const update = await supabaseServiceRequest(`delivery_files?id=eq.${encodeURIComponent(String(saved.id))}&portal_id=eq.${encodeURIComponent(portalId)}`, {
-        method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ file_size_bytes: Number(metadata.size) }),
+        method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ file_size_bytes: Number(metadata.size), ...(isRawZip ? { is_raw: true } : {}) }),
       });
       if (!update.ok) throw new Error('File was added but its file size could not be saved.');
+    }
+    if (saved?.id && isRawZip && !metadata.size) {
+      const update = await supabaseServiceRequest(`delivery_files?id=eq.${encodeURIComponent(String(saved.id))}&portal_id=eq.${encodeURIComponent(portalId)}`, {
+        method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ is_raw: true }),
+      });
+      if (!update.ok) throw new Error('RAW ZIP was added but could not be marked as a RAW file.');
     }
     return json(res, 200, { verified: true, saved: true, fileType, driveId, metadata: { id: metadata.id, name: metadata.name, mimeType: metadata.mimeType, size: metadata.size || null }, file: saved });
   } catch (error: any) {

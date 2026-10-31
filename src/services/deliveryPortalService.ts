@@ -18,6 +18,7 @@ export type DeliveryFinalFile = {
   sort_order?: number;
   google_drive_link?: string | null;
   file_size_bytes?: number | null;
+  is_raw?: boolean;
 };
 
 export type DeliveryAdminFile = DeliveryFinalFile & {
@@ -460,7 +461,7 @@ export async function deleteDeliveryFile(input: { token: string; fileId: string 
 }
 
 
-export async function syncDeliveryFolder(input: { adminToken: string; portalId: string; folderUrl: string; fileType?: 'PHOTO' | 'VIDEO' }) {
+export async function syncDeliveryFolder(input: { adminToken: string; portalId: string; folderUrl: string; fileType?: 'PHOTO' | 'VIDEO'; raw?: boolean }) {
   let pageToken = '';
   let imported = 0;
   let skipped = 0;

@@ -193,6 +193,7 @@ export default function RamyaChobiDeliveryAdmin() {
   const [fileMetaByPortal, setFileMetaByPortal] = useState<Record<string, { name?: string; mimeType?: string; size?: string | null }>>({});
   const [fileErrorByPortal, setFileErrorByPortal] = useState<Record<string, string>>({});
   const [rawZipLinksByPortal, setRawZipLinksByPortal] = useState<Record<string, { photos: string; videos: string }>>({});
+  const [rawFolderLinksByPortal, setRawFolderLinksByPortal] = useState<Record<string, { photos: string; videos: string }>>({});
   const [drivePickerPortalId, setDrivePickerPortalId] = useState('');
   const [ledgerByPortal, setLedgerByPortal] = useState<Record<string, DeliveryPaymentLedger[]>>({});
   const [portalSearch, setPortalSearch] = useState('');
@@ -785,6 +786,37 @@ export default function RamyaChobiDeliveryAdmin() {
     }
   }
 
+  async function importRawDeliveryFolder(portalId: string, media: 'photos' | 'videos') {
+    const folderUrl = (rawFolderLinksByPortal[portalId]?.[media] || '').trim();
+    const title = media === 'photos' ? 'RAW Photos' : 'RAW Videos';
+    if (!folderUrl || !isGoogleDriveFolderLink(folderUrl)) {
+      setFileErrorByPortal((current) => ({ ...current, [portalId]: 'একটি Google Drive folder link দিন। / Paste a valid Google Drive folder link.' }));
+      return;
+    }
+    setLoading(true);
+    setFileErrorByPortal((current) => ({ ...current, [portalId]: '' }));
+    setNotice(`${title} folder থেকে ফাইল আনা হচ্ছে…`);
+    try {
+      const result = await syncDeliveryFolder({
+        adminToken: token,
+        portalId,
+        folderUrl,
+        fileType: media === 'photos' ? 'PHOTO' : 'VIDEO',
+        raw: true,
+      });
+      const files = await listDeliveryFiles({ token, portalId });
+      setFilesByPortal((current) => ({ ...current, [portalId]: files }));
+      setRawFolderLinksByPortal((current) => ({ ...current, [portalId]: { photos: current[portalId]?.photos || '', videos: current[portalId]?.videos || '', [media]: '' } }));
+      setNotice(`${title} folder যুক্ত হয়েছে: ${result.imported}টি ফাইল যোগ হয়েছে${result.skipped ? `, ${result.skipped}টি বাদ` : ''}. ক্লায়েন্ট RAW ${media === 'photos' ? 'Photos' : 'Videos'} preview করতে পারবে।`);
+    } catch (error: any) {
+      const message = error?.message || 'RAW folder import করা যায়নি।';
+      setFileErrorByPortal((current) => ({ ...current, [portalId]: message }));
+      setNotice(message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function removeFinalDeliveryFile(portalId: string, fileId: string) {
     setLoading(true); setNotice('');
     try {
@@ -1210,17 +1242,25 @@ export default function RamyaChobiDeliveryAdmin() {
                     </div>
                     <div className="mt-3 rounded-xl border border-emerald-200 bg-white p-4">
                       <h4 className="font-semibold text-emerald-950">RAW Files · Photos & Videos</h4>
-                      <p className="mt-1 text-xs leading-5 text-stone-600">ছবি ও ভিডিওর RAW ZIP আলাদা আলাদা Google Drive লিংক দিয়ে যোগ করুন। সংযুক্ত Drive account-এর ফাইল access থাকতে হবে।</p>
+                      <p className="mt-1 text-xs leading-5 text-stone-600">প্রিভিউ ও আলাদা Download All সুবিধার জন্য normal Drive folder import করুন। ZIP দিতে চাইলে আলাদা ZIP link ব্যবহার করুন। ফাইলগুলো connected Drive account থেকে access করা যেতে হবে।</p>
                       <div className="mt-3 grid gap-3 lg:grid-cols-2">
-                        {(['photos', 'videos'] as const).map((media) => (
-                          <div key={media} className="rounded-xl border border-stone-200 bg-stone-50 p-3">
-                            <label className="mb-2 block text-sm font-bold text-stone-800">RAW {media === 'photos' ? 'Photos' : 'Videos'} ZIP</label>
+                        {(['photos', 'videos'] as const).map((media) => {
+                          const mediaLabel = media === 'photos' ? 'Photos' : 'Videos';
+                          return <div key={media} className="rounded-xl border border-stone-200 bg-stone-50 p-3">
+                            <h5 className="mb-3 text-sm font-bold text-stone-800">RAW {mediaLabel}</h5>
+                            <label className="mb-1 block text-xs font-semibold text-stone-600">Normal folder for preview and individual files</label>
+                            <input value={rawFolderLinksByPortal[portal.id]?.[media] || ''} onChange={(event) => setRawFolderLinksByPortal((current) => ({ ...current, [portal.id]: { photos: current[portal.id]?.photos || '', videos: current[portal.id]?.videos || '', [media]: event.target.value } }))} placeholder="Google Drive folder link" className="w-full rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm" />
+                            <button type="button" onClick={() => void importRawDeliveryFolder(portal.id, media)} disabled={loading} className="mt-2 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-emerald-700 bg-white px-4 py-2 text-sm font-bold text-emerald-900 disabled:opacity-50">
+                              <Images className="h-4 w-4" /> {loading ? 'Importing…' : `Import RAW ${mediaLabel} Folder`}
+                            </button>
+                            <div className="my-3 border-t border-stone-200" />
+                            <label className="mb-1 block text-xs font-semibold text-stone-600">ZIP archive</label>
                             <input value={rawZipLinksByPortal[portal.id]?.[media] || ''} onChange={(event) => setRawZipLinksByPortal((current) => ({ ...current, [portal.id]: { photos: current[portal.id]?.photos || '', videos: current[portal.id]?.videos || '', [media]: event.target.value } }))} placeholder="Google Drive .zip file link" className="w-full rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm" />
                             <button type="button" onClick={() => void addRawZipFromDrive(portal.id, media)} disabled={loading} className="mt-2 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl bg-emerald-800 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-900 disabled:opacity-50">
-                              <Archive className="h-4 w-4" /> {loading ? 'Verifying…' : `Add RAW ${media === 'photos' ? 'Photos' : 'Videos'} ZIP`}
+                              <Archive className="h-4 w-4" /> {loading ? 'Verifying…' : `Add RAW ${mediaLabel} ZIP`}
                             </button>
-                          </div>
-                        ))}
+                          </div>;
+                        })}
                       </div>
                     </div>
                     {fileMetaByPortal[portal.id] && (

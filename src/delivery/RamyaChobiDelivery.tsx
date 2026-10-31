@@ -101,8 +101,10 @@ export default function RamyaChobiDelivery({ token, view: viewSegment }: { token
   ].filter((item) => Boolean(item.account));
   const currentMethod = paymentOptions.find((item) => item.id === paymentMethod) || paymentOptions[0];
   const finalFiles = data?.delivery_files || [];
-  const photos = finalFiles.filter(file => file.file_type === 'PHOTO');
-  const videos = finalFiles.filter(file => file.file_type === 'VIDEO');
+  const photos = finalFiles.filter(file => file.file_type === 'PHOTO' && !file.is_raw);
+  const videos = finalFiles.filter(file => file.file_type === 'VIDEO' && !file.is_raw);
+  const rawPhotoFiles = finalFiles.filter(file => file.file_type === 'PHOTO' && file.is_raw);
+  const rawVideoFiles = finalFiles.filter(file => file.file_type === 'VIDEO' && file.is_raw);
   const documentFiles = finalFiles.filter(file => file.file_type === 'DOCUMENT');
   const rawArchives = documentFiles.filter(file => /\.zip$/i.test(String(file.file_name || file.title || '')) || /zip/i.test(String(file.mime_type || '')));
   const rawPhotoArchives = rawArchives.filter(file => /raw\s*photos?\s*zip/i.test(String(file.title || '')));
@@ -116,7 +118,9 @@ export default function RamyaChobiDelivery({ token, view: viewSegment }: { token
   const documents = documentFiles.filter(file => !rawArchives.some(raw => raw.id === file.id));
   const photoItems = useMemo(() => data ? deliveryPreviews(data, 'PHOTO') : [], [data]);
   const videoItems = useMemo(() => data ? deliveryPreviews(data, 'VIDEO') : [], [data]);
-  const activeItems = view === 'photos' ? photoItems : view === 'videos' ? videoItems : [];
+  const rawPhotoItems = useMemo(() => data ? deliveryPreviews(data, 'PHOTO', true) : [], [data]);
+  const rawVideoItems = useMemo(() => data ? deliveryPreviews(data, 'VIDEO', true) : [], [data]);
+  const activeItems = view === 'photos' ? photoItems : view === 'videos' ? videoItems : view === 'raw-photos' ? rawPhotoItems : view === 'raw-videos' ? rawVideoItems : [];
 
   useEffect(() => {
     if (!data?.id) return;
@@ -149,11 +153,12 @@ export default function RamyaChobiDelivery({ token, view: viewSegment }: { token
   }, [data, remaining, paymentOptions.length, isAccessPayment, selectedDays, dailyFee]);
 
   useEffect(() => {
-    if (!previewMode || !adminPreviewToken || view !== 'photos' || data?.is_published !== false) { setAdminPreviewSources({}); return; }
+    if (!previewMode || !adminPreviewToken || (view !== 'photos' && view !== 'raw-photos') || data?.is_published !== false) { setAdminPreviewSources({}); return; }
     let cancelled = false;
     const urls: string[] = [];
     const sources: Record<string, string> = {};
-    const files = photoItems.flatMap(item => item.file ? [item.file] : []);
+    const previewItems = view === 'raw-photos' ? rawPhotoItems : photoItems;
+    const files = previewItems.flatMap(item => item.file ? [item.file] : []);
     const run = async () => {
       let cursor = 0;
       await Promise.all(Array.from({ length: Math.min(6, files.length) }, async () => {
@@ -172,7 +177,7 @@ export default function RamyaChobiDelivery({ token, view: viewSegment }: { token
     };
     void run();
     return () => { cancelled = true; urls.forEach(URL.revokeObjectURL); };
-  }, [previewMode, adminPreviewToken, token, view, photoItems, data?.is_published]);
+  }, [previewMode, adminPreviewToken, token, view, photoItems, rawPhotoItems, data?.is_published]);
 
   function fileCanDownload(file: DeliveryFinalFile) {
     return Boolean(data && deliveryFileAllowed(file, data, clock + serverOffset));
@@ -227,7 +232,7 @@ export default function RamyaChobiDelivery({ token, view: viewSegment }: { token
   const deliveryStatus = deliveryLabel(data.delivery_status);
   const freeDays = accessExpiry ? Math.max(0, Math.ceil((Date.parse(accessExpiry) - clock - serverOffset) / 86400000)) : null;
   const allowedFiles = finalFiles.filter(fileCanDownload);
-  const downloadAllFiles = allowedFiles.filter(file => !rawArchives.some(raw => raw.id === file.id));
+  const downloadAllFiles = allowedFiles.filter(file => !file.is_raw && !rawArchives.some(raw => raw.id === file.id));
   const statusColor = unavailable || locked ? 'bg-stone-200 text-stone-700' : canDownload ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800';
   const directoryParams = new URLSearchParams(window.location.search);
   const fromDirectory = directoryParams.get('from') === 'list';
@@ -236,12 +241,12 @@ export default function RamyaChobiDelivery({ token, view: viewSegment }: { token
   if (directoryParams.get('date')) directorySearch.set('date', directoryParams.get('date')!);
   const directoryReturnHref = fromDirectory ? `/delivery${directorySearch.toString() ? `?${directorySearch.toString()}` : ''}` : null;
   const preserveDirectoryContext = (path: string) => { if (!fromDirectory) return path; const next = new URL(path, window.location.origin); next.searchParams.set('from', 'list'); for (const key of ['q', 'date']) { const value = directoryParams.get(key); if (value) next.searchParams.set(key, value); } return `${next.pathname}${next.search}`; };
-  const href = (page: 'main' | 'photos' | 'videos' | 'recovery') => preserveDirectoryContext(deliveryPath(token, page, previewMode));
+  const href = (page: 'main' | 'photos' | 'videos' | 'raw-photos' | 'raw-videos' | 'recovery') => preserveDirectoryContext(deliveryPath(token, page, previewMode));
   if (view !== 'main') return <main className="min-h-screen bg-[#f6f2ea] text-stone-900"><header className="border-b border-stone-200 bg-white px-5 py-6"><div className="mx-auto max-w-6xl">{directoryReturnHref && <a href={directoryReturnHref} className="mb-3 inline-flex min-h-9 items-center rounded-full border border-emerald-200 bg-white px-3 py-1 text-xs font-bold text-emerald-900">← সব ডেলিভারি</a>}<p className="text-xs font-bold tracking-widest text-emerald-800">RAMYACHOBI · PRIVATE DELIVERY</p><h1 className="mt-2 text-2xl font-bold">{data.client_name}</h1><p className="mt-2 text-sm text-stone-500">{data.event_name || 'Final Delivery'} · {date(data.event_date)}</p>{previewMode && <p className="mt-2 text-sm text-amber-800">Admin preview</p>}</div></header><div className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-8">
     {view === 'recovery' ? <><a href={href('main')} className="inline-block rounded-xl border bg-white px-4 py-3 font-bold">← মূল ডেলিভারি পেজে ফিরুন</a><h2 className="text-2xl font-bold">File Recovery / অ্যাক্সেসের সাহায্য</h2><DeliveryRecoveryNotice portalId={data.id} clientToken={token} expiresAt={accessExpiry} title={data.event_name || data.client_name} /></> : <>
       <DeliveryCountdown expiresAt={accessExpiry} serverOffset={serverOffset} />
       {bulkFiles.length > 0 && <DeliveryBulkDownloads files={bulkFiles} allowed={fileCanDownload} onDownload={downloadOne} onClose={() => setBulkFiles([])} />}
-      <DeliveryPreviewGallery kind={view === 'photos' ? 'PHOTO' : 'VIDEO'} items={unavailable ? [] : activeItems} backHref={href('main')} source={previewSource} resolveSource={resolvePreview} allowed={fileCanDownload} onDownload={file => void downloadOne(file)} onDownloadAll={() => void downloadZip((view === 'photos' ? photos : videos).filter(fileCanDownload), `ramyachobi-${view}.zip`)} busy={downloading} error={downloadError} previewEnabled={!unavailable && data.preview_enabled !== false} />
+      <DeliveryPreviewGallery kind={view === 'photos' || view === 'raw-photos' ? 'PHOTO' : 'VIDEO'} raw={view === 'raw-photos' || view === 'raw-videos'} items={unavailable ? [] : activeItems} backHref={href('main')} source={previewSource} resolveSource={resolvePreview} allowed={fileCanDownload} onDownload={file => void downloadOne(file)} onDownloadAll={() => { const files = view === 'photos' ? photos : view === 'videos' ? videos : view === 'raw-photos' ? rawPhotoFiles : rawVideoFiles; void downloadZip(files.filter(fileCanDownload), `ramyachobi-${view}.zip`); }} busy={downloading} error={downloadError} previewEnabled={!unavailable && data.preview_enabled !== false} />
     </>}
   </div></main>;
 
@@ -275,6 +280,7 @@ export default function RamyaChobiDelivery({ token, view: viewSegment }: { token
           <a href={href('videos')} className="flex min-h-28 flex-col justify-center rounded-2xl border border-stone-200 bg-stone-50 p-5"><PlayCircle className="mb-3 h-7 w-7" /><strong>Preview Videos</strong><span className="mt-1 text-sm text-stone-600">ভিডিও দেখুন · {videoItems.length}টি</span></a>
           <button type="button" onClick={() => void downloadZip(downloadAllFiles, 'ramyachobi-all-files.zip')} disabled={!downloadAllFiles.length || downloading} className="flex min-h-28 flex-col items-start justify-center rounded-2xl bg-emerald-800 p-5 text-left text-white disabled:opacity-40"><Download className="mb-3 h-7 w-7" /><strong>{downloading ? 'ডাউনলোড প্রস্তুত হচ্ছে…' : 'Download All Files'}</strong><span className="mt-1 text-sm">অনুমোদিত ছবি, ভিডিও ও ডকুমেন্ট · {downloadAllFiles.length}টি</span></button>
         </div>{!allowedFiles.length && <p className="mt-4 text-sm text-stone-600">ফাইল প্রস্তুত, পেমেন্ট যাচাই ও ডাউনলোডের অনুমতি চালু হলে Download বাটন কাজ করবে।</p>}{downloadError && <p role="alert" className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-800">{downloadError}</p>}
+        {(rawPhotoFiles.length > 0 || rawVideoFiles.length > 0) && <section aria-label="RAW photos and videos" className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4 sm:p-5"><div className="flex items-start gap-3"><Archive className="mt-0.5 h-6 w-6 shrink-0 text-emerald-800" /><div><h3 className="font-bold text-emerald-950">RAW Files · Photos & Videos</h3><p className="mt-1 text-sm text-stone-600">RAW ছবি ও ভিডিও আলাদা করে preview করুন অথবা সবগুলো একসঙ্গে ডাউনলোড করুন।</p></div></div><div className="mt-4 grid gap-3 sm:grid-cols-2">{([{key:'photos',label:'RAW Photos',files:rawPhotoFiles,view:'raw-photos' as const},{key:'videos',label:'RAW Videos',files:rawVideoFiles,view:'raw-videos' as const}]).map(group => { const permitted = group.files.filter(fileCanDownload); return <div key={group.key} className="rounded-2xl border border-emerald-100 bg-white p-4"><h4 className="font-bold text-stone-900">{group.label} · {group.files.length}</h4><div className="mt-3 grid gap-2"><a href={href(group.view)} className="inline-flex min-h-11 items-center justify-center rounded-xl border border-emerald-700 px-4 py-2 text-sm font-bold text-emerald-900">Preview {group.label}</a><button type="button" onClick={() => void downloadZip(permitted, `ramyachobi-${group.key}-raw.zip`)} disabled={!permitted.length || downloading} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-800 px-4 py-2 text-sm font-bold text-white disabled:opacity-40"><Download className="h-4 w-4" />Download All {group.label}</button></div></div>; })}</div></section>}
         {rawArchiveGroups.map(group => <section key={group.key} aria-label={group.heading} className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4 sm:p-5"><div className="flex items-start gap-3"><Archive className="mt-0.5 h-6 w-6 shrink-0 text-emerald-800" /><div><h3 className="font-bold text-emerald-950">{group.heading}</h3><p className="mt-1 text-sm text-stone-600">{group.description}</p></div></div><div className="mt-3 space-y-2">{group.files.map(file => <div key={file.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-100 bg-white p-3"><span className="min-w-0 break-all text-sm font-semibold">{file.file_name || file.title || group.heading}</span><button type="button" disabled={!fileCanDownload(file) || downloading} onClick={() => downloadOne(file)} className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl bg-emerald-800 px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40"><Download className="h-4 w-4" />{group.button}</button></div>)}</div>{group.files.some(file => !fileCanDownload(file)) && <p className="mt-3 text-xs text-stone-600">পেমেন্ট, ফাইলের মেয়াদ এবং Document / RAW ZIP download অনুমতি চালু হলে ডাউনলোড করা যাবে।</p>}</section>)}
         {documents.length > 0 && <details className="mt-5 rounded-xl border border-stone-200 p-4"><summary className="cursor-pointer font-bold">কাগজপত্র / Documents ({documents.length})</summary><div className="mt-3 space-y-2">{documents.map(file => <div key={file.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-stone-50 p-3"><span className="break-all text-sm">{file.title || file.file_name || 'Document'}</span><button type="button" disabled={!fileCanDownload(file) || downloading} onClick={() => void downloadOne(file)} className="min-h-11 rounded-xl border bg-white px-4 py-2 text-sm font-bold disabled:opacity-40">Download</button></div>)}</div></details>}
         </section>

@@ -68,6 +68,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const folderUrl = String(body.folderUrl || '').trim();
     const pageToken = String(body.pageToken || '').trim();
     const requestedType = body.fileType;
+    const markAsRaw = body.raw === true;
     if (requestedType && !['PHOTO','VIDEO'].includes(requestedType)) return json(res,400,{error:'Invalid folder media type.'});
 
     if (!adminToken || !portalId || !folderUrl) return json(res, 400, { error: 'Admin token, portal ID and folder link are required.' });
@@ -116,9 +117,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         p_is_visible: true,
       })));
       await Promise.all(batch.map(async ({ file }, index) => {
-        if (saved[index]?.id && file.size) {
+        if (saved[index]?.id && (file.size || markAsRaw)) {
           await supabaseServiceRequest(`delivery_files?id=eq.${encodeURIComponent(String(saved[index].id))}&portal_id=eq.${encodeURIComponent(portalId)}`, {
-            method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ file_size_bytes: Number(file.size) }),
+            method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ ...(file.size ? { file_size_bytes: Number(file.size) } : {}), ...(markAsRaw ? { is_raw: true } : {}) }),
           });
         }
       }));
