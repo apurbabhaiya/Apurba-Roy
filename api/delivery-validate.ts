@@ -1,5 +1,4 @@
-import { assertDeliveryAdmin, getDriveAccessToken, supabaseServiceRequest } from './_lib/driveAuth.js';
-import { safeFileName } from './_lib/fileName.js';
+import { getDriveAccessToken, supabaseServiceRequest } from './_lib/driveAuth.js';
 
 type VercelRequest = any;
 type VercelResponse = any;
@@ -50,75 +49,6 @@ async function driveMetadata(id: string) {
   return data;
 }
 
-async function assertPortalAccess(adminToken: string, portalId: string) {
-  await rpc('delivery_admin_list_files', { p_token: adminToken, p_portal_id: portalId });
-}
-
-async function startRawZipUpload(adminToken: string, portalId: string, fileName: string, fileSize: number) {
-  if (!adminToken || !portalId || !fileName || !Number.isSafeInteger(fileSize) || fileSize < 1 || fileSize > 5 * 1024 ** 4) {
-    throw new Error('Choose a non-empty ZIP file up to Google Drive’s 5 TB file limit.');
-  }
-  if (!/^[0-9a-f-]{36}$/i.test(portalId)) throw new Error('Invalid delivery ID.');
-  if (!/\.zip$/i.test(fileName)) throw new Error('Only .zip files can be uploaded as RAW delivery files.');
-  await assertDeliveryAdmin(adminToken);
-  await assertPortalAccess(adminToken, portalId);
-  const accessToken = await getDriveAccessToken();
-  const metadata = { name: safeFileName(fileName, 'ramyachobi-raw.zip'), mimeType: 'application/zip' };
-  const upload = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id,name,mimeType,size,webViewLink', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'content-type': 'application/json; charset=UTF-8',
-      'x-upload-content-type': 'application/zip',
-      'x-upload-content-length': String(fileSize),
-    },
-    body: JSON.stringify(metadata),
-  });
-  if (!upload.ok) {
-    if (upload.status === 403) throw new Error('Google Drive upload permission is missing. Reconnect Google Drive in Delivery Admin and grant file access.');
-    throw new Error(`Google Drive could not start the ZIP upload (HTTP ${upload.status}).`);
-  }
-  const uploadUrl = upload.headers.get('location');
-  if (!uploadUrl || !uploadUrl.startsWith('https://www.googleapis.com/upload/drive/')) throw new Error('Google Drive did not return a valid resumable upload session.');
-  return { uploadUrl, fileName: metadata.name };
-}
-
-async function saveRawZipUpload(body: Record<string, any>) {
-  const adminToken = String(body.adminToken || '').trim();
-  const portalId = String(body.portalId || '').trim();
-  const driveFileId = String(body.driveFileId || '').trim();
-  const requestedName = String(body.fileName || '').trim();
-  const title = String(body.title || '').trim().slice(0, 160);
-  const sortOrder = Math.min(1000000, Math.max(0, Math.trunc(Number(body.sortOrder) || 0)));
-  if (!adminToken || !portalId || !driveFileId || !requestedName) throw new Error('Admin session, delivery ID and uploaded ZIP details are required.');
-  if (!/^[0-9a-f-]{36}$/i.test(portalId) || !/^[A-Za-z0-9_-]{10,200}$/.test(driveFileId)) throw new Error('Invalid delivery or Google Drive file ID.');
-  if (!/\.zip$/i.test(requestedName)) throw new Error('Only ZIP files can be attached as RAW delivery files.');
-  await assertPortalAccess(adminToken, portalId);
-  const accessToken = await getDriveAccessToken();
-  const metadataResponse = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(driveFileId)}?fields=id,name,mimeType,size,trashed&supportsAllDrives=true`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
-  if (!metadataResponse.ok) throw new Error(`Google Drive could not verify the uploaded ZIP (HTTP ${metadataResponse.status}).`);
-  const metadata = await metadataResponse.json();
-  if (metadata.trashed) throw new Error('The uploaded ZIP is in the Google Drive trash.');
-  if (!/\.zip$/i.test(String(metadata.name || '')) || !['application/zip', 'application/x-zip-compressed', 'application/octet-stream'].includes(String(metadata.mimeType || ''))) {
-    throw new Error('Google Drive upload is not a ZIP file.');
-  }
-  const fileName = safeFileName(String(metadata.name || requestedName), 'ramyachobi-raw.zip');
-  const sourceUrl = `https://drive.google.com/file/d/${encodeURIComponent(driveFileId)}/view`;
-  const saved: any = await rpc('delivery_admin_upsert_file', {
-    p_token: adminToken, p_portal_id: portalId, p_file_id: null, p_source_url: sourceUrl,
-    p_file_type: 'DOCUMENT', p_title: title || 'RAW photos & videos ZIP', p_file_name: fileName,
-    p_mime_type: 'application/zip', p_sort_order: sortOrder, p_is_visible: true,
-  });
-  if (!saved?.id) throw new Error('The ZIP was uploaded but could not be linked to this delivery.');
-  const update = await supabaseServiceRequest(`delivery_files?id=eq.${encodeURIComponent(String(saved.id))}&portal_id=eq.${encodeURIComponent(portalId)}`, {
-    method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ file_size_bytes: Number(metadata.size || 0) }),
-  });
-  if (!update.ok) throw new Error('The ZIP is uploaded, but its file size could not be saved.');
-  return { success: true, file: { ...saved, file_name: fileName, mime_type: 'application/zip', file_size_bytes: Number(metadata.size || 0) } };
-}
-
 function classifyFile(mime: string, fileName: string): 'PHOTO' | 'VIDEO' | 'DOCUMENT' {
   const name = fileName.toLowerCase();
   const imageExt = ['.jpg','.jpeg','.png','.webp','.gif','.heic','.heif','.tif','.tiff','.bmp','.raw','.arw','.cr2','.cr3','.nef','.dng','.raf','.orf','.rw2','.pef','.srw','.3fr','.iiq'];
@@ -132,16 +62,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return json(res, 405, { error: 'Only POST is supported.' });
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
-    const action = String(body.action || 'validate');
-    if (action === 'raw-upload-init') {
-      const result = await startRawZipUpload(String(body.adminToken || '').trim(), String(body.portalId || '').trim(), String(body.fileName || '').trim(), Number(body.fileSize));
-      return json(res, 200, result);
-    }
-    if (action === 'raw-upload-complete') return json(res, 200, await saveRawZipUpload(body));
     const adminToken = String(body.adminToken || '').trim();
     const portalId = String(body.portalId || '').trim();
     const sourceUrl = String(body.sourceUrl || '').trim();
     const requestedType = String(body.fileType || 'PHOTO').toUpperCase();
+    const isRawZip = body.rawZip === true;
     const title = String(body.title || '').trim();
     const fileNameInput = String(body.fileName || '').trim();
     const sortOrder = Math.max(0, Number(body.sortOrder || 0));
@@ -149,11 +74,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!adminToken || !portalId || !sourceUrl) return json(res, 400, { error: 'Admin token, delivery ID and private Drive link are required.' });
     if (!/^[0-9a-f-]{36}$/i.test(portalId) || (existingFileId && !/^[0-9a-f-]{36}$/i.test(existingFileId))) return json(res, 400, { error: 'Invalid delivery or file ID.' });
     if (!['PHOTO','VIDEO','DOCUMENT','FOLDER'].includes(requestedType)) return json(res, 400, { error: 'Choose a photo, video, document or folder.' });
+    if (isRawZip && requestedType !== 'DOCUMENT') return json(res, 400, { error: 'RAW ZIP files must be added as documents.' });
     await rpc('delivery_admin_list_files', { p_token: adminToken, p_portal_id: portalId });
     const fileType = requestedType as 'PHOTO' | 'VIDEO' | 'DOCUMENT' | 'FOLDER';
     const driveId = extractDriveId(sourceUrl, fileType === 'FOLDER' ? 'folder' : 'file');
     if (!driveId) return json(res, 400, { error: 'This is not a valid private Google Drive file or folder link.' });
     const metadata = await driveMetadata(driveId);
+    if (isRawZip && !/\.zip$/i.test(String(metadata.name || ''))) return json(res, 400, { error: 'Google Drive file name must end in .zip.' });
     if (fileType === 'FOLDER') {
       if (metadata.mimeType !== 'application/vnd.google-apps.folder') return json(res, 400, { error: 'This Drive item is not a folder.' });
       return json(res, 200, { verified: true, fileType, driveId, metadata: { id: metadata.id, name: metadata.name, mimeType: metadata.mimeType } });

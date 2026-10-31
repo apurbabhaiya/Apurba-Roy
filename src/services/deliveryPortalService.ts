@@ -488,74 +488,6 @@ export async function syncDeliveryFolder(input: { adminToken: string; portalId: 
   throw new Error('Folder contains too many pages to import safely. Split the folder into smaller folders and retry.');
 }
 
-export async function uploadDeliveryRawZip(input: {
-  adminToken: string;
-  portalId: string;
-  file: File;
-  title?: string;
-  sortOrder?: number;
-  onProgress?: (progress: number) => void;
-}) {
-  const initResponse = await fetch('/api/delivery-validate', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      action: 'raw-upload-init',
-      adminToken: input.adminToken,
-      portalId: input.portalId,
-      fileName: input.file.name,
-      fileSize: input.file.size,
-    }),
-  });
-  const initText = await initResponse.text();
-  let initData: any = {};
-  try { initData = initText ? JSON.parse(initText) : {}; } catch { initData = { error: initText.slice(0, 300) }; }
-  if (!initResponse.ok || !initData.uploadUrl) throw new Error(initData.error || 'Could not start the private ZIP upload.');
-
-  const uploaded: any = await new Promise((resolve, reject) => {
-    const request = new XMLHttpRequest();
-    request.open('PUT', String(initData.uploadUrl));
-    request.setRequestHeader('Content-Type', 'application/zip');
-    request.upload.onprogress = (event) => {
-      if (event.lengthComputable) input.onProgress?.(Math.round((event.loaded / event.total) * 100));
-    };
-    request.onerror = () => reject(new Error('ZIP upload failed. Check your connection and try again.'));
-    request.onabort = () => reject(new Error('ZIP upload was cancelled.'));
-    request.onload = () => {
-      let data: any = {};
-      try { data = request.responseText ? JSON.parse(request.responseText) : {}; } catch { data = {}; }
-      if (request.status < 200 || request.status >= 300 || !data.id) {
-        reject(new Error(data.error?.message || `Google Drive upload failed (HTTP ${request.status}).`));
-        return;
-      }
-      resolve(data);
-    };
-    request.send(input.file);
-  });
-
-  const completeResponse = await fetch('/api/delivery-validate', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      action: 'raw-upload-complete',
-      adminToken: input.adminToken,
-      portalId: input.portalId,
-      driveFileId: uploaded.id,
-      fileName: input.file.name,
-      title: input.title || null,
-      sortOrder: input.sortOrder || 0,
-    }),
-  });
-  const completeText = await completeResponse.text();
-  let completeData: any = {};
-  try { completeData = completeText ? JSON.parse(completeText) : {}; } catch { completeData = { error: completeText.slice(0, 300) }; }
-  if (!completeResponse.ok || !completeData.file) throw new Error(completeData.error || 'ZIP uploaded, but it could not be attached to this delivery.');
-  input.onProgress?.(100);
-  return completeData.file as DeliveryAdminFile;
-}
-
-
-
 export async function setDeliveryPermissions(input: {
   token: string;
   portalId: string;
@@ -709,6 +641,7 @@ export async function validateAndSaveDeliveryFile(input: {
   sortOrder?: number;
   isVisible?: boolean;
   persist?: boolean;
+  rawZip?: boolean;
 }) {
   const response = await fetch('/api/delivery-validate', {
     method: 'POST',
@@ -724,6 +657,7 @@ export async function validateAndSaveDeliveryFile(input: {
       sortOrder: input.sortOrder || 0,
       isVisible: input.isVisible ?? true,
       persist: input.persist !== false,
+      rawZip: input.rawZip === true,
     }),
   });
   const rawResponse = await response.text();
