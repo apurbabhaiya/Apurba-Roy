@@ -496,10 +496,11 @@ export async function uploadDeliveryRawZip(input: {
   sortOrder?: number;
   onProgress?: (progress: number) => void;
 }) {
-  const initResponse = await fetch('/api/delivery-raw-upload-init', {
+  const initResponse = await fetch('/api/delivery-validate', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
+      action: 'raw-upload-init',
       adminToken: input.adminToken,
       portalId: input.portalId,
       fileName: input.file.name,
@@ -532,10 +533,11 @@ export async function uploadDeliveryRawZip(input: {
     request.send(input.file);
   });
 
-  const completeResponse = await fetch('/api/delivery-raw-upload-complete', {
+  const completeResponse = await fetch('/api/delivery-validate', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
+      action: 'raw-upload-complete',
       adminToken: input.adminToken,
       portalId: input.portalId,
       driveFileId: uploaded.id,
