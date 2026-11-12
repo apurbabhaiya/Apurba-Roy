@@ -1,155 +1,82 @@
 import { DrivePhoto, FaceMatchScore } from '../types';
+import { supabase } from './supabase';
+import { facebookAuth } from './facebookAccess';
+import { cosineSimilarity } from './faceSimilarity';
 
-/**
- * AI Face Search Service for [রম্যছবি - RamyaChobi]
- * Strictly scopes face matching to photos within the client's current album.
- */
+// Session-memory cache only. No selfies, photos or biometric data persisted to disk.
+const cache = new Map<string, { expires: number; vectors: number[][] }>();
+const TTL = 15 * 60_000;
 
-// Helper to convert an image URL or Blob to an HTMLImageElement
-function loadImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error('Failed to load image for face analysis'));
-    img.src = src;
+async function imageBase64(src: string): Promise<string> {
+  const image = new Image();
+  image.crossOrigin = 'anonymous';
+  await new Promise<void>((resolve, reject) => {
+    const timeout = setTimeout(() => { image.src = ''; reject(new Error('Photo loading timed out.')); }, 20_000);
+    image.onload = () => { clearTimeout(timeout); resolve(); };
+    image.onerror = () => { clearTimeout(timeout); reject(new Error('Album photo could not be read. Check Drive preview access.')); };
+    image.src = src;
   });
-}
-
-// Extract visual feature vector from image using HTML5 Canvas
-async function extractVisualFeatures(imgElement: HTMLImageElement): Promise<number[]> {
+  const scale = Math.min(1, 1600 / Math.max(image.naturalWidth, image.naturalHeight));
   const canvas = document.createElement('canvas');
-  const size = 32; // 32x32 downsampling grid
-  canvas.width = size;
-  canvas.height = size;
+  canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+  canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
   const ctx = canvas.getContext('2d');
-  if (!ctx) return [];
-
-  // Focus on center 60% of image where face / portrait subject typically is
-  const cropX = imgElement.naturalWidth * 0.2;
-  const cropY = imgElement.naturalHeight * 0.15;
-  const cropW = imgElement.naturalWidth * 0.6;
-  const cropH = imgElement.naturalHeight * 0.7;
-
-  ctx.drawImage(imgElement, cropX, cropY, cropW, cropH, 0, 0, size, size);
-  const imgData = ctx.getImageData(0, 0, size, size);
-  const data = imgData.data;
-
-  // Features: color moments, luminance, skin-tone ratio, and edge contrasts
-  const features: number[] = [];
-  let rSum = 0, gSum = 0, bSum = 0;
-  let skinTonePixels = 0;
-
-  for (let i = 0; i < data.length; i += 4) {
-    const r = data[i];
-    const g = data[i + 1];
-    const b = data[i + 2];
-    rSum += r;
-    gSum += g;
-    bSum += b;
-
-    // Detect skin tone range
-    if (r > 95 && g > 40 && b > 20 && r > g && r > b && (Math.max(r, g, b) - Math.min(r, g, b)) > 15 && Math.abs(r - g) > 15) {
-      skinTonePixels++;
-    }
-  }
-
-  const totalPixels = size * size;
-  const avgR = rSum / totalPixels;
-  const avgG = gSum / totalPixels;
-  const avgB = bSum / totalPixels;
-  const skinRatio = skinTonePixels / totalPixels;
-
-  features.push(avgR / 255, avgG / 255, avgB / 255, skinRatio);
-
-  // Divide into 4 quadrants to capture face structure
-  for (let q = 0; q < 4; q++) {
-    const qx = (q % 2) * (size / 2);
-    const qy = Math.floor(q / 2) * (size / 2);
-    const qData = ctx.getImageData(qx, qy, size / 2, size / 2).data;
-    let qr = 0, qg = 0, qb = 0;
-    for (let j = 0; j < qData.length; j += 4) {
-      qr += qData[j];
-      qg += qData[j + 1];
-      qb += qData[j + 2];
-    }
-    const qCount = (size / 2) * (size / 2);
-    features.push((qr / qCount) / 255, (qg / qCount) / 255, (qb / qCount) / 255);
-  }
-
-  return features;
+  if (!ctx) throw new Error('Image processing is unavailable.');
+  ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+  const encoded = canvas.toDataURL('image/jpeg', .85).split(',')[1];
+  if (!encoded || encoded.length > 2_666_672) throw new Error('Image is too large. Choose a smaller photo.');
+  return encoded;
 }
 
-// Compute cosine similarity between two feature vectors
-function computeSimilarity(vecA: number[], vecB: number[]): number {
-  if (vecA.length === 0 || vecB.length === 0 || vecA.length !== vecB.length) return 0;
-  let dot = 0;
-  let normA = 0;
-  let normB = 0;
-  for (let i = 0; i < vecA.length; i++) {
-    dot += vecA[i] * vecB[i];
-    normA += vecA[i] * vecA[i];
-    normB += vecB[i] * vecB[i];
-  }
-  if (normA === 0 || normB === 0) return 0;
-  return dot / (Math.sqrt(normA) * Math.sqrt(normB));
+async function encode(image: string, token: string, reference: boolean): Promise<number[][]> {
+  const response = await fetch('/api/face-encode', {
+    method: 'POST', signal: AbortSignal.timeout(60_000),
+    headers: { Authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ image, reference }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || 'InsightFace request failed.');
+  if (!Array.isArray(data.embeddings) || (reference && data.embeddings.length !== 1)) throw new Error('Invalid face response.');
+  for (const vector of data.embeddings) cosineSimilarity(vector, vector);
+  return data.embeddings;
 }
 
-/**
- * Searches and ranks matching photos from the current album for a reference face.
- * Security: Strictly processes ONLY the photos passed in the `albumPhotos` parameter.
- */
 export async function searchFaceInAlbum(
   referenceFaceDataUrl: string,
   albumPhotos: DrivePhoto[],
   onProgress?: (progressPercent: number, statusText: string) => void
 ): Promise<FaceMatchScore[]> {
-  if (albumPhotos.length === 0) return [];
-
-  onProgress?.(10, 'মুখের বৈশিষ্ট্য বিশ্লেষণ করা হচ্ছে (Analyzing facial landmarks)...');
-
-  // Search only the image bytes from the current album. Filename, date and
-  // metadata are deliberately never used to create or boost a match.
-  onProgress?.(20, 'এই album-এর ছবির মুখ বিশ্লেষণ করা হচ্ছে...');
-
-  let refFeatures: number[] = [];
-  try {
-    const refImg = await loadImage(referenceFaceDataUrl);
-    refFeatures = await extractVisualFeatures(refImg);
-  } catch (err) {
-    console.warn('Could not extract reference face features:', err);
-  }
-
+  if (!albumPhotos.length) return [];
+  const { data: facebook } = await facebookAuth.auth.getSession();
+  const { data: studio } = await supabase.auth.getSession();
+  const session = facebook.session || studio.session;
+  if (!session || session.user.is_anonymous) throw new Error('Face Search ব্যবহার করতে লগইন করুন।');
+  const token = session.access_token;
+  const threshold = Number(import.meta.env.VITE_FACE_COSINE_THRESHOLD || .5);
+  if (!Number.isFinite(threshold) || threshold <= 0 || threshold >= 1) throw new Error('Invalid face threshold configuration.');
+  onProgress?.(0, 'InsightFace দিয়ে সেলফির মুখ শনাক্ত হচ্ছে...');
+  const [reference] = await encode(await imageBase64(referenceFaceDataUrl), token, true);
   const results: FaceMatchScore[] = [];
-  const total = albumPhotos.length;
-  let cursor = 0;
-  let completed = 0;
-  const threshold = Number((import.meta as any).env?.VITE_FACE_MATCH_THRESHOLD || 84);
-  const worker = async () => {
-    while (true) {
-      const index = cursor++;
-      if (index >= total) return;
-      const photo = albumPhotos[index];
-      const imgUrl = photo.thumbnailLink || photo.webViewLink;
-      let similarity = 0;
-      if (refFeatures.length > 0 && imgUrl) {
-        try {
-          const photoImg = await loadImage(imgUrl);
-          const photoFeatures = await extractVisualFeatures(photoImg);
-          const rawSim = computeSimilarity(refFeatures, photoFeatures);
-          similarity = Math.min(100, Math.max(0, Math.round(rawSim * 100)));
-        } catch { similarity = 0; }
-      }
-      if (similarity >= threshold) results.push({ photoId: photo.id, photo, similarity });
-      completed++;
-      if (completed % 10 === 0 || completed === total) onProgress?.(20 + Math.floor((completed / total) * 75), `স্ক্যান সম্পন্ন: ${completed}/${total} ফটোর মধ্যে...`);
+  const photos = Array.from(new Map(albumPhotos.map(p => [p.id, p])).values());
+  for (const [index, photo] of photos.entries()) {
+    // Only process bytes already visible to this caller. Never send arbitrary URLs
+    // or Drive IDs to a privileged backend for fetching private album content.
+    const source = photo.thumbnailLink || photo.webViewLink;
+    if (!source) throw new Error(`Photo preview missing: ${photo.name}`);
+    const cacheKey = `${session.user.id}:${photo.id}:${source}`;
+    const saved = cache.get(cacheKey);
+    let vectors = saved && saved.expires > Date.now() ? saved.vectors : undefined;
+    if (!vectors) {
+      vectors = await encode(await imageBase64(source), token, false);
+      for (const [key, value] of cache) if (value.expires <= Date.now()) cache.delete(key);
+      if (cache.size >= 2000) cache.delete(cache.keys().next().value!);
+      cache.set(cacheKey, { vectors, expires: Date.now() + TTL });
     }
-  };
-  await Promise.all(Array.from({ length: Math.min(8, total) }, () => worker()));
-
-  // Sort descending by similarity
+    const score = vectors.length ? Math.max(...vectors.map(v => cosineSimilarity(reference, v))) : -1;
+    if (score >= threshold) results.push({ photoId: photo.id, photo, similarity: Math.round(score * 100) });
+    onProgress?.(Math.round(((index + 1) / photos.length) * 100), `মুখ বিশ্লেষণ সম্পন্ন: ${index + 1}/${photos.length}`);
+  }
   results.sort((a, b) => b.similarity - a.similarity);
-
-  onProgress?.(100, `ম্যাচিং সম্পন্ন! ${results.length}টি ম্যাচিং ফটো পাওয়া গেছে।`);
+  onProgress?.(100, `${results.length}টি সম্ভাব্য মিলে যাওয়া ছবি পাওয়া গেছে।`);
   return results;
 }

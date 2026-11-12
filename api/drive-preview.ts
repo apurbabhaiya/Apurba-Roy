@@ -1,3 +1,5 @@
+import faceEncode from './_lib/faceEncode.js';
+
 type VercelRequest = any;
 type VercelResponse = any;
 
@@ -38,6 +40,7 @@ async function fetchPreview(fileId: string, width: number, token?: string): Prom
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.query.operation === 'face-encode') return faceEncode(req, res);
   if (req.method !== 'GET') return json(res, 405, 'Only GET is supported.');
   const fileId = String(req.query.fileId || '').trim();
   if (!fileId || !/^[A-Za-z0-9_-]{10,}$/.test(fileId)) return json(res, 400, 'A valid Google Drive file ID is required.');
